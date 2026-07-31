@@ -271,6 +271,13 @@
           }
         },
         {
+          "path": "search",
+          "style": {
+            "navigationBarTitleText": "搜索",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "applications",
           "style": {
             "navigationBarTitleText": "我的申请",

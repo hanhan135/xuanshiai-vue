@@ -765,7 +765,12 @@
 		})
 	}
 	const onHistory = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/history' }) }
-	const onSearch = () => {}
+	const onSearch = () => {
+		uni.navigateTo({
+			url: '/pagesSub/profileExtra/search',
+			fail: () => uni.showToast({ title: '搜索页面打开失败，请重试', icon: 'none' })
+		})
+	}
 
 	// ========== 推荐页数据 ==========
 	const basicInfoRows = [
