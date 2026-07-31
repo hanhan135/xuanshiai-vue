@@ -314,10 +314,6 @@
         {
           "path": "support",
           "style": { "navigationBarTitleText": "帮助与客服", "navigationStyle": "custom" }
-        },
-        {
-          "path": "security",
-          "style": { "navigationBarTitleText": "安全中心", "navigationStyle": "custom" }
         }
       ]
     },
