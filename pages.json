@@ -278,11 +278,34 @@
           }
         },
         {
+          "path": "report",
+          "style": {
+            "navigationBarTitleText": "举报",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "applications",
           "style": {
             "navigationBarTitleText": "我的申请",
             "navigationStyle": "custom"
           }
+        },
+        {
+          "path": "favorites",
+          "style": { "navigationBarTitleText": "我的收藏", "navigationStyle": "custom" }
+        },
+        {
+          "path": "spotlights",
+          "style": { "navigationBarTitleText": "我的爆灯", "navigationStyle": "custom" }
+        },
+        {
+          "path": "support",
+          "style": { "navigationBarTitleText": "帮助与客服", "navigationStyle": "custom" }
+        },
+        {
+          "path": "security",
+          "style": { "navigationBarTitleText": "安全中心", "navigationStyle": "custom" }
         }
       ]
     },
@@ -303,7 +326,8 @@
         {
           "path": "about",
           "style": {
-            "navigationBarTitleText": "关于我们"
+            "navigationBarTitleText": "关于我们",
+            "navigationStyle": "custom"
           }
         },
         {

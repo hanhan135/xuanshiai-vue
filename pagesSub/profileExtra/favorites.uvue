@@ -1,0 +1,13 @@
+<template>
+	<view class="empty-page"><view class="empty-nav"><text class="ic ic-sys ic-fanhui back" @tap="back"></text><text>宣誓爱</text><view class="placeholder"></view></view><view class="tabs"><view class="tab" :class="{ active: activeTab === 0 }" @tap="activeTab = 0"><text>我的收藏(0)</text><view></view></view><view class="tab" :class="{ active: activeTab === 1 }" @tap="activeTab = 1"><text>谁收藏我(0)</text><view></view></view></view><view class="empty-content"><text class="ic ic-home ic-search empty-icon"></text><text class="empty-copy">什么都还没有哦</text></view></view>
+</template>
+<script setup lang="uts">
+const back = () => uni.navigateBack({ delta: 1 })
+const activeTab = ref(0)
+</script>
+<style scoped>
+.empty-page { min-height: 100vh; background: #F5F7FC; color: #20232A; }.empty-nav { height: 100px; padding: 44px 18px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: #FFF; font-size: 20px; font-weight: 800; }.back,.placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }.back { font-size: 38px; font-weight: 300; }.tabs { height: 56px; display: flex; flex-direction: row; background: #FFF; }.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; color: #999DA7; font-size: 16px; }.tab view { width: 28px; height: 5px; border-radius: 3px; background: transparent; }.tab.active { color: #24242A; font-weight: 700; }.tab.active view { background: #D55CEA; }.empty-content { display: flex; flex-direction: column; align-items: center; padding-top: 45px; color: #D9DFEC; }.empty-icon { width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; background: #FFF; font-size: 64px; color: #DDE5F4; }.empty-copy { margin-top: 10px; font-size: 14px; color: #D1D4DC; }
+@font-face { font-family: "iconfont-home"; src: url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff2') format('woff2'); }
+@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'); }
+.ic { font-style: normal; }.ic-home { font-family: "iconfont-home" !important; }.ic-sys { font-family: "iconfont-sys" !important; }.ic-fanhui:before { content: "\e606"; }.ic-search:before { content: "\e600"; }
+</style>

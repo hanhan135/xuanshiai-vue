@@ -267,7 +267,7 @@
 
 				<!-- 屏蔽/举报行 -->
 				<view class="block-row">
-					<text class="block-text" @click="showBlockReport">屏蔽Ta/举报Ta</text>
+					<view class="block-action" @tap="openReportPage"><text class="block-text">举报Ta</text></view><text class="block-divider">|</text><view class="block-action" @tap="handleBlockUser"><text class="block-text">拉黑Ta</text></view>
 				</view>
 				<view class="scroll-bottom-spacer"></view>
 			</scroll-view>
@@ -694,6 +694,14 @@
 			<view class="apply-body"><text>认真关系从一段真诚对话开始。请注意保护隐私与财产安全。</text></view>
 		</XsaModal>
 
+		<view v-if="blockVisible" class="block-mask" @tap="blockVisible = false">
+			<view class="block-dialog" @tap.stop>
+				<view class="block-dialog-title"><text class="block-success-icon">✓</text><text>您已将 {{ blockedUserName }} 拉入黑名单</text></view>
+				<view class="block-dialog-card"><text class="block-dialog-note">黑名单中的人无法查看您的资料页</text><view class="blocked-user-row"><image :src="blockedUserAvatar" mode="aspectFill"></image><view class="blocked-user-info"><text>{{ blockedUserName }}</text><text>用户编号：{{ blockedUserId }}</text></view><view class="unblock-button" @tap="handleUnblock"><text>移除黑名单</text></view></view></view>
+				<view class="block-back-button" @tap="blockVisible = false"><text>返回</text></view>
+			</view>
+		</view>
+
 <!-- 自定义底部导航栏 -->
 
 <XsaTabBar />
@@ -727,8 +735,7 @@
 	import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
-	import { likeUser } from '@/api'
-	import { getAccessToken } from '@/api/config.uts'
+	import { likeUser, blockUser, unblockUser } from '@/api'
 	import { mockRecommendUsers } from '@/mock/user.uts'
 	import {
 		recordProfileView,
@@ -740,12 +747,15 @@
 	// ========== 欢迎页 ==========
 	const welcomeVisible = ref(true)
 	const welcomeAgreementVisible = ref(false)
+	const WELCOME_AGREEMENT_KEY = 'xsa_welcome_agreed_v2'
 
 	const showWelcomeService = () => { uni.showToast({ title: '客服功能将在完成登录后提供', icon: 'none' }) }
 	const openWelcomeAgreement = () => { welcomeAgreementVisible.value = true }
 	const closeWelcomeAgreement = () => { welcomeAgreementVisible.value = false }
 	const acceptWelcomeAgreement = () => {
+		uni.setStorageSync(WELCOME_AGREEMENT_KEY, true)
 		uni.setStorageSync('xsa_welcome_agreed', true)
+		uni.setStorageSync('xsa_skip_welcome_once', true)
 		welcomeAgreementVisible.value = false; welcomeVisible.value = false
 		uni.navigateTo({ url: '/pages/auth/login' })
 	}
@@ -856,7 +866,34 @@
 		if (list.length === 0) return
 		currentRecommendIndex.value = (currentRecommendIndex.value + 1) % list.length
 	}
-	const showBlockReport = () => { showToast('屏蔽/举报功能') }
+	const blockVisible = ref(false)
+	const blockedUserId = ref(0)
+	const blockedUserName = ref('')
+	const blockedUserAvatar = ref('/static/portraits/profile-woman-main.jpg')
+	const openReportPage = () => {
+		const user = currentRecommendUser.value as any
+		const userId = user != null && user.id != null ? Number(user.id) : 0
+		const userName = user != null && user.name != null ? '' + user.name : '该用户'
+		uni.navigateTo({ url: '/pagesSub/profileExtra/report?userId=' + userId + '&userName=' + encodeURIComponent(userName), fail: () => showToast('举报页面打开失败，请重试') })
+	}
+	const handleBlockUser = async () => {
+		const user = currentRecommendUser.value as any
+		const userId = user != null && user.id != null ? Number(user.id) : 0
+		blockedUserId.value = userId
+		blockedUserName.value = user.name != null ? '' + user.name : '该用户'
+		blockedUserAvatar.value = user.avatar != null ? '' + user.avatar : '/static/portraits/profile-woman-main.jpg'
+		blockVisible.value = true
+		if (userId <= 0) { showToast('当前为演示用户，已展示拉黑结果'); return }
+		try {
+			const res = await blockUser(userId)
+			if (!res.success) showToast(res.message != null ? '' + res.message : '已显示拉黑结果，稍后同步')
+		} catch (e) { showToast('已显示拉黑结果，网络恢复后同步') }
+	}
+	const handleUnblock = async () => {
+		const res = await unblockUser(blockedUserId.value)
+		if (res.success) { blockVisible.value = false; showToast('已移除黑名单') }
+		else showToast('移除失败，请重试')
+	}
 
 	// 左滑换一个
 	const touchStartX = ref(0)
@@ -957,10 +994,9 @@
 		const pages = getCurrentPages()
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
-		const hasAuthenticatedSession = getAccessToken() != ''
-		welcomeVisible.value =
-			!hasAuthenticatedSession &&
-			(options.tab == null || options.tab == '')
+		const skipWelcomeOnce = uni.getStorageSync('xsa_skip_welcome_once') == true
+		if (skipWelcomeOnce) uni.removeStorageSync('xsa_skip_welcome_once')
+		welcomeVisible.value = !skipWelcomeOnce && (options.tab == null || options.tab == '')
 		if (options.tab != null && options.tab != '') {
 			const parsedTab = Number(options.tab)
 			if (!isNaN(parsedTab) && parsedTab >= 0 && parsedTab < navTabs.length) {
@@ -1313,8 +1349,22 @@
 .sticky-header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; max-width: 750rpx; margin: 0 auto; background-color: var(--bg-primary); }
 .content-scroll { flex: 1; padding: 254rpx 32rpx 0 32rpx; }
 /* 屏蔽/举报行 */
-.block-row { display: flex; justify-content: center; align-items: center; width: 100%; padding: 16rpx 0 8rpx 0; }
-.block-text { font-size: 24rpx; color: var(--text-muted); }
+.block-row { display: flex; flex-direction: row; justify-content: center; align-items: center; width: 100%; padding: 16rpx 0 8rpx 0; }
+.block-action { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 10rpx 18rpx; }
+.block-text { display: block; flex-shrink: 0; white-space: nowrap; font-size: 24rpx; color: var(--text-muted); }
+.block-divider { margin: 0 12rpx; font-size: 22rpx; color: var(--line); }
+.block-mask { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding: 30px; background: rgba(0,0,0,.58); }
+.block-dialog { width: 100%; padding: 28px 22px 22px; border-radius: 24px; background: linear-gradient(135deg, #F8FBFF, #F4F0FF); box-sizing: border-box; }
+.block-dialog-title { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; font-size: 20px; font-weight: 800; color: var(--ink); text-align: center; }
+.block-success-icon { width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: #7047F4; color: var(--text-invert); font-size: 18px; }
+.block-dialog-card { margin-top: 26px; padding: 18px 14px; border-radius: 10px; background: rgba(255,255,255,.82); }
+.block-dialog-note { display: block; text-align: center; font-size: 13px; color: var(--muted); }
+.blocked-user-row { display: flex; flex-direction: row; align-items: center; gap: 10px; margin-top: 16px; }
+.blocked-user-row image { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; }
+.blocked-user-info { flex: 1; display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--ink); }
+.blocked-user-info text:last-child { font-size: 12px; color: var(--muted); }
+.unblock-button { padding: 10px 8px; border: 2px solid #7957C9; border-radius: 6px; color: #7957C9; font-size: 12px; white-space: nowrap; }
+.block-back-button { height: 48px; margin-top: 22px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #8247F3, #4B45F4); color: var(--text-invert); font-size: 18px; font-weight: 800; }
 /* 底部操作栏 */
 
 .ai-float-btn { z-index: 55; bottom: 360rpx; }

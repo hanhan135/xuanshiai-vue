@@ -1,9 +1,10 @@
 <template>
 	<view class="page">
+		<view class="about-nav"><text class="ic ic-sys ic-fanhui nav-back" @tap="goBack"></text><text>关于我们</text><view class="nav-placeholder"></view></view>
 		<!-- Hero 区 -->
 		<view class="hero">
 			<view class="hero-icon-wrap">
-				<text class="hero-icon">❤️</text>
+				<image class="hero-icon" src="/static/logo.png" mode="aspectFit"></image>
 			</view>
 			<text class="hero-title">宣誓爱</text>
 			<text class="hero-version">V {{ appVersion }}</text>
@@ -20,7 +21,7 @@
 			>
 				<text class="list-label">{{ item.title }}</text>
 				<view class="list-right">
-					<text class="list-arrow" v-if="item.clickable">›</text>
+					<text class="ic ic-sys ic-jiantou-you list-arrow" v-if="item.clickable"></text>
 				</view>
 			</view>
 		</view>
@@ -44,6 +45,7 @@ let loading = ref(true)
 let error = ref('')
 
 const appVersion = '1.0.0'
+const goBack = () => uni.navigateBack({ delta: 1 })
 
 onMounted(async () => {
 	try {
@@ -84,10 +86,8 @@ const handleWithdraw = () => {
 </script>
 
 <style scoped>
-.page {
-	min-height: 100vh;
-	background-color: #F8F8F8;
-}
+.page { min-height: 100vh; background-color: #FFFFFF; }
+.about-nav { height: 100px; padding: 44px 20px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; font-size: 20px; font-weight: 800; }.nav-back,.nav-placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }.nav-back { font-size: 38px; font-weight: 300; }
 
 /* ---- Hero 区 ---- */
 .hero {
@@ -95,22 +95,23 @@ const handleWithdraw = () => {
 	flex-direction: column;
 	align-items: center;
 	gap: 24rpx;
-	padding: 80rpx 40rpx 60rpx;
+	padding: 38rpx 40rpx 60rpx;
 	background-color: #FFFFFF;
 }
 
 .hero-icon-wrap {
-	width: 160rpx;
-	height: 160rpx;
-	border-radius: 32rpx;
-	background-color: #E7F1EA;
+	width: 180rpx;
+	height: 180rpx;
+	border-radius: 90rpx;
+	background-color: #00A884;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
 .hero-icon {
-	font-size: 84rpx;
+	width: 120rpx;
+	height: 120rpx;
 }
 
 .hero-title {
@@ -199,4 +200,6 @@ const handleWithdraw = () => {
 	font-size: 28rpx;
 	color: #1A1A1A;
 }
+@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'); }
+.ic { font-style: normal; }.ic-sys { font-family: "iconfont-sys" !important; }.ic-fanhui:before { content: "\e606"; }.ic-jiantou-you:before { content: "\e928"; }
 </style>
