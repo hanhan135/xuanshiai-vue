@@ -1,0 +1,133 @@
+<template>
+	<view class="search-page">
+		<view class="search-nav">
+			<view class="nav-back" @tap="goBack"><text>‹</text></view>
+			<text class="nav-title">搜索女生</text>
+			<view class="nav-placeholder"></view>
+		</view>
+
+		<scroll-view class="search-scroll" scroll-y enhanced show-scrollbar="false">
+			<view class="basic-grid">
+				<view class="filter-item">
+					<text class="filter-label">家乡</text>
+					<picker mode="selector" :range="hometownOptions" :value="hometownIndex" @change="onHometownChange"><view class="filter-pill"><text>{{ hometownOptions[hometownIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+				</view>
+				<view class="filter-item">
+					<text class="filter-label">居住地</text>
+					<picker mode="selector" :range="residenceOptions" :value="residenceIndex" @change="onResidenceChange"><view class="filter-pill"><text>{{ residenceOptions[residenceIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+				</view>
+				<view class="filter-item">
+					<text class="filter-label">年龄(年)</text>
+					<picker mode="selector" :range="ageOptions" :value="ageIndex" @change="onAgeChange"><view class="filter-pill"><text>{{ ageOptions[ageIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+				</view>
+				<view class="filter-item">
+					<text class="filter-label">身高(CM)</text>
+					<picker mode="selector" :range="heightOptions" :value="heightIndex" @change="onHeightChange"><view class="filter-pill"><text>{{ heightOptions[heightIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+				</view>
+			</view>
+
+			<view class="vip-card" @tap="openVip">
+				<view class="vip-heading"><view><text class="vip-title"><text class="ic ic-home ic-star vip-icon"></text> VIP高级筛选</text><text class="vip-subtitle">更精准地找到契合对象</text></view><text class="vip-arrow">›</text></view>
+				<view v-for="(row, rowIndex) in vipRows" :key="rowIndex" class="vip-filter-line"><view class="vip-chip-row"><text v-for="item in row" :key="rowIndex + '-' + item.label + '-' + item.value" class="vip-chip-label">{{ item.label }}</text></view><view class="vip-value-row"><text v-for="item in row" :key="rowIndex + '-' + item.value + '-' + item.label" class="vip-chip-value">{{ item.value }}</text></view></view>
+			</view>
+
+			<view class="mbti-card">
+				<view class="mbti-heading"><view><text class="mbti-title">MBTI交友匹配</text><text class="mbti-subtitle">完成测试，找到性格契合的人</text></view><view class="mbti-actions"><view class="mbti-add" @tap="openMbti"><text>+</text></view><view class="mbti-arrow" @tap="openMbti"><text>›</text></view></view></view>
+				<view class="mbti-tags"><text v-for="item in mbtiOptions" :key="item" class="mbti-tag" :class="{ selected: selectedMbti === item }" @tap="selectMbti(item)">{{ item }}</text></view>
+				<view class="mbti-match-row"><text class="mbti-title">MBTI交友匹配</text><text class="mbti-subtitle">完成测试，找到性格契合的人</text><view class="mbti-tags second-tags"><text v-for="item in secondMbtiOptions" :key="item" class="mbti-tag" :class="{ selected: selectedMbti === item }" @tap="selectMbti(item)">{{ item }}</text></view></view>
+			</view>
+		</scroll-view>
+
+		<view class="bottom-actions"><view class="reset-button" @tap="resetFilters"><text>重置</text></view><view class="search-button" @tap="submitSearch"><text>搜索</text></view></view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	const hometownOptions = ['不限', '江苏', '浙江', '上海', '安徽']
+	const residenceOptions = ['城市可选', '南京', '杭州', '上海', '深圳']
+	const ageOptions = ['不限年龄', '18-25岁', '26-30岁', '31-35岁', '36-40岁', '41岁以上']
+	const heightOptions = ['不限身高', '150-160cm', '161-170cm', '171-180cm', '181cm以上']
+	const hometownIndex = ref(0)
+	const residenceIndex = ref(0)
+	const ageIndex = ref(0)
+	const heightIndex = ref(0)
+	const selectedMbti = ref('')
+	const mbtiOptions = ['ISTJ', 'ENFP', 'INFJ']
+	const vipRows = [
+		[
+			{ label: '身高', value: '不限' },
+			{ label: '大专', value: '155-165' },
+			{ label: '大专', value: '166-175' },
+			{ label: '收入', value: '166-175' },
+			{ label: '1万以上', value: '175+' }
+		],
+		[
+			{ label: '学历', value: '5万以下' },
+			{ label: '不限', value: '16万15万' },
+			{ label: '不限', value: '' },
+			{ label: '大专', value: '' },
+			{ label: '本科及以上', value: '' }
+		]
+	]
+	const secondMbtiOptions = ['ENFP', 'INFJ', 'ESTP']
+
+	const goBack = () => uni.navigateBack({ delta: 1 })
+	const onHometownChange = (event: any) => hometownIndex.value = Number(event.detail.value)
+	const onResidenceChange = (event: any) => residenceIndex.value = Number(event.detail.value)
+	const onAgeChange = (event: any) => ageIndex.value = Number(event.detail.value)
+	const onHeightChange = (event: any) => heightIndex.value = Number(event.detail.value)
+	const selectMbti = (item: string) => selectedMbti.value = selectedMbti.value === item ? '' : item
+	const openVip = () => uni.navigateTo({ url: '/pagesSub/profileExtra/vip' })
+	const openMbti = () => uni.showToast({ title: '请先完成MBTI测试', icon: 'none' })
+	const resetFilters = () => {
+		hometownIndex.value = 0
+		residenceIndex.value = 0
+		ageIndex.value = 0
+		heightIndex.value = 0
+		selectedMbti.value = ''
+	}
+	const submitSearch = () => uni.showToast({ title: '已应用搜索条件', icon: 'success' })
+</script>
+
+<style scoped>
+.search-page { min-height: 100vh; background: var(--paper); color: var(--ink); }
+.search-nav { height: 100px; padding: 44px 20px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: var(--paper); }
+.nav-back, .nav-placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.nav-back text { font-size: 38px; line-height: 36px; color: var(--ink); }
+.nav-title { font-size: 22px; font-weight: 800; font-family: var(--serif); }
+.search-scroll { height: calc(100vh - 100px); padding: 0 28px 150px; box-sizing: border-box; }
+.basic-grid { display: grid; grid-template-columns: 38% 38%; justify-content: space-between; column-gap: 0; row-gap: 48px; padding-top: 28px; }
+.filter-item { display: flex; flex-direction: column; gap: 12px; }
+.filter-label { font-size: 17px; color: var(--ink); }
+.filter-pill { height: 46px; padding: 0 12px; border-radius: 24px; background: var(--canvas); display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; font-size: 16px; color: var(--ink2); white-space: nowrap; }
+.pill-arrow { font-size: 18px; color: var(--muted); }
+.vip-card { margin-top: 34px; padding: 20px 18px 18px; border-radius: 18px; background: #FFFEF2; box-shadow: 0 4px 18px rgba(196, 184, 127, .08); }
+.vip-heading, .mbti-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.vip-title { font-size: 19px; font-weight: 800; color: var(--ink); }
+.vip-icon { margin-right: 4px; color: #C9A96E; font-size: 17px; }
+.vip-subtitle, .mbti-subtitle { display: block; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.vip-arrow { font-size: 30px; color: var(--ink2); }
+.vip-filter-line { margin-top: 18px; }
+.vip-filter-line + .vip-filter-line { margin-top: 12px; }
+.vip-chip-row, .vip-value-row { display: flex; flex-direction: row; gap: 6px; }
+.vip-value-row { margin-top: 10px; }
+.vip-chip-label, .vip-chip-value { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: var(--ink2); white-space: nowrap; }
+.vip-chip-value { font-size: 12px; color: var(--muted); }
+.mbti-card { margin-top: 20px; padding: 20px 18px 22px; border-radius: 16px; background: linear-gradient(135deg, #F1EEFF, #F7F3FF); }
+.mbti-title { font-size: 21px; font-weight: 800; color: var(--ink); }
+.mbti-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.mbti-add, .mbti-arrow { width: 34px; height: 34px; border-radius: 17px; background: var(--paper); display: flex; align-items: center; justify-content: center; color: var(--accent2); }
+.mbti-add text { font-size: 26px; line-height: 24px; }
+.mbti-arrow text { font-size: 26px; }
+.mbti-tags { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.mbti-match-row { position: relative; margin-top: 18px; padding-top: 4px; }
+.mbti-match-row .mbti-subtitle { margin-top: 6px; }
+.second-tags { position: absolute; right: 0; top: 20px; max-width: 62%; margin-top: 0; }
+.mbti-tag { padding: 7px 14px; border: 1px solid #8275B9; border-radius: 18px; color: #655798; font-size: 12px; background: rgba(255,255,255,.55); }
+.mbti-tag.selected { background: #7564D9; color: var(--text-invert); }
+.bottom-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; flex-direction: row; gap: 12px; padding: 18px 28px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(255,255,255,0), var(--paper) 22%); }
+.reset-button, .search-button { height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; }
+.reset-button { width: 116px; border: 1px solid #E8DDB9; background: var(--paper); color: var(--ink2); }
+.search-button { flex: 1; background: #6A5BE7; color: var(--text-invert); }
+@media (max-width: 350px) { .search-scroll { padding-left: 20px; padding-right: 20px; } .basic-grid { column-gap: 20px; } .filter-pill { padding: 0 10px; font-size: 13px; } .bottom-actions { padding-left: 20px; padding-right: 20px; } }
+</style>

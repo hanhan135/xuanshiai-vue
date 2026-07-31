@@ -3,12 +3,13 @@
 		<view class="nav-bar">
 			<view class="nav-back" @tap="onCancel"><text class="nav-back-icon">‹</text></view>
 			<text class="nav-title">编辑资料</text>
-			<text class="nav-preview" @tap="onPreview">主页预览</text>
 		</view>
 
 		<view v-if="loading" class="state-block">
-			<text class="state-title">正在加载资料</text>
-			<text class="state-description">请稍候，正在读取最新信息</text>
+			<view class="loading-orbit"><view class="loading-ring"></view><view class="loading-core"><text>宣</text></view></view>
+			<text class="state-title">正在准备你的资料</text>
+			<text class="state-description">读取最新信息，请稍候</text>
+			<view class="loading-dots"><view></view><view></view><view></view></view>
 		</view>
 		<XsaEmpty
 			v-else-if="loadError != ''"
@@ -29,7 +30,7 @@
 			<view class="section-card avatar-section">
 				<view class="section-heading">
 					<text class="section-title">头像</text>
-					<view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view>
+					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
 				</view>
 				<view class="avatar-row">
 					<view class="avatar-box" @tap="chooseAvatar">
@@ -159,12 +160,12 @@
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">现居地</text>
-						<input class="sheet-input" :value="formData.residenceCityCode" placeholder="未填写" @input="onInput('residenceCityCode', $event)" /><text class="sheet-row-arrow">›</text>
+						<picker class="sheet-row-right" mode="region" @change="onResidenceChange"><text class="sheet-row-value">{{ formData.residenceCityCode || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">家乡</text>
-						<input class="sheet-input" :value="formData.hometown" placeholder="未填写" @input="onInput('hometown', $event)" /><text class="sheet-row-arrow">›</text>
+						<picker class="sheet-row-right" mode="region" @change="onHometownChange"><text class="sheet-row-value">{{ formData.hometown || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
@@ -195,7 +196,7 @@
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">MBTI</text>
-						<input class="sheet-input" :value="formData.mbti" placeholder="请选择" maxlength="4" @input="onInput('mbti', $event)" /><text class="sheet-row-arrow">›</text>
+						<picker class="sheet-row-right" mode="selector" :range="mbtiOptions" :value="mbtiPickerIndex" @change="onMbtiChange"><text class="sheet-row-value">{{ formData.mbti || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
@@ -274,6 +275,7 @@
 	const educationOptions = ['未选择', '高中及以下', '大专', '本科', '硕士', '博士']
 	const maritalOptions = ['未选择', '未婚', '离异', '丧偶']
 	const incomeOptions = ['请选择', '小于10w', '10-20w', '30-50w', '50-100w', '100w以上', '保密']
+	const mbtiOptions = ['未选择', 'INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP']
 	const companyDirectory = ['腾讯', '阿里巴巴', '字节跳动', '华为', '京东', '美团', '小米', '网易', '比亚迪', '中国平安', '招商银行', '中国移动']
 	const companySuggestions = ref([] as string[])
 	const formData = ref({
@@ -425,6 +427,10 @@
 		const index = incomeOptions.indexOf(textValue(formData.value.income))
 		return index >= 0 ? index : 0
 	})
+	const mbtiPickerIndex = computed(() => {
+		const index = mbtiOptions.indexOf(textValue(formData.value.mbti))
+		return index >= 0 ? index : 0
+	})
 	const occupationPreview = computed(() => {
 		const parts = [formData.value.occupation, formData.value.industry].filter((v: any) => v != null && ('' + v).trim() != '')
 		return parts.length > 0 ? parts.join(' · ') : '未填写'
@@ -453,9 +459,19 @@
 	const onBirthdayChange = (event: any) => { if (!isIdentityLocked.value) formData.value.birthday = event.detail.value }
 	const onHeightChange = (event: any) => formData.value.height = Number(heightOptions[Number(event.detail.value)])
 	const onWeightChange = (event: any) => formData.value.weight = Number(weightOptions[Number(event.detail.value)])
+	const regionText = (event: any): string => {
+		const values = event.detail.value as string[]
+		return values.join(' ')
+	}
+	const onResidenceChange = (event: any) => formData.value.residenceCityCode = regionText(event)
+	const onHometownChange = (event: any) => formData.value.hometown = regionText(event)
 	const onIncomeChange = (event: any) => {
 		const index = Number(event.detail.value)
 		formData.value.income = index > 0 ? incomeOptions[index] : ''
+	}
+	const onMbtiChange = (event: any) => {
+		const index = Number(event.detail.value)
+		formData.value.mbti = index > 0 ? mbtiOptions[index] : ''
 	}
 	const onCompanyInput = (event: any) => {
 		formData.value.company = event.detail.value
@@ -597,22 +613,35 @@
 
 <style scoped>
 .edit-page { min-height: 100vh; background: var(--canvas); display: flex; flex-direction: column; }
-.nav-bar { height: 48px; padding: 0 16px; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; background: var(--paper); border-bottom: 1px solid var(--line); }
+.nav-bar { height: 72px; margin-top: 32px; padding: 36px 16px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; background: var(--paper); border-bottom: 1px solid var(--line); }
 .nav-back { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
 .nav-back-icon { font-size: 28px; font-weight: 700; color: var(--ink); line-height: 1; }
 .nav-title { font-size: 18px; font-weight: 700; color: var(--ink); }
-.nav-preview { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 14px; color: var(--muted); }
-.state-block { padding: 72px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.state-title { font-size: 16px; font-weight: 700; color: var(--ink); }
-.state-description { font-size: 13px; color: var(--muted); }
-.scroll-content { flex: 1; height: 0; padding: 12px 16px 100px; box-sizing: border-box; }
+.state-block { flex: 1; min-height: 420px; padding: 100px 24px 140px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.loading-orbit { position: relative; width: 92px; height: 92px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; }
+.loading-ring { position: absolute; width: 78px; height: 78px; border: 4px solid var(--sage-soft); border-top-color: var(--sage); border-right-color: var(--accent); border-radius: 50%; animation: loading-spin 1.15s linear infinite; }
+.loading-core { width: 50px; height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center; background: var(--sage); box-shadow: 0 8px 20px rgba(51,141,107,0.2); }
+.loading-core text { color: var(--text-invert); font-size: 22px; font-weight: 700; }
+.state-title { font-size: 17px; font-weight: 700; color: var(--ink); }
+.state-description { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.loading-dots { display: flex; flex-direction: row; gap: 6px; margin-top: 14px; }
+.loading-dots view { width: 6px; height: 6px; border-radius: 3px; background: var(--sage); opacity: 0.35; animation: loading-pulse 1.2s ease-in-out infinite; }
+.loading-dots view:nth-child(2) { animation-delay: 0.18s; }
+.loading-dots view:nth-child(3) { animation-delay: 0.36s; }
+@keyframes loading-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes loading-pulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+.scroll-content { flex: 1; height: 0; padding: 36px 16px 100px; box-sizing: border-box; }
 .progress-section { padding: 12px 16px 4px; display: flex; flex-direction: column; gap: 6px; }
 .progress-header, .section-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.heading-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .progress-label, .section-title { font-size: 16px; font-weight: 700; color: var(--ink); }
 .progress-value { font-size: 14px; font-weight: 700; color: var(--sage); }
 .progress-track { height: 6px; border-radius: 3px; background: var(--warm); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--sage), var(--accent)); }
 .progress-hint { font-size: 11px; color: var(--muted); }
+.preview-action { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 16px; background: var(--sage-soft); color: var(--sage); }
+.preview-action text { font-size: 13px; font-weight: 600; }
+.preview-action-arrow { font-size: 16px !important; }
 .section-caption { font-size: 12px; color: var(--sage); font-weight: 500; }
 .section-card { margin-bottom: 14px; padding: 16px 18px; background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 14px; }
 .avatar-row { display: flex; flex-direction: row; gap: 16px; align-items: center; }
