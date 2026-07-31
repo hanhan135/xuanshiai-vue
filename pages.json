@@ -238,6 +238,18 @@
           }
         },
         {
+          "path": "help",
+          "style": {
+            "navigationBarTitleText": "客服与帮助"
+          }
+        },
+        {
+          "path": "security",
+          "style": {
+            "navigationBarTitleText": "安全中心"
+          }
+        },
+        {
           "path": "certification",
           "style": {
             "navigationBarTitleText": "我的认证"

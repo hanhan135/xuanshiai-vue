@@ -1,0 +1,87 @@
+/** 客服与帮助 Mock 数据。仅用于开发、演示和端侧状态回归。 */
+
+export const mockHelpQuickActions = [
+  { id: 'report', title: '如何举报违规内容？', prompt: '如何举报违规内容？' },
+  { id: 'block', title: '如何拉黑用户？', prompt: '如何拉黑用户？' },
+  { id: 'safety', title: '遇到疑似诈骗怎么办？', prompt: '遇到疑似诈骗怎么办？' }
+]
+
+export const mockHelpCategories = [
+  {
+    id: 'common',
+    title: '常见问题',
+    icon: '?',
+    items: [
+      { id: 'common-1', question: '喜欢、小纸条后可以取消吗', prompt: '喜欢、小纸条后可以取消吗' },
+      { id: 'common-2', question: '我初来乍到，如何在平台交友', prompt: '我初来乍到，如何在平台交友' },
+      { id: 'common-3', question: '看见心仪的TA，如何开启聊天', prompt: '看见心仪的TA，如何开启聊天' },
+      { id: 'common-4', question: '我为什么不能看“谁喜欢我”和“访客”', prompt: '我为什么不能看谁喜欢我和访客' }
+    ]
+  },
+  {
+    id: 'profile',
+    title: '完善资料\n和认证',
+    icon: '✓',
+    items: [
+      { id: 'profile-1', question: '资料和认证审核多久能通过', prompt: '资料和认证审核多久能通过' },
+      { id: 'profile-2', question: '为什么我必须要通过身份和学历认证才能聊天', prompt: '为什么我必须要通过身份和学历认证才能聊天' },
+      { id: 'profile-3', question: '我提交的认证资料有泄漏风险吗？', prompt: '我提交的认证资料有泄漏风险吗' },
+      { id: 'profile-4', question: '什么是可信度', prompt: '什么是可信度' }
+    ]
+  },
+  {
+    id: 'recommend',
+    title: '嘉宾推荐',
+    icon: '♡',
+    items: [
+      { id: 'recommend-1', question: '为什么每天限量推荐有​​限嘉宾', prompt: '为什么每天限量推荐有限嘉宾' },
+      { id: 'recommend-2', question: '推荐嘉宾数量不足或重复', prompt: '推荐嘉宾数量不足或重复怎么办' },
+      { id: 'recommend-3', question: '推荐的人不符合要求', prompt: '推荐的人不符合要求怎么办' }
+    ]
+  },
+  {
+    id: 'feature',
+    title: '功能使用',
+    icon: '▦',
+    items: [
+      { id: 'feature-1', question: '脱单了如何修改感情状态', prompt: '脱单了如何修改感情状态' },
+      { id: 'feature-2', question: '什么是“小纸条”', prompt: '什么是小纸条' },
+      { id: 'feature-3', question: '村口如何使用', prompt: '村口如何使用' },
+      { id: 'feature-4', question: '什么样的行为会算访问呢', prompt: '什么样的行为会算访问' }
+    ]
+  },
+  {
+    id: 'value',
+    title: '增值服务',
+    icon: '◇',
+    items: [
+      { id: 'value-1', question: '发票中心', prompt: '如何申请发票' },
+      { id: 'value-2', question: '兑换会员入口', prompt: '在哪里兑换会员' },
+      { id: 'value-3', question: '会员功能', prompt: '会员有哪些功能' },
+      { id: 'value-4', question: '青藤币有什么用，如何获得更多青藤币呢', prompt: '青藤币有什么用，如何获得更多青藤币' },
+      { id: 'value-5', question: '精选嘉宾相关', prompt: '精选嘉宾是什么' },
+      { id: 'value-6', question: '为什么要认证', prompt: '为什么要认证' }
+    ]
+  }
+]
+
+function buildMessageId(): string {
+  return 'ai-' + Date.now()
+}
+
+export function getMockAiSupportReply(content: string): any {
+  const question = (content != null ? '' + content : '').toLowerCase()
+  let reply = '我可以帮你了解平台功能、举报入口和安全设置。你可以描述遇到的问题，我会给出操作建议。'
+  if (question.indexOf('举报') >= 0 || question.indexOf('违规') >= 0) {
+    reply = '如果需要举报，请前往相关内容或用户卡片上方的举报入口提交。AI 客服只提供操作指引，不会替你提交举报。'
+  } else if (question.indexOf('拉黑') >= 0 || question.indexOf('屏蔽') >= 0) {
+    reply = '你可以在相关用户卡片或资料页的操作菜单中选择拉黑；之后也可以在安全中心查看黑名单并解除拉黑。'
+  } else if (question.indexOf('诈骗') >= 0 || question.indexOf('借钱') >= 0 || question.indexOf('转账') >= 0) {
+    reply = '请先停止转账或继续提供隐私信息，保留必要记录，并通过相关内容或用户卡片上方的举报入口反馈；涉及现实人身或财产风险时，请及时联系当地警方。'
+  }
+  return { id: buildMessageId(), role: 'assistant', content: reply }
+}
+
+export function submitMockFeedback(content: string): any {
+  return { success: true, data: { submitted: true, content: content } }
+}

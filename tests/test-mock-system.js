@@ -43,7 +43,9 @@ try {
     'mock/user.uts',
     'mock/message.uts',
     'mock/community.uts',
+    'mock/security.uts',
     'mock/matchmaker.uts',
+    'mock/help.uts',
     'mock/spotlight.uts'
   ]
 
@@ -72,7 +74,9 @@ try {
     'api/user.uts',
     'api/message.uts',
     'api/community.uts',
+    'api/security.uts',
     'api/matchmaker.uts',
+    'api/help.uts',
     'api/spotlight.uts'
   ]
 

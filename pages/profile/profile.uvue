@@ -59,7 +59,7 @@
 
 			<!-- 主菜单 -->
 			<view class="menu-card">
-				<view class="menu-row" v-for="item in mainMenuItems" :key="item.label" @tap="item.action">
+				<view class="menu-row" v-for="item in mainMenuItems" :key="item.label" @tap="handleMenuItem(item)">
 					<view class="menu-icon-wrap" :style="{ backgroundColor: item.iconBg }">
 						<text :class="item.iconClass + ' menu-icon'"></text>
 					</view>
@@ -74,7 +74,7 @@
 
 			<!-- 底部菜单 -->
 			<view class="menu-card">
-				<view class="menu-row" v-for="item in bottomMenuItems" :key="item.label" @tap="item.action">
+				<view class="menu-row" v-for="item in bottomMenuItems" :key="item.label" @tap="item.label == '安全中心' ? onSecurity() : handleMenuItem(item)">
 					<view class="menu-icon-wrap" :style="{ backgroundColor: item.iconBg }">
 						<text :class="item.iconClass + ' menu-icon'"></text>
 					</view>
@@ -164,7 +164,7 @@ const onMenuSettings = () => {
 }
 
 const onHelp = () => {
-	uni.showToast({ title: '客服与帮助', icon: 'none' })
+	uni.navigateTo({ url: '/pagesSub/profileExtra/help', fail: () => { uni.showToast({ title: '客服与帮助打开失败，请重试', icon: 'none' }) } })
 }
 
 const onAbout = () => {
@@ -172,7 +172,41 @@ const onAbout = () => {
 }
 
 const onSecurity = () => {
-	uni.showToast({ title: '安全中心', icon: 'none' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/security',
+		animationType: 'slide-in-right',
+		fail: (err) => {
+			console.log('安全中心导航失败', err)
+			uni.showToast({ title: '安全中心暂不可用，请重试', icon: 'none' })
+		}
+	})
+}
+
+const handleMenuItem = (item: any) => {
+	if (item == null) return
+	const directUrl = item.url != null ? '' + item.url : ''
+	if (directUrl != '') {
+		uni.navigateTo({ url: directUrl, fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) } })
+		return
+	}
+	const label = item.label != null ? '' + item.label : ''
+	if (label == '客服与帮助') {
+		onHelp()
+	} else if (label == '安全中心') {
+		onSecurity()
+	} else if (label == '设置') {
+		onMenuSettings()
+	} else if (label == '关于我们') {
+		onAbout()
+	} else if (label == '我的动态') {
+		onMyMoments()
+	} else if (label == '诚信认证') {
+		onCertification()
+	} else if (label == '会员中心') {
+		onOpenVIP()
+	} else if (item.action != null) {
+		item.action()
+	}
 }
 
 const mainMenuItems = [
@@ -188,7 +222,7 @@ const mainMenuItems = [
 const bottomMenuItems = [
 	{ iconClass: 'ic ic-me ic-kefu', iconBg: '#F7F4F0', label: '客服与帮助', subtitle: 'AI客服 . 意见反馈', action: onHelp },
 	{ iconClass: 'ic ic-me ic-bangzhu', iconBg: '#F7F4F0', label: '关于我们', subtitle: '版本 1.0.0', action: onAbout },
-	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '安全中心', action: onSecurity },
+	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '安全中心', url: '/pagesSub/profileExtra/security', action: onSecurity },
 ]
 </script>
 
