@@ -1,0 +1,214 @@
+<template>
+	<view class="poster-template" :class="modeClass">
+		<view class="poster-stage" :class="modeStageClass">
+			<view class="style-card">
+				<view class="card-frame" :class="borderClass" :style="cardStyle">
+					<view v-if="styleId === 1" class="poster-thumb poster-guest">
+						<view class="guest-photo-wrap">
+							<image class="guest-photo" :src="profileImage" mode="aspectFill"></image>
+							<view v-if="profile.realNameVerified" class="guest-stamp"><text>已实名</text></view>
+						</view>
+						<view class="guest-body">
+							<view class="guest-pattern"></view>
+							<text class="guest-name">{{ profile.name }}</text>
+							<text class="guest-intro">{{ introDisplay }}</text>
+							<view class="guest-divider"></view>
+							<view class="guest-footer">
+								<view class="guest-qr"><text>QR</text></view>
+								<view class="guest-guide"><text class="guide-quote">“</text><text>长按识别二维码</text><text>了解Ta的资料</text></view>
+							</view>
+						</view>
+					</view>
+
+					<view v-else-if="styleId === 2" class="poster-thumb poster-journal">
+						<view class="journal-top-gradient"></view>
+						<view class="journal-info">
+							<view class="journal-profile">
+								<image class="journal-photo" :src="profileImage" mode="aspectFill"></image>
+								<view v-if="profile.realNameVerified" class="journal-stamp"><text>已实名</text></view>
+								<view class="journal-tags"><text>{{ profile.tags[0] }}</text><text>{{ profile.tags[1] }}</text></view>
+								<text class="journal-name">{{ profile.name }}</text>
+							</view>
+							<view class="journal-facts">
+								<text>出生：{{ birthDisplay }}</text>
+								<text>身高：{{ profile.height }}</text>
+								<text>职业：{{ profile.job }}</text>
+								<text>家乡：{{ profile.hometown }}</text>
+								<text>学历：{{ profile.education }}</text>
+								<text>婚姻状况：{{ profile.marriage }}</text>
+							</view>
+						</view>
+						<view class="journal-heading"><view></view><text>理想中的 Ta</text><view></view></view>
+						<view class="journal-wish"><text>{{ expectation(0) }}</text><text>{{ expectation(1) }}</text><text>{{ expectation(2) }}</text><text>{{ expectation(3) }}</text><text>{{ expectation(4) }}</text></view>
+						<view class="journal-footer"><view class="journal-qr"><text>QR</text></view><text>有幸相逢，期许同行</text></view>
+					</view>
+
+					<view v-else-if="styleId === 3" class="poster-thumb poster-split">
+						<view class="split-aside">
+							<image class="split-avatar" :src="profileImage" mode="aspectFill"></image>
+							<text class="split-name">{{ profile.name }}</text>
+							<view v-if="profile.realNameVerified" class="split-badge"><text>♥</text><text>已实名</text></view>
+							<text class="split-slogan">愿有真诚，终遇相逢</text>
+						</view>
+						<view class="split-main">
+							<view class="split-decor"></view>
+							<text class="split-title">嘉宾介绍</text>
+							<text class="split-copy">{{ profile.introduction }}</text>
+							<view class="split-facts">
+								<view class="split-fact-row"><text>年龄：{{ profile.age }}</text><text>身高：{{ profile.height }}</text></view>
+								<view class="split-fact-row"><text>学历：{{ profile.education }}</text><text>职业：{{ profile.job }}</text></view>
+								<view class="split-fact-row"><text>收入：{{ profile.income }}</text><text>居住地：{{ profile.city }}</text></view>
+								<view class="split-fact-row"><text>婚姻状态：{{ profile.marriage }}</text><text>家乡：{{ profile.hometown }}</text></view>
+							</view>
+							<view class="split-heading"><view></view><text>择偶条件</text><view></view></view>
+							<view class="split-wish"><text>· {{ expectation(0) }}</text><text>· {{ expectation(1) }}</text><text>· {{ expectation(2) }}</text><text>· {{ expectation(3) }}</text><text>· {{ expectation(4) }}</text></view>
+							<view class="split-qr"><text>QR</text></view>
+							<text class="split-guide">长按识别二维码，了解更多Ta的资料</text>
+						</view>
+					</view>
+
+					<view v-else class="poster-thumb poster-mint">
+						<view class="mint-photo-wrap">
+							<image class="mint-photo" :src="profileImage" mode="aspectFill"></image>
+							<view v-if="profile.realNameVerified" class="mint-stamp"><text>已实名</text></view>
+						</view>
+						<view class="mint-name-row"><text class="mint-name">{{ profile.name }}</text><view class="mint-tags"><text>{{ profile.tags[0] }}</text><text>{{ profile.tags[1] }}</text></view></view>
+						<view class="mint-columns">
+							<view class="mint-column"><text class="mint-column-title">个人概况</text><text>年龄：{{ profile.age }}</text><text>身高：{{ profile.height }}</text><text>学历：{{ profile.education }}</text><text>职业：{{ profile.job }}</text><text>现居：{{ profile.city }}</text><text>收入：{{ profile.income }}</text></view>
+							<view class="mint-column"><text class="mint-column-title">期待的伴侣</text><text>{{ expectation(0) }}</text><text>{{ expectation(1) }}</text><text>{{ expectation(2) }}</text><text>{{ expectation(3) }}</text><text>{{ expectation(4) }}</text></view>
+						</view>
+						<view class="mint-footer"><view class="mint-qr"><text>QR</text></view><text>长按识别二维码</text><text>慢慢相遇，与温柔相逢</text></view>
+					</view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import type { PosterProfile } from '@/utils/poster-profile.uts'
+
+interface Props {
+	profile: PosterProfile
+	styleId?: number
+	mode?: 'compact' | 'preview'
+	imageIndex?: number
+}
+
+const props = withDefaults(defineProps<Props>(), {
+	styleId: 1,
+	mode: 'compact',
+	imageIndex: 0
+})
+
+const styleId = computed(() => props.styleId)
+const modeClass = computed(() => props.mode == 'preview' ? 'preview' : 'compact')
+const modeStageClass = computed(() => props.mode == 'preview' ? 'preview-stage' : 'compact-stage')
+const cardStyle = computed(() => props.mode == 'preview' ? 'transform: scale(2.09756); transform-origin: top left;' : '')
+const profile = computed(() => props.profile)
+const profileImage = computed(() => {
+	const photos = props.profile.photos != null && props.profile.photos.length > 0 ? props.profile.photos : [props.profile.avatar]
+	let index = props.imageIndex
+	if (index < 0) index = 0
+	if (index >= photos.length) index = index % photos.length
+	return photos[index]
+})
+const birthDisplay = computed(() => props.profile.birthYear != null && props.profile.birthYear != '未填写' ? props.profile.birthYear : props.profile.age)
+const introDisplay = computed(() => {
+	const intro = props.profile.introduction != null ? props.profile.introduction.trim() : ''
+	if (intro.length >= 36 || intro == '未填写') return intro
+	return '年龄' + props.profile.age + '，身高' + props.profile.height + '，' + props.profile.education + '，' + props.profile.marriage + '。' + intro
+})
+const borderClass = computed(() => {
+	if (props.styleId == 2) return 'border-cocoa'
+	if (props.styleId == 3) return 'border-rose'
+	if (props.styleId == 4) return 'border-mint'
+	return 'border-lilac'
+})
+const expectation = (index: number): string => {
+	if (props.profile.expectations != null && index < props.profile.expectations.length && props.profile.expectations[index] != '') return props.profile.expectations[index]
+	return '未填写'
+}
+</script>
+
+<style scoped>
+.poster-template { display: block; overflow: visible; }
+.poster-template.compact { width: 328rpx; height: 588rpx; }
+.poster-template.preview { width: 688rpx; height: 1234rpx; }
+.poster-stage { width: 100%; height: 100%; overflow: visible; }
+.style-card { width: 328rpx; height: 588rpx; }
+.poster-template.preview .style-card, .preview-stage .style-card { width: 688rpx; height: 1234rpx; overflow: visible; }
+.card-frame { position: relative; width: 328rpx; height: 588rpx; padding: 4rpx; box-sizing: border-box; border-radius: 24rpx; }
+.poster-template.preview .card-frame, .preview-stage .card-frame { transform: scale(2.09756); transform-origin: top left; }
+.border-lilac { background-color: #C5BDD4; }
+.border-cocoa { background-color: #D9BCB4; }
+.border-rose { background-color: #E8B8C0; }
+.border-mint { background-color: #BFD8D2; }
+.poster-thumb { position: relative; width: 320rpx; height: 580rpx; overflow: hidden; box-sizing: border-box; }
+.poster-guest { display: flex; flex-direction: column; border: 2rpx solid #CEC8DD; border-radius: 22rpx; background-color: #FBFAF7; }
+.guest-photo-wrap { position: relative; width: 100%; height: 236rpx; flex-shrink: 0; overflow: hidden; border-radius: 20rpx 20rpx 0 0; }
+.guest-photo { width: 100%; height: 100%; }
+.guest-stamp { position: absolute; right: 16rpx; bottom: 14rpx; width: 52rpx; height: 52rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #FFFFFF; background-color: rgba(206,163,167,.86); font-size: 12rpx; font-weight: 700; }
+.guest-body { position: relative; flex: 1; display: flex; flex-direction: column; gap: 12rpx; padding: 24rpx; background-color: #F6F3F5; }
+.guest-pattern { position: absolute; right: 12rpx; top: 14rpx; width: 36rpx; height: 36rpx; border: 2rpx solid rgba(197,189,212,.46); border-radius: 50%; }
+.guest-name { color: #4E3E34; font-size: 30rpx; font-weight: 600; }
+.guest-intro { width: 100%; color: #6B5A4E; font-size: 16rpx; line-height: 1.45; }
+.guest-divider { height: 1rpx; background-color: #C5BDD4; }
+.guest-footer { display: flex; flex-direction: row; align-items: center; gap: 10rpx; margin-top: auto; }
+.guest-qr { width: 84rpx; height: 84rpx; display: flex; align-items: center; justify-content: center; border-radius: 24rpx; color: #CCCCCC; background-color: #F5F0F5; font-size: 14rpx; }
+.guest-guide { display: flex; flex-direction: column; gap: 4rpx; color: #999999; font-size: 16rpx; }
+.guide-quote { color: #D4C8E8; font-size: 40rpx; line-height: .6; }
+.poster-journal { display: flex; flex-direction: column; gap: 16rpx; border-radius: 22rpx; padding: 36rpx 24rpx 16rpx; background: linear-gradient(180deg, #F6EDE5 0%, #F6EDE5 44%, #F9F2EC 72%, #FDF9F5 100%); }
+.journal-top-gradient { position: absolute; left: 0; top: 0; width: 100%; height: 300rpx; background: radial-gradient(circle at 78% 10%, rgba(217,188,180,.18), transparent 28%); }
+.journal-info { position: relative; display: flex; flex-direction: row; gap: 12rpx; }
+.journal-profile { position: relative; width: 116rpx; height: 176rpx; flex-shrink: 0; }
+.journal-photo { width: 104rpx; height: 112rpx; border-radius: 12rpx; }
+.journal-stamp { position: absolute; left: 56rpx; top: 88rpx; width: 52rpx; height: 18rpx; display: flex; align-items: center; justify-content: center; color: #8B6A60; background-color: rgba(229,208,200,.82); font-size: 12rpx; }
+.journal-tags { display: flex; flex-direction: row; gap: 8rpx; margin-top: 38rpx; }
+.journal-tags text { padding: 3rpx 8rpx; border-radius: 12rpx; color: #8B7268; background: linear-gradient(135deg, #ECE0D8, #DFCCC0); font-size: 10rpx; }
+.journal-name { position: absolute; left: 26rpx; top: 124rpx; color: #6B5048; font-size: 20rpx; font-weight: 700; }
+.journal-facts { display: flex; flex-direction: column; gap: 4rpx; padding-top: 2rpx; color: #8B7268; font-size: 16rpx; line-height: 1.25; }
+.journal-heading { display: flex; flex-direction: row; align-items: center; gap: 10rpx; color: #B89488; font-size: 24rpx; font-weight: 700; }
+.journal-heading view { flex: 1; height: 2rpx; background-color: #DFCEC8; }
+.journal-wish { display: flex; flex-direction: column; gap: 6rpx; padding: 4rpx 0 8rpx; color: #8B7268; background-color: rgba(253,249,245,.74); font-size: 17rpx; line-height: 1.18; }
+.journal-wish text { width: 100%; }
+.journal-footer { display: flex; flex-direction: row; align-items: center; gap: 12rpx; margin-top: auto; color: #B89488; font-size: 18rpx; }
+.journal-qr { width: 84rpx; height: 84rpx; display: flex; align-items: center; justify-content: center; border-radius: 24rpx; color: #D4958A; background-color: #FCF9F3; font-size: 14rpx; }
+.poster-split { display: flex; flex-direction: row; border-radius: 22rpx; background-color: #FDFAF8; }
+.split-aside { width: 39%; height: 580rpx; display: flex; flex-direction: column; align-items: center; padding: 20rpx 16rpx 28rpx; box-sizing: border-box; color: #D8A0A8; background-color: #F9E6E8; }
+.split-avatar { width: 88rpx; height: 88rpx; border: 4rpx solid #FFFFFF; border-radius: 50%; }
+.split-name { margin-top: 16rpx; color: #3D2A2A; font-size: 26rpx; font-weight: 700; }
+.split-badge { display: flex; flex-direction: row; gap: 6rpx; align-items: center; margin-top: 16rpx; padding: 6rpx 14rpx; border-radius: 24rpx; color: #D8A0A8; background-color: #FFFFFF; font-size: 12rpx; }
+.split-slogan { margin-top: auto; width: 40rpx; color: #D8A0A8; font-size: 18rpx; line-height: 1.8; text-align: center; }
+.split-main { position: relative; flex: 1; width: auto; height: 580rpx; display: flex; flex-direction: column; gap: 10rpx; padding: 20rpx 16rpx 12rpx; box-sizing: border-box; color: #555555; background-color: #FDFAF8; }
+.split-decor { position: absolute; right: 16rpx; top: 18rpx; width: 28rpx; height: 28rpx; border: 2rpx solid rgba(216,160,168,.32); border-radius: 50%; }
+.split-title { color: #C09098; font-size: 22rpx; font-weight: 700; }
+.split-copy { width: 100%; color: #8C6E73; font-size: 14rpx; line-height: 1.35; }
+.split-facts { display: flex; flex-direction: column; gap: 5rpx; padding: 8rpx; border-radius: 8rpx; color: #555555; background-color: #FDF2F2; font-size: 11rpx; line-height: 1.15; }
+.split-fact-row { display: flex; flex-direction: row; gap: 4rpx; }
+.split-fact-row text { flex: 1; min-width: 0; }
+.split-heading { display: flex; flex-direction: row; align-items: center; gap: 6rpx; color: #C09098; font-size: 15rpx; font-weight: 700; }
+.split-heading view { flex: 1; height: 2rpx; background-color: #E8D0D4; }
+.split-wish { display: flex; flex-direction: column; gap: 4rpx; color: #555555; font-size: 10rpx; line-height: 1.15; }
+.split-wish text { width: 100%; }
+.split-qr { width: 76rpx; height: 70rpx; display: flex; align-items: center; justify-content: center; align-self: flex-end; margin-top: auto; border-radius: 12rpx; border: 4rpx solid #F0B5C3; color: #D8A0A8; background-color: #FFFFFF; font-size: 12rpx; }
+.split-guide { color: #B89488; font-size: 9rpx; line-height: 1.2; text-align: right; }
+.poster-mint { display: flex; flex-direction: column; border-radius: 22rpx; background-color: #FAFDFC; }
+.mint-photo-wrap { position: relative; width: 100%; height: 212rpx; overflow: hidden; border-radius: 20rpx 20rpx 0 0; }
+.mint-photo { width: 100%; height: 100%; }
+.mint-stamp { position: absolute; right: 16rpx; bottom: 14rpx; width: 52rpx; height: 52rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #4A5453; background-color: rgba(191,216,210,.82); font-size: 12rpx; }
+.mint-name-row { display: flex; flex-direction: column; gap: 6rpx; padding: 14rpx 20rpx 10rpx; background-color: #FAFDFC; }
+.mint-name { color: #2C3A38; font-size: 28rpx; font-weight: 700; }
+.mint-tags { display: flex; flex-direction: row; gap: 10rpx; }
+.mint-tags text { padding: 4rpx 14rpx; border-radius: 16rpx; color: #4A5453; background-color: rgba(191,216,210,.25); font-size: 11rpx; }
+.mint-columns { display: flex; flex-direction: row; gap: 2rpx; padding: 16rpx; background-color: #FAFDFC; }
+.mint-column { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; padding: 12rpx 10rpx; color: #4A5453; background-color: #E8F1EF; font-size: 11rpx; line-height: 1.12; }
+.mint-column text { width: 100%; }
+.mint-column:first-child { border-radius: 16rpx 0 0 16rpx; }
+.mint-column:last-child { border-radius: 0 16rpx 16rpx 0; }
+.mint-column-title { margin-bottom: 4rpx; color: #73948E; font-size: 14rpx; font-weight: 700; }
+.mint-footer { display: flex; flex-direction: row; align-items: center; gap: 10rpx; padding: 6rpx 16rpx 8rpx; color: #73948E; background-color: #FAFDFC; font-size: 9rpx; }
+.mint-qr { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; border-radius: 6rpx; color: #73948E; background-color: #E8F1EF; font-size: 11rpx; }
+.poster-template.compact .poster-thumb, .poster-template.preview .poster-thumb { font-family: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', serif; }
+.guest-guide, .split-guide, .mint-footer { font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+</style>

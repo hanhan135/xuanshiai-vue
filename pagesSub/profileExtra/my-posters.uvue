@@ -1,0 +1,78 @@
+<template>
+	<view class="page">
+		<view class="top-bar" :style="{ paddingTop: statusBarHeight + 'px', height: (statusBarHeight + 44) + 'px' }">
+			<view class="top-back" @tap="goBack"><text>←</text></view>
+			<text class="top-title">选择海报</text>
+			<view class="top-actions"><text class="top-menu">⋯</text><text class="top-dot"></text></view>
+		</view>
+
+		<scroll-view scroll-y class="content-scroll" show-scrollbar="false">
+			<view class="intro-block">
+				<text class="heading">请选择您喜欢的样式</text>
+				<text class="subheading">海报仅展示已授权公开的资料与认证状态</text>
+			</view>
+
+			<view class="style-grid">
+				<view v-for="style in posterStyles" :key="style.id" class="style-card-shell" @tap="selectStyle(style.id)">
+					<image class="style-card-image" :src="style.image" mode="scaleToFill"></image>
+					<view v-if="selectedStyleId === style.id" class="selected-outline"><text>✓</text></view>
+				</view>
+			</view>
+
+			<view class="confirm-area">
+				<view class="confirm-button" @tap="confirmSelection"><text>确认选择</text></view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+const selectedStyleId = ref(1)
+const userId = ref(9001)
+
+const posterStyles = [
+	{ id: 1, image: '/static/poster-templates/ehi3K.png' },
+	{ id: 2, image: '/static/poster-templates/X7hDIt.png' },
+	{ id: 3, image: '/static/poster-templates/gabCv.png' },
+	{ id: 4, image: '/static/poster-templates/v4EFK.png' }
+]
+
+onLoad((options: any) => {
+	if (options != null && options.userId != null) {
+		const parsedUserId = parseInt('' + options.userId)
+		if (!isNaN(parsedUserId) && parsedUserId > 0) userId.value = parsedUserId
+	}
+})
+
+const goBack = () => { uni.navigateBack() }
+const selectStyle = (styleId: number) => { selectedStyleId.value = styleId }
+const confirmSelection = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-poster-preview?style=' + selectedStyleId.value + '&userId=' + userId.value,
+		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
+}
+</script>
+
+<style scoped>
+.page { height: 100vh; display: flex; flex-direction: column; background-color: #EDF1EC; color: #1A1A1A; }
+.top-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; background-color: #FFFFFF; padding-left: 32rpx; padding-right: 32rpx; box-sizing: border-box; }
+.top-back { width: 56rpx; color: #1A1A1A; font-size: 40rpx; line-height: 1; }
+.top-title { flex: 1; color: #1A1A1A; text-align: center; font-size: 32rpx; font-weight: 600; }
+.top-actions { width: 112rpx; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 24rpx; }
+.top-menu { color: #1A1A1A; font-size: 34rpx; line-height: 1; }
+.top-dot { width: 26rpx; height: 26rpx; border-radius: 50%; background-color: #1A1A1A; }
+.content-scroll { flex: 1; min-height: 0; box-sizing: border-box; }
+.intro-block { display: flex; flex-direction: column; gap: 4rpx; padding: 10rpx 16rpx 0; }
+.heading { color: #334438; font-size: 26rpx; font-weight: 700; line-height: 1.35; }
+.subheading { color: #7A8A7C; font-size: 15rpx; line-height: 1.4; }
+.style-grid { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; row-gap: 28rpx; padding: 16rpx 16rpx 0; box-sizing: border-box; }
+.style-card-shell { position: relative; width: 328rpx; height: 588rpx; flex-shrink: 0; }
+.style-card-image { display: block; width: 328rpx; height: 588rpx; }
+.selected-outline { position: absolute; left: -4rpx; top: -4rpx; width: 336rpx; height: 596rpx; display: flex; align-items: flex-start; justify-content: flex-end; border: 4rpx solid #73948E; border-radius: 26rpx; box-sizing: border-box; pointer-events: none; }
+.selected-outline text { width: 34rpx; height: 34rpx; margin: 8rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #FFFFFF; background-color: #73948E; font-size: 22rpx; font-weight: 700; }
+.confirm-area { padding: 22rpx 16rpx 48rpx; }
+.confirm-button { width: 100%; height: 64rpx; display: flex; align-items: center; justify-content: center; border-radius: 32rpx; color: #223124; background-color: #C5DDBE; font-size: 24rpx; font-weight: 700; }
+</style>

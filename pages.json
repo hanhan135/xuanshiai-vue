@@ -269,6 +269,34 @@
           }
         },
         {
+          "path": "my-tasks",
+          "style": {
+            "navigationBarTitleText": "我的任务",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-registration",
+          "style": {
+            "navigationBarTitleText": "我的报名",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-posters",
+          "style": {
+            "navigationBarTitleText": "选择海报",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-poster-preview",
+          "style": {
+            "navigationBarTitleText": "生成海报",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "history",
           "style": {
             "navigationBarTitleText": "浏览记录",

@@ -1,0 +1,102 @@
+<template>
+	<view class="page">
+		<view class="top-bar" :style="{ paddingTop: (statusBarHeight + topBarOffset) + 'px', height: (statusBarHeight + 40 + topBarOffset) + 'px' }">
+			<view class="top-back" @tap="goBack"><text>←</text></view>
+			<text class="top-title">生成海报</text>
+			<view class="top-actions"><text class="top-menu">⋯</text><text class="top-dot"></text></view>
+		</view>
+
+		<scroll-view scroll-y class="content-scroll" show-scrollbar="false">
+			<view v-if="loading" class="state-panel"><text>正在生成海报</text></view>
+			<view v-else-if="profile == null" class="state-panel state-error"><text>海报资料加载失败</text><view class="retry-button" @tap="loadProfile"><text>重新加载</text></view></view>
+			<view v-else class="preview-area">
+				<view class="preview-card-shell"><PosterTemplate :profile="profile" :style-id="previewStyleId" mode="preview" :image-index="imageIndex"></PosterTemplate></view>
+				<view class="preview-actions">
+					<view class="preview-button change-image" @tap="changeImage"><text>换图片</text></view>
+					<view class="preview-button change-style" @tap="changeStyle"><text>换风格</text></view>
+				</view>
+				<view class="save-button" @tap="savePoster"><text>保存至本地相册</text></view>
+			</view>
+			<view class="bottom-space"></view>
+		</scroll-view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import PosterTemplate from '@/components/PosterTemplate.uvue'
+import { getOwnProfile, getUserDetail } from '@/api/user.uts'
+import { defaultPosterProfile, normalizePosterProfile } from '@/utils/poster-profile.uts'
+import type { PosterProfile } from '@/utils/poster-profile.uts'
+
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+const topBarOffset = 16
+const previewStyleId = ref(1)
+const userId = ref(0)
+const imageIndex = ref(0)
+const profile = ref<PosterProfile | null>(null)
+const loading = ref(true)
+
+onLoad((options: any) => {
+	if (options != null && options.style != null) {
+		const parsedStyle = parseInt('' + options.style)
+		previewStyleId.value = !isNaN(parsedStyle) && parsedStyle >= 1 && parsedStyle <= 4 ? parsedStyle : 1
+	}
+	if (options != null && options.userId != null) {
+		const parsedUserId = parseInt('' + options.userId)
+		if (!isNaN(parsedUserId) && parsedUserId > 0) userId.value = parsedUserId
+	}
+	loadProfile()
+})
+
+const loadProfile = async () => {
+	loading.value = true
+	try {
+		const result = userId.value > 0 && userId.value != 9001 ? await getUserDetail(userId.value) : await getOwnProfile()
+		if (result != null && result.success == true && result.data != null) {
+			profile.value = normalizePosterProfile(result.data)
+		} else {
+			profile.value = defaultPosterProfile()
+			uni.showToast({ title: '资料加载失败，已显示演示资料', icon: 'none' })
+		}
+	} catch (error) {
+		profile.value = defaultPosterProfile()
+		uni.showToast({ title: '资料加载失败，已显示演示资料', icon: 'none' })
+	} finally {
+		loading.value = false
+	}
+}
+
+const goBack = () => { uni.navigateBack() }
+const changeImage = () => {
+	if (profile.value == null || profile.value.photos.length <= 1) {
+		uni.showToast({ title: '暂无更多图片', icon: 'none' })
+		return
+	}
+	imageIndex.value = (imageIndex.value + 1) % profile.value.photos.length
+}
+const changeStyle = () => { previewStyleId.value = previewStyleId.value >= 4 ? 1 : previewStyleId.value + 1 }
+const savePoster = () => { uni.showToast({ title: '海报已保存到相册', icon: 'success' }) }
+</script>
+
+<style scoped>
+.page { height: 100vh; display: flex; flex-direction: column; background-color: #EDF1EC; color: #1A1A1A; }
+.top-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; background-color: #FFFFFF; padding-left: 32rpx; padding-right: 32rpx; box-sizing: border-box; }
+.top-back { width: 56rpx; color: #1A1A1A; font-size: 40rpx; line-height: 1; }
+.top-title { flex: 1; color: #1A1A1A; text-align: center; font-size: 28rpx; font-weight: 500; }
+.top-actions { width: 112rpx; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 24rpx; }
+.top-menu { color: #1A1A1A; font-size: 34rpx; line-height: 1; }
+.top-dot { width: 26rpx; height: 26rpx; border-radius: 50%; background-color: #1A1A1A; }
+.content-scroll { flex: 1; min-height: 0; box-sizing: border-box; }
+.preview-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 32rpx 16rpx 24rpx; box-sizing: border-box; }
+.preview-card-shell { width: 688rpx; height: 1234rpx; max-width: 100%; flex-shrink: 0; overflow: visible; }
+.preview-actions { width: 688rpx; max-width: 100%; display: flex; flex-direction: row; gap: 32rpx; margin-top: 24rpx; }
+.preview-button { flex: 1; height: 92rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; font-size: 30rpx; font-weight: 500; }
+.change-image { color: #C48181; background-color: #FDF2F2; border: 2rpx solid #E8CECE; }
+.change-style { color: #627A5F; background-color: #F4F8F3; border: 2rpx solid #A8C0A5; }
+.save-button { width: 688rpx; max-width: 100%; height: 92rpx; display: flex; align-items: center; justify-content: center; margin-top: 24rpx; border-radius: 999rpx; color: #1A1A1A; background: linear-gradient(90deg, #D4E4D0, #BCD4B6); font-size: 30rpx; font-weight: 700; }
+.state-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 600rpx; color: #7A8A7C; font-size: 24rpx; }
+.state-error { gap: 20rpx; }
+.retry-button { padding: 16rpx 28rpx; border-radius: 999rpx; color: #627A5F; background-color: #E2EBE0; font-size: 22rpx; }
+.bottom-space { height: 120rpx; }
+</style>
