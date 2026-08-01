@@ -11,14 +11,16 @@
 			<text class="state-description">读取最新信息，请稍候</text>
 			<view class="loading-dots"><view></view><view></view><view></view></view>
 		</view>
-		<XsaEmpty
-			v-else-if="loadError != ''"
-			text="资料暂时无法打开"
-			:description="loadError"
-			:show-action="true"
-			action-text="重试"
-			@action="load"
-		/>
+		<view v-else-if="loadError != ''" class="error-state">
+			<view class="error-mark"><text>!</text></view>
+			<text class="error-title">资料暂时无法打开</text>
+			<text class="error-description">{{ loadError }}</text>
+			<text class="error-hint">请检查网络后重试</text>
+			<view class="error-actions">
+				<view class="error-retry" @tap="load"><text>重新加载</text></view>
+				<view class="error-cancel" @tap="onCancel"><text>返回</text></view>
+			</view>
+		</view>
 
 		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false">
 			<view class="progress-section">
@@ -252,11 +254,9 @@
 </template>
 
 <script setup lang="uts">
-	import XsaEmpty from '@/components/XsaEmpty.uvue'
 	import { getOwnProfile, updateOwnProfile, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile } from '@/api'
+	import { resolveMediaUrl } from '@/api/config.uts'
 
-	const DEFAULT_AVATAR = '/static/portraits/profile-woman-main.jpg'
-	const DEFAULT_COVER = '/static/portraits/profile-woman-alt.jpg'
 	const loading = ref(true)
 	const loadError = ref('')
 	const saving = ref(false)
@@ -299,8 +299,8 @@
 		interestTags: [] as string[],
 		personalityTags: [] as string[],
 		tagSelections: {} as any,
-		avatar: DEFAULT_AVATAR,
-		coverBg: DEFAULT_COVER,
+		avatar: '',
+		coverBg: '',
 		photos: [] as any[],
 		ageMin: '' as any,
 		ageMax: '' as any,
@@ -322,7 +322,7 @@
 	}
 	const profileMedia = (raw: any): any[] => {
 		const list = raw != null && Array.isArray(raw) ? raw as any[] : []
-		return list.map((item: any) => ({ id: item.id, url: item.file_url != null ? '' + item.file_url : '', sortOrder: item.sort_order }))
+		return list.map((item: any) => ({ id: item.id, url: resolveMediaUrl(item.file_url), sortOrder: item.sort_order }))
 	}
 
 	const applyProfile = (raw: any) => {
@@ -347,8 +347,8 @@
 		formData.value.interestTags = data.interest_tags != null ? data.interest_tags : []
 		formData.value.personalityTags = data.personality_tags != null ? data.personality_tags : []
 		formData.value.tagSelections = data.tag_selections != null ? data.tag_selections : {}
-		formData.value.avatar = textValue(data.avatar) || DEFAULT_AVATAR
-		formData.value.coverBg = textValue(data.background_wall) || DEFAULT_COVER
+		formData.value.avatar = resolveMediaUrl(data.avatar)
+		formData.value.coverBg = resolveMediaUrl(data.background_wall)
 		formData.value.photos = profileMedia(data.photos)
 		completionScore.value = data.completion_score != null ? Math.round(Number(data.completion_score)) : 0
 	}
@@ -365,34 +365,19 @@
 		formData.value.extraRequirement = textValue(data.extra_requirement)
 	}
 
-	const applyLocalDraft = () => {
-		usingLocalDraft.value = true
-		applyProfile({
-			user_id: 9001,
-			nickname: '苏晚晴', gender: 2, birthday: '1998-05-15', height: 165, weight: 48,
-			education_level: 3, residence_city_code: '杭州', hometown: '杭州', occupation: '插画师', industry: '文化创意', company: '', income: 20000, is_married: 1, mbti: 'INFP',
-			self_intro: '喜欢画画、猫和下雨天。周末常在西湖边写生，希望找到能一起看展、一起发呆的人。',
-			interest_tags: ['看展', '咖啡', '宠物'], personality_tags: ['文艺', '温和'], tag_selections: {}, avatar: DEFAULT_AVATAR, background_wall: DEFAULT_COVER,
-			wechat: '', photos: [{ id: 1, file_url: DEFAULT_AVATAR }, { id: 2, file_url: DEFAULT_COVER }], completion_score: 72
-		})
-		applyPreferences({ age_min: 25, age_max: 35, height_min: 170, height_max: '', education_min: 3, accept_long_distance: true, accept_cross_province: true, extra_requirement: '愿意真诚沟通，也尊重彼此的生活节奏。' })
-	}
-
 	const load = async () => {
 		loading.value = true
 		loadError.value = ''
 		try {
 			const profileRes = await getOwnProfile()
 			if (!profileRes.success || profileRes.data == null) {
-				applyLocalDraft()
-				uni.showToast({ title: '服务暂不可用，已打开本地资料', icon: 'none' })
+				loadError.value = profileRes.message != null ? '' + profileRes.message : '个人资料接口暂不可用'
 				return
 			}
 			applyProfile(profileRes.data)
 			const preferenceRes = await getOwnPreferences()
 			if (!preferenceRes.success || preferenceRes.data == null) {
-				applyLocalDraft()
-				uni.showToast({ title: '择偶要求暂不可用，已打开本地资料', icon: 'none' })
+				loadError.value = preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求接口暂不可用'
 				return
 			}
 			applyPreferences(preferenceRes.data)
@@ -402,8 +387,7 @@
 				educationStatus.value = meRes.data.educationStatus != null ? '' + meRes.data.educationStatus : 'missing'
 			}
 		} catch (e) {
-			applyLocalDraft()
-			uni.showToast({ title: '网络不可用，已打开本地资料', icon: 'none' })
+			loadError.value = '网络不可用，请重试'
 		} finally {
 			loading.value = false
 		}
@@ -505,7 +489,7 @@
 		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
 			const media = await uploadMedia(path, 'avatar')
-			if (media != null) formData.value.avatar = media.file_url != null ? '' + media.file_url : path
+			if (media != null) formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : path
 		} })
 	}
 
@@ -513,7 +497,7 @@
 		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
 			const media = await uploadMedia(path, 'background')
-			if (media != null) formData.value.coverBg = media.file_url != null ? '' + media.file_url : path
+			if (media != null) formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : path
 		} })
 	}
 
@@ -524,7 +508,7 @@
 			const paths = res != null && res.tempFilePaths != null ? res.tempFilePaths as string[] : []
 			for (let i = 0; i < paths.length; i++) {
 				const media = await uploadMedia('' + paths[i], 'photo')
-				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? '' + media.file_url : '' + paths[i] })
+				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + paths[i] })
 			}
 		} })
 	}
@@ -618,6 +602,16 @@
 .nav-back-icon { font-size: 28px; font-weight: 700; color: var(--ink); line-height: 1; }
 .nav-title { font-size: 18px; font-weight: 700; color: var(--ink); }
 .state-block { flex: 1; min-height: 420px; padding: 100px 24px 140px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-state { flex: 1; min-height: 420px; padding: 72px 32px 140px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-mark { width: 76px; height: 76px; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-md); }
+.error-mark text { color: var(--accent2); font-size: 38px; font-weight: 700; line-height: 1; }
+.error-title { color: var(--ink); font-size: 18px; font-weight: 700; }
+.error-description { max-width: 560rpx; margin-top: 12px; color: var(--ink2); font-size: 14px; line-height: 1.5; text-align: center; }
+.error-hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.error-actions { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-top: 28px; }
+.error-retry, .error-cancel { height: 42px; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 21px; font-size: 14px; }
+.error-retry { min-width: 116px; background: var(--sage); color: var(--text-invert); box-shadow: var(--shadow-sm); }
+.error-cancel { min-width: 76px; border: 1px solid var(--line); background: var(--surface); color: var(--ink2); }
 .loading-orbit { position: relative; width: 92px; height: 92px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; }
 .loading-ring { position: absolute; width: 78px; height: 78px; border: 4px solid var(--sage-soft); border-top-color: var(--sage); border-right-color: var(--accent); border-radius: 50%; animation: loading-spin 1.15s linear infinite; }
 .loading-core { width: 50px; height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center; background: var(--sage); box-shadow: 0 8px 20px rgba(51,141,107,0.2); }
@@ -741,4 +735,6 @@
 .sheet-bottom-spacer { height: 20px; }
 
 @media (max-width: 350px) { .scroll-content { padding-left: 12px; padding-right: 12px; } .section-card { padding: 13px 14px; } }
+.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { font-size: 16px; line-height: 1; color: var(--ink); }
 </style>

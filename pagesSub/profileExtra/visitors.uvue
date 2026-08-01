@@ -13,12 +13,23 @@
 </template>
 
 <script setup lang="uts">
-const visitors = [
-	{ distance: '1.2km', hot: 256 }, { distance: '2.8km', hot: 198 }, { distance: '4.5km', hot: 312 }, { distance: '3.1km', hot: 167 }, { distance: '6.7km', hot: 89 }, { distance: '0.8km', hot: 421 }
-]
+import { getVisitors } from '@/api'
+const visitors = ref<any[]>([])
+const loadVisitors = async () => {
+	const res = await getVisitors(1, 20)
+	if (!res.success || res.data == null) return
+	const rows = res.data.items != null && Array.isArray(res.data.items) ? res.data.items as any[] : []
+	const result: any[] = []
+	for (let i = 0; i < rows.length; i++) {
+		const card = rows[i].target != null ? rows[i].target : {}
+		result.push({ distance: card.distance_km != null ? Number(card.distance_km).toFixed(1) + 'km' : '未知', hot: card.match_score != null ? Math.round(Number(card.match_score)) : 0 })
+	}
+	visitors.value = result
+}
 const goBack = () => { uni.navigateBack({}) }
 const goHistory = () => { uni.redirectTo({ url: '/pagesSub/profileExtra/history' }) }
 const goVip = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/vip' }) }
+onMounted(() => { loadVisitors() })
 </script>
 
 <style>

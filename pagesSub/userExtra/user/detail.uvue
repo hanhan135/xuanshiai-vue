@@ -4,14 +4,16 @@
 			<text class="state-title">正在加载资料</text>
 			<text class="state-description">请稍候，正在读取最新信息</text>
 		</view>
-		<XsaEmpty
-			v-else-if="detailError != ''"
-			text="资料暂时无法打开"
-			:description="detailError"
-			:show-action="true"
-			action-text="重试"
-			@action="load"
-		/>
+		<view v-else-if="detailError != ''" class="error-state">
+			<view class="error-mark"><text>!</text></view>
+			<text class="error-title">资料暂时无法打开</text>
+			<text class="error-description">{{ detailError }}</text>
+			<text class="error-hint">请检查网络后重试</text>
+			<view class="error-actions">
+				<view class="error-retry" @tap="load"><text>重新加载</text></view>
+				<view class="error-cancel" @tap="onBack"><text>返回</text></view>
+			</view>
+		</view>
 		<scroll-view v-else scroll-y class="detail-scroll" enhanced show-scrollbar="false">
 			<view v-if="!isLockedView" class="ordinary-detail-page">
 				<view class="ordinary-profile-card">
@@ -230,7 +232,6 @@
 
 <script setup lang="uts">
 import { ref } from 'vue'
-import XsaEmpty from '@/components/XsaEmpty.uvue'
 import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
@@ -512,6 +513,16 @@ const onLike = async () => {
 <style scoped>
 .detail-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; background-color: var(--canvas); color: var(--ink); }
 .state-block { padding: 72px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.error-state { min-height: 100vh; padding: 120px 32px 180px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-mark { width: 82px; height: 82px; margin-bottom: 26px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 26px; background: var(--surface); box-shadow: var(--shadow-md); }
+.error-mark text { color: var(--accent2); font-size: 42px; font-weight: 700; line-height: 1; }
+.error-title { color: var(--ink); font-size: 18px; font-weight: 700; }
+.error-description { max-width: 560rpx; margin-top: 12px; color: var(--ink2); font-size: 14px; line-height: 1.5; text-align: center; }
+.error-hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.error-actions { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-top: 28px; }
+.error-retry, .error-cancel { height: 42px; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 21px; font-size: 14px; }
+.error-retry { min-width: 116px; background: var(--sage); color: var(--text-invert); box-shadow: var(--shadow-sm); }
+.error-cancel { min-width: 76px; border: 1px solid var(--line); background: var(--surface); color: var(--ink2); }
 .state-title { font-size: 16px; font-weight: 700; color: var(--ink); }
 .state-description { font-size: 13px; color: var(--muted); }
 .detail-scroll { width: 100%; height: 100vh; }
