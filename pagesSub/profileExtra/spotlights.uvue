@@ -10,4 +10,5 @@ const activeTab = ref(0)
 @font-face { font-family: "iconfont-home"; src: url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff2') format('woff2'); }
 @font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'); }
 .ic { font-style: normal; }.ic-home { font-family: "iconfont-home" !important; }.ic-sys { font-family: "iconfont-sys" !important; }.ic-fanhui:before { content: "\e606"; }.ic-search:before { content: "\e600"; }
+.back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #2C2C2C; }
 </style>

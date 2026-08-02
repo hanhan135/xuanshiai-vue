@@ -6,6 +6,13 @@
 import { request } from './request.uts'
 import { setAuthTokens, clearAuthTokens } from './config.uts'
 
+export async function getProfileCompletion() {
+  return request({
+    url: '/users/me/completion',
+    method: 'GET'
+  })
+}
+
 export async function sendSms(phone: string, purpose: string = 'login') {
   return request({
     url: '/auth/sms/send',

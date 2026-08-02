@@ -5,6 +5,7 @@
 
 // 认证相关
 export {
+  getProfileCompletion,
   sendSms,
   loginByPhone,
   loginByWechat,
@@ -29,6 +30,21 @@ export {
   getChatFeatureUnlocks,
   unlockChatFeature
 } from './user.uts'
+
+// 首页与我的页面的发现数据
+export {
+  getDiscoveryRecommendations,
+  getDiscoveryPlaza,
+  getProfileOverview,
+  getBrowseHistory,
+  getVisitors,
+  getDiscoveryFavorites,
+  searchDiscovery,
+  getOutgoingApplications,
+  getIncomingApplications,
+  acceptDiscoveryApplication,
+  rejectDiscoveryApplication
+} from './discovery.uts'
 
 // 消息相关
 export {
@@ -123,6 +139,7 @@ export {
   SPOTLIGHT_AMOUNT,
   paySpotlight
 } from './spotlight.uts'
+
 
 // 牵线/红娘相关
 export {

@@ -180,6 +180,16 @@ export async function unlockChatFeature(feature: string) {
  * 获取推荐用户（支持轮换 index）
  */
 export async function getRecommendUser(index: number = 0) {
+  if (!USE_MOCK) {
+    const res = await request({
+      url: '/discovery/recommendations',
+      method: 'GET',
+      data: { page: 1, page_size: 20 }
+    })
+    if (!res.success) return res
+    const rows = res.data != null && Array.isArray(res.data.items) ? res.data.items as any[] : []
+    return { success: true, data: rows.length > 0 ? rows[Math.min(index, rows.length - 1)] : null, code: res.code, message: res.message }
+  }
   const list = mockRecommendUsers as any[]
   const i = list.length > 0 ? (index % list.length) : 0
   const user = list.length > 0 ? list[i] : mockUserDetail
@@ -197,6 +207,9 @@ export async function getRecommendUser(index: number = 0) {
  * 获取推荐用户列表（全量）
  */
 export async function getRecommendUsers() {
+  if (!USE_MOCK) {
+    return request({ url: '/discovery/recommendations', method: 'GET', data: { page: 1, page_size: 20 } })
+  }
   return request({
     url: '/user/recommend/list',
     cloudFunctionName: 'user',
@@ -210,6 +223,9 @@ export async function getRecommendUsers() {
  * 获取广场用户列表
  */
 export async function getSquareUsers(params: any) {
+  if (!USE_MOCK) {
+    return request({ url: '/discovery/plaza', method: 'GET', data: params != null ? params : {} })
+  }
   return request({
     url: '/user/square',
     cloudFunctionName: 'user',

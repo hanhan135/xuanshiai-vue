@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="uts">
+	import { searchDiscovery } from '@/api'
 	const hometownOptions = ['不限', '江苏', '浙江', '上海', '安徽']
 	const residenceOptions = ['城市可选', '南京', '杭州', '上海', '深圳']
 	const ageOptions = ['不限年龄', '18-25岁', '26-30岁', '31-35岁', '36-40岁', '41岁以上']
@@ -86,7 +87,21 @@
 		heightIndex.value = 0
 		selectedMbti.value = ''
 	}
-	const submitSearch = () => uni.showToast({ title: '已应用搜索条件', icon: 'success' })
+	const submitSearch = async () => {
+		const filters: any = { page: 1, page_size: 20 }
+		if (ageIndex.value > 0) {
+			const ageRanges = [{ min: 18, max: 25 }, { min: 26, max: 30 }, { min: 31, max: 35 }, { min: 36, max: 40 }, { min: 41, max: 60 }]
+			filters.age_min = ageRanges[ageIndex.value - 1].min
+			filters.age_max = ageRanges[ageIndex.value - 1].max
+		}
+		if (heightIndex.value > 0) {
+			const heightRanges = [{ min: 140, max: 160 }, { min: 161, max: 170 }, { min: 171, max: 180 }, { min: 181, max: 220 }]
+			filters.height_min = heightRanges[heightIndex.value - 1].min
+			filters.height_max = heightRanges[heightIndex.value - 1].max
+		}
+		const res = await searchDiscovery(filters)
+		uni.showToast({ title: res.success ? '已应用搜索条件' : (res.message || '搜索失败'), icon: res.success ? 'success' : 'none' })
+	}
 </script>
 
 <style scoped>
@@ -130,4 +145,6 @@
 .reset-button { width: 116px; border: 1px solid #E8DDB9; background: var(--paper); color: var(--ink2); }
 .search-button { flex: 1; background: #6A5BE7; color: var(--text-invert); }
 @media (max-width: 350px) { .search-scroll { padding-left: 20px; padding-right: 20px; } .basic-grid { column-gap: 20px; } .filter-pill { padding: 0 10px; font-size: 13px; } .bottom-actions { padding-left: 20px; padding-right: 20px; } }
+.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nav-back text { font-size: 16px; line-height: 1; color: #2C2C2C; }
 </style>
