@@ -89,12 +89,11 @@
 				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
 			</view>
 
-			<view class="section-card tags-card">
-				<text class="section-title">我的标签</text>
+			<view class="section-card tags-card" @tap="goTagsEdit">
+				<view class="section-heading"><text class="section-title">我的标签</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">选择最能代表你的个性标签（最多20个）</text>
 				<view class="tag-list">
-					<view class="tag-chip" v-for="tag in formData.interestTags" :key="tag"><text>{{ tag }}</text></view>
-					<view class="tag-chip tag-accent" v-for="tag in formData.personalityTags" :key="'p-' + tag"><text>{{ tag }}</text></view>
+					<view class="tag-chip" v-for="tag in displayTags" :key="tag"><text>{{ tag }}</text></view>
 					<view class="tag-chip tag-add"><text>+ 添加</text></view>
 				</view>
 			</view>
@@ -254,6 +253,7 @@
 <script setup lang="uts">
 	import XsaEmpty from '@/components/XsaEmpty.uvue'
 	import { getOwnProfile, updateOwnProfile, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile } from '@/api'
+	import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
 
 	const DEFAULT_AVATAR = '/static/portraits/profile-woman-main.jpg'
 	const DEFAULT_COVER = '/static/portraits/profile-woman-alt.jpg'
@@ -438,6 +438,25 @@
 	const incomePreview = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '未填写')
 	const incomePreviewText = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '请选择')
 	const completedCertCount = computed(() => certifications.value.filter((c: any) => c.passed).length)
+	const displayTags = computed(() => {
+		const result: string[] = []
+		const selections = formData.value.tagSelections
+		let hasGroupedTags = false
+		if (selections != null && typeof selections === 'object') {
+			for (const category of TAG_CATEGORIES) {
+				const values = selections[category.id]
+				if (Array.isArray(values)) {
+					hasGroupedTags = true
+					for (const value of values as string[]) result.push(value)
+				}
+			}
+		}
+		if (!hasGroupedTags) {
+			for (const tag of formData.value.interestTags) result.push(tag)
+			for (const tag of formData.value.personalityTags) result.push(tag)
+		}
+		return result.slice(0, 20)
+	})
 	const certifications = computed(() => [
 		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
 		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
@@ -446,6 +465,9 @@
 	])
 
 	onMounted(() => load())
+	onShow(() => {
+		if (!loading.value) syncLocalTagDraft()
+	})
 
 	const onInput = (field: string, event: any) => {
 		(formData.value as any)[field] = event.detail.value
@@ -540,7 +562,43 @@
 	}
 
 	const goCertification = (key: string) => uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	const goTagsEdit = () => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit' })
 	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
+
+	const syncLocalTagDraft = () => {
+		try {
+			const savedMap = uni.getStorageSync('xsa_my_tag_selections')
+			if (savedMap != null && typeof savedMap === 'object') {
+				formData.value.tagSelections = savedMap
+				const personality: string[] = []
+				const interest: string[] = []
+				for (const category of TAG_CATEGORIES) {
+					const values = Array.isArray(savedMap[category.id]) ? savedMap[category.id] as string[] : []
+					for (const value of values) {
+						if (category.id == 'personality') personality.push(value)
+						else interest.push(value)
+					}
+				}
+				formData.value.personalityTags = personality.slice(0, 5)
+				formData.value.interestTags = interest.slice(0, 5)
+				return
+			}
+			const savedTags = uni.getStorageSync('xsa_my_tags')
+			if (Array.isArray(savedTags)) {
+				const next: any = {}
+				for (const category of TAG_CATEGORIES) next[category.id] = []
+				for (const rawTag of savedTags as any[]) {
+					if (typeof rawTag != 'string') continue
+					const categoryId = findTagCategoryId(rawTag)
+					const values = next[categoryId] as string[]
+					if (values.indexOf(rawTag) < 0) values.push(rawTag)
+				}
+				formData.value.tagSelections = next
+			}
+		} catch (e) {
+			// 本地草稿不可用时继续使用接口数据。
+		}
+	}
 
 	const onCancel = () => {
 		uni.navigateBack({ delta: 1 })

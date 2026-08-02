@@ -65,10 +65,10 @@ const confirmSelection = () => {
 .top-menu { color: #1A1A1A; font-size: 34rpx; line-height: 1; }
 .top-dot { width: 26rpx; height: 26rpx; border-radius: 50%; background-color: #1A1A1A; }
 .content-scroll { flex: 1; min-height: 0; box-sizing: border-box; }
-.intro-block { display: flex; flex-direction: column; gap: 4rpx; padding: 10rpx 16rpx 0; }
-.heading { color: #334438; font-size: 26rpx; font-weight: 700; line-height: 1.35; }
-.subheading { color: #7A8A7C; font-size: 15rpx; line-height: 1.4; }
-.style-grid { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; row-gap: 28rpx; padding: 16rpx 16rpx 0; box-sizing: border-box; }
+.intro-block { display: flex; flex-direction: column; gap: 6rpx; padding: 12rpx 16rpx 0; }
+.heading { color: #334438; font-size: 30rpx; font-weight: 700; line-height: 1.35; }
+.subheading { color: #7A8A7C; font-size: 18rpx; line-height: 1.4; }
+.style-grid { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; row-gap: 12rpx; padding: 16rpx 16rpx 0; box-sizing: border-box; }
 .style-card-shell { position: relative; width: 328rpx; height: 588rpx; flex-shrink: 0; }
 .style-card-image { display: block; width: 328rpx; height: 588rpx; }
 .selected-outline { position: absolute; left: -4rpx; top: -4rpx; width: 336rpx; height: 596rpx; display: flex; align-items: flex-start; justify-content: flex-end; border: 4rpx solid #73948E; border-radius: 26rpx; box-sizing: border-box; pointer-events: none; }
