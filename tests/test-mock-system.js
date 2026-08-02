@@ -43,7 +43,10 @@ try {
     'mock/user.uts',
     'mock/message.uts',
     'mock/community.uts',
-    'mock/matchmaker.uts'
+    'mock/security.uts',
+    'mock/matchmaker.uts',
+    'mock/help.uts',
+    'mock/spotlight.uts'
   ]
 
   mockFiles.forEach(file => {
@@ -71,7 +74,10 @@ try {
     'api/user.uts',
     'api/message.uts',
     'api/community.uts',
-    'api/matchmaker.uts'
+    'api/security.uts',
+    'api/matchmaker.uts',
+    'api/help.uts',
+    'api/spotlight.uts'
   ]
 
   apiFiles.forEach(file => {
@@ -100,7 +106,7 @@ try {
     { path: 'pages/message/message.uvue', name: '消息页' },
     { path: 'pages/community/community.uvue', name: '社区页' },
     { path: 'pages/matchmaker/matchmaker.uvue', name: '牵线页' },
-    { path: 'pages/chat/detail.uvue', name: '聊天详情页' }
+    { path: 'pagesSub/chat/detail.uvue', name: '聊天详情页' }
   ]
 
   pages.forEach(page => {

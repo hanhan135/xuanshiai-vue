@@ -38,6 +38,23 @@ export {
   mockCurrentCity
 } from './community.uts'
 
+// 客服与帮助相关
+export {
+  mockHelpQuickActions,
+  getMockAiSupportReply,
+  submitMockFeedback
+} from './help.uts'
+
+// 安全中心相关
+export {
+  mockSecurityCenterData
+} from './security.uts'
+
+// 爆灯相关
+export {
+  mockSpotlightPaymentOrders
+} from './spotlight.uts'
+
 // 红娘相关
 export {
   mockMatchmakerContact,

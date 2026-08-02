@@ -1,0 +1,97 @@
+<template>
+  <view class="page">
+    <scroll-view class="scroll" scroll-y="true" show-scrollbar="false">
+      <view class="hero">
+        <view class="hero-copy">
+          <text class="hero-title">{{ securityData != null ? securityData.hero.title : '安全中心' }}</text>
+          <text class="hero-subtitle">{{ securityData != null ? securityData.hero.subtitle : '守护你的社交安全' }}</text>
+          <text class="hero-note">{{ securityData != null ? securityData.hero.note : '安全数据加载中...' }}</text>
+        </view>
+      </view>
+
+      <view class="section-heading"><text class="section-title">平台治理公示</text><text class="section-help">ⓘ</text></view>
+      <XsaCard variant="standard" class="governance-card">
+        <view v-if="securityLoading" class="governance-state"><text>治理数据加载中...</text></view>
+        <view v-else-if="securityError != ''" class="governance-state error" @tap="loadSecurityCenter"><text>{{ securityError }}，点击重试</text></view>
+        <view v-else-if="governanceStats == null" class="governance-state"><text>暂无本月治理数据</text></view>
+        <view v-else>
+          <view class="governance-total"><view class="governance-icon"><text>⚖</text></view><view class="governance-total-copy"><text class="governance-total-label">{{ governanceStats.monthLabel }}累计处置账号（个）</text><text class="governance-total-note">封禁与警示均按平台规则处理</text></view><text class="governance-total-value">{{ governanceStats.totalProcessed }}</text></view>
+          <view class="governance-breakdown"><view class="governance-stat"><text class="governance-stat-label">暂时封禁</text><text class="governance-stat-value">{{ governanceStats.temporaryBans }}</text></view><view class="governance-stat"><text class="governance-stat-label">永久封禁</text><text class="governance-stat-value">{{ governanceStats.permanentBans }}</text></view><view class="governance-stat"><text class="governance-stat-label">警告</text><text class="governance-stat-value">{{ governanceStats.warnings }}</text></view></view>
+          <view class="governance-link" @tap="openGovernance"><text>查看治理公示与处理原则</text><text class="inline-arrow">›</text></view>
+        </view>
+      </XsaCard>
+
+      <view class="section-heading section-gap"><text class="section-title">我的安全设置</text><text class="section-caption">管理主动设置的安全边界</text></view>
+      <XsaCard variant="standard" class="security-card">
+        <view class="security-item" @tap="toggleSafety"><view class="security-item-icon block"><text>禁</text></view><view class="security-item-copy"><text class="security-item-title">已屏蔽用户</text><text class="security-item-desc">{{ blockedSummary }}</text></view><text class="security-item-value">{{ blockedLoading ? '...' : blockedUsers.length + '人' }} ›</text></view>
+        <view class="inline-content" v-if="safetyVisible">
+          <view v-if="blockedLoading" class="state-text">正在加载黑名单...</view>
+          <view v-else-if="blockedError != ''" class="retry-row" @tap="loadBlockedUsers"><text class="state-error">{{ blockedError }}，点击重试</text></view>
+          <XsaEmpty v-else-if="blockedLoaded && blockedUsers.length == 0" type="noData" text="暂无已拉黑用户" description="你可以在相关内容或用户资料的操作菜单中进行拉黑管理。" size="small" />
+          <view v-else class="blocked-list"><view class="blocked-row" v-for="user in blockedUsers" :key="user.id"><view class="blocked-avatar"><text>人</text></view><view class="blocked-copy"><text class="blocked-name">{{ user.nickname || '已拉黑用户' }}</text><text class="blocked-desc">已加入黑名单</text></view><XsaButton variant="text" size="small" :loading="isUnblocking(user.id)" :disabled="isUnblocking(user.id)" @click="confirmUnblock(user.id)">解除拉黑</XsaButton></view></view>
+        </view>
+        <view class="security-item" @tap="toggleRecords"><view class="security-item-icon records"><text>▧</text></view><view class="security-item-copy"><text class="security-item-title">举报与申诉记录</text><text class="security-item-desc">{{ recordsSummary }}</text></view><text class="security-item-value">查看 ›</text></view>
+        <view class="inline-content" v-if="recordsVisible">
+          <view v-if="recordsLoading" class="state-text">正在加载举报与申诉记录...</view>
+          <view v-else-if="recordsError != ''" class="retry-row" @tap="loadReports"><text class="state-error">{{ recordsError }}，点击重试</text></view>
+          <view v-else><view class="report-row" v-for="report in reports" :key="report.id"><text class="report-text">{{ report.result || '处理中' }}</text><text class="text-accent" v-if="report.can_appeal" @tap="startAppeal(report.id)">申诉</text></view><view class="report-row" v-for="appeal in appeals" :key="appeal.id"><text class="report-text">申诉：{{ appealStatusText(appeal.status) }}</text></view><text class="empty-safety" v-if="recordsLoaded && reports.length == 0 && appeals.length == 0">暂无举报或申诉记录</text></view>
+        </view>
+      </XsaCard>
+
+      <view class="ai-entry" @tap="openAiSupport"><text class="ai-entry-title">{{ securityData != null ? securityData.aiSupportTitle : '需要操作指引？打开 AI 客服' }}</text><text class="ai-entry-desc">{{ securityData != null ? securityData.aiSupportDescription : 'AI 仅提供入口说明' }}</text><text class="row-arrow">›</text></view>
+
+      <view class="section-heading section-gap"><text class="section-title">反诈宣传</text><text class="section-caption">保持警惕 · 先核实再行动</text></view>
+      <view class="article-list"><view v-for="article in fraudArticles" :key="article.type" class="article-card" @tap="openArticle(article.type)"><view class="article-mark" :class="article.tone"><text>{{ article.mark }}</text></view><view class="article-copy"><text class="article-title">{{ article.title }}</text><text class="article-desc">{{ article.description }}</text></view><text class="row-arrow">›</text></view></view>
+      <view class="notice"><text>{{ securityData != null ? securityData.riskNotice : '遇到风险时，请停止互动并保存必要记录。' }}</text></view>
+      <view class="bottom-space"></view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="uts">
+import XsaCard from '@/components/XsaCard.uvue'
+import XsaButton from '@/components/XsaButton.uvue'
+import XsaEmpty from '@/components/XsaEmpty.uvue'
+import { getSecurityCenterData, getBlockedUsers, unblockUser, getMyReports, getMyReportAppeals } from '@/api'
+
+let securityData = ref(null as any)
+let securityLoading = ref(false)
+let securityError = ref('')
+let blockedUsers = ref([] as any[])
+let blockedLoading = ref(false)
+let blockedLoaded = ref(false)
+let blockedError = ref('')
+let unblockingIds = ref([] as number[])
+let reports = ref([] as any[])
+let appeals = ref([] as any[])
+let safetyVisible = ref(false)
+let recordsVisible = ref(false)
+let recordsLoading = ref(false)
+let recordsLoaded = ref(false)
+let recordsError = ref('')
+
+const governanceStats = computed(() => securityData.value == null ? null : securityData.value.governance)
+const fraudArticles = computed(() => securityData.value == null || securityData.value.fraudArticles == null ? [] as any[] : securityData.value.fraudArticles as any[])
+const blockedSummary = computed(() => blockedLoading.value ? '正在加载' : blockedError.value != '' ? '加载失败' : !blockedLoaded.value ? '查看并管理已拉黑用户' : blockedUsers.value.length == 0 ? '暂无已拉黑用户' : '已拉黑 ' + blockedUsers.value.length + ' 人')
+const recordsSummary = computed(() => recordsLoading.value ? '正在加载' : recordsError.value != '' ? '加载失败' : !recordsLoaded.value ? '查看处理进度与申诉状态' : reports.value.length + appeals.value.length == 0 ? '暂无记录' : '已有 ' + (reports.value.length + appeals.value.length) + ' 条记录')
+
+const loadSecurityCenter = async () => { securityLoading.value = true; securityError.value = ''; try { const res = await getSecurityCenterData(); if (!res.success || res.data == null) throw new Error('security center unavailable'); securityData.value = res.data as any } catch (e) { securityError.value = '安全中心数据加载失败' } finally { securityLoading.value = false } }
+const loadBlockedUsers = async () => { blockedLoading.value = true; blockedError.value = ''; try { const res = await getBlockedUsers(); if (!res.success || res.data == null) throw new Error('blocked unavailable'); blockedUsers.value = res.data as any[]; blockedLoaded.value = true } catch (e) { blockedError.value = '黑名单加载失败' } finally { blockedLoading.value = false } }
+const loadReports = async () => { recordsLoading.value = true; recordsError.value = ''; try { const reportRes = await getMyReports(); const appealRes = await getMyReportAppeals(); if (!reportRes.success || reportRes.data == null || !appealRes.success || appealRes.data == null) throw new Error('records unavailable'); reports.value = reportRes.data.items != null ? reportRes.data.items as any[] : []; appeals.value = appealRes.data.items != null ? appealRes.data.items as any[] : []; recordsLoaded.value = true } catch (e) { recordsError.value = '举报与申诉记录加载失败' } finally { recordsLoading.value = false } }
+const toggleSafety = async () => { safetyVisible.value = !safetyVisible.value; if (safetyVisible.value && !blockedLoaded.value && !blockedLoading.value) await loadBlockedUsers() }
+const toggleRecords = async () => { recordsVisible.value = !recordsVisible.value; if (recordsVisible.value && !recordsLoaded.value && !recordsLoading.value) await loadReports() }
+const isUnblocking = (id: number) => (unblockingIds.value as number[]).indexOf(id) >= 0
+const confirmUnblock = (id: number) => { if (isUnblocking(id)) return; uni.showModal({ title: '解除拉黑', content: '确定要将该用户移出黑名单吗？', success: (res) => { if (res.confirm) unblock(id) } }) }
+const unblock = async (id: number) => { if (isUnblocking(id)) return; unblockingIds.value.push(id); try { const res = await unblockUser(id); if (!res.success) throw new Error('unblock unavailable'); blockedUsers.value = (blockedUsers.value as any[]).filter((user: any) => user.id != id); uni.showToast({ title: '已解除拉黑', icon: 'success' }) } catch (e) { uni.showToast({ title: '解除失败，请重试', icon: 'none' }) } finally { const ids = unblockingIds.value as number[]; const index = ids.indexOf(id); if (index >= 0) ids.splice(index, 1) } }
+const startAppeal = (id: number) => { uni.showToast({ title: '请在设置中提交申诉', icon: 'none' }) }
+const appealStatusText = (status: number) => status == 1 ? '处理中' : status == 2 ? '已通过' : status == 3 ? '已驳回' : '待处理'
+const openArticle = (type: string) => { uni.navigateTo({ url: '/pagesSub/about/article?type=' + type, fail: () => { uni.showToast({ title: '文章打开失败，请重试', icon: 'none' }) } }) }
+const openGovernance = () => openArticle('governance_notice')
+const openAiSupport = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/help?open=ai', fail: () => { uni.showToast({ title: 'AI 客服打开失败，请重试', icon: 'none' }) } }) }
+onMounted(() => { loadSecurityCenter(); loadBlockedUsers() })
+</script>
+<style scoped>
+.security-page { min-height: 100vh; padding-bottom: 30px; background: #FFF; color: #1E2933; }.security-nav { height: 100px; padding: 44px 20px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; font-size: 20px; font-weight: 800; }.back,.placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }.back { font-size: 38px; font-weight: 300; }.security-hero { position: relative; height: 190px; padding: 38px 26px; box-sizing: border-box; overflow: hidden; background: linear-gradient(135deg,#E8FAEC,#F5FFF8); }.hero-title { display: block; font-size: 30px; font-weight: 800; }.hero-copy { display: block; margin-top: 10px; color: #688073; font-size: 16px; }.shield { position: absolute; right: 55px; top: 34px; font-size: 100px; color: #56C493; }.governance { margin: -1px 8px 0; padding: 28px 18px 18px; border-radius: 18px; background: #FFF; box-shadow: 0 3px 14px rgba(84,120,95,.08); }.governance-title,.tools-title { display: block; color: #8B9096; font-size: 14px; }.report-total { margin-top: 16px; padding: 20px 14px; display: flex; flex-direction: row; align-items: center; gap: 10px; border-radius: 12px; background: #D9F5E6; color: #7A8087; }.report-icon { width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; background: #5AC99D; color: #FFF; }.report-number { margin-left: auto; color: #1E2933; font-size: 25px; font-weight: 800; }.report-stats { display: flex; flex-direction: row; justify-content: space-around; margin-top: 20px; text-align: center; color: #91969D; font-size: 12px; }.report-stats view { display: flex; flex-direction: column; gap: 8px; }.report-stats b { color: #1E2933; font-size: 20px; }.tools-title { margin: 24px 24px 12px; }.tools { display: flex; flex-direction: row; gap: 12px; padding: 0 24px; }.tools view { flex: 1; padding: 20px 12px; border-radius: 14px; background: #F6F7FA; text-align: center; color: #E54F3A; font-size: 19px; font-weight: 800; }.tools small { display: block; margin-top: 6px; color: #90959B; font-size: 11px; font-weight: 400; }.security-tabs { display: flex; flex-direction: row; justify-content: space-around; margin-top: 20px; padding: 16px 12px; border-bottom: 1px solid #E6E7E9; color: #9B9FA4; }.security-tabs .active { color: #28A78D; font-weight: 800; }.security-article { min-height: 74px; padding: 20px 22px; box-sizing: border-box; display: flex; flex-direction: row; justify-content: space-between; align-items: center; border-bottom: 1px solid #E7E8EA; font-size: 14px; }.article-arrow { color: #A7ADB3; font-size: 24px; }
+@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'); }.ic { font-style: normal; }.ic-sys { font-family: "iconfont-sys" !important; }.ic-fanhui:before { content: "\e606"; }.ic-shiming:before { content: "\e605"; }.ic-jiantou-you:before { content: "\e928"; }
+.back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #2C2C2C; }
+</style>

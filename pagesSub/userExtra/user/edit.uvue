@@ -1,0 +1,798 @@
+<template>
+	<view class="edit-page">
+		<view class="nav-bar">
+			<view class="nav-back" @tap="onCancel"><text class="nav-back-icon">‹</text></view>
+			<text class="nav-title">编辑资料</text>
+		</view>
+
+		<view v-if="loading" class="state-block">
+			<view class="loading-orbit"><view class="loading-ring"></view><view class="loading-core"><text>宣</text></view></view>
+			<text class="state-title">正在准备你的资料</text>
+			<text class="state-description">读取最新信息，请稍候</text>
+			<view class="loading-dots"><view></view><view></view><view></view></view>
+		</view>
+		<view v-else-if="loadError != ''" class="error-state">
+			<view class="error-mark"><text>!</text></view>
+			<text class="error-title">资料暂时无法打开</text>
+			<text class="error-description">{{ loadError }}</text>
+			<text class="error-hint">请检查网络后重试</text>
+			<view class="error-actions">
+				<view class="error-retry" @tap="load"><text>重新加载</text></view>
+				<view class="error-cancel" @tap="onCancel"><text>返回</text></view>
+			</view>
+		</view>
+
+		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false">
+			<view class="progress-section">
+				<view class="progress-header"><text class="progress-label">资料完整度</text><text class="progress-value">{{ completeness }}%</text></view>
+				<view class="progress-track"><view class="progress-fill" :style="{ width: completeness + '%' }"></view></view>
+				<text class="progress-hint">资料越完整，推荐权重越高，更容易遇见对的人</text>
+			</view>
+
+			<view class="section-card avatar-section">
+				<view class="section-heading">
+					<text class="section-title">头像</text>
+					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
+				</view>
+				<view class="avatar-row">
+					<view class="avatar-box" @tap="chooseAvatar">
+						<image class="avatar-image" :src="formData.avatar" mode="aspectFill"></image>
+						<view class="camera-badge"><text class="camera-icon">⌾</text></view>
+					</view>
+					<view class="avatar-copy"><text class="avatar-title">上传真实头像</text><text class="avatar-description">正面高清照，衣着得体，提高推荐排名</text></view>
+				</view>
+				<text class="avatar-rule">⚠ 他人照片、看不清脸、P图过度、非人物照将无法通过审核</text>
+			</view>
+
+			<view class="section-card album-card">
+				<view class="section-heading"><text class="section-title">我的相册</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
+				<view class="album-grid">
+					<view class="album-cell" v-for="(photo, index) in formData.photos" :key="photo.id != null ? photo.id : index">
+						<image class="album-photo" :src="photo.url" mode="aspectFill"></image>
+						<view class="album-delete" @tap="deletePhoto(index)"><text>×</text></view>
+					</view>
+					<view v-if="formData.photos.length < 9" class="album-cell add-cell" @tap="addPhoto"><text class="add-icon">+</text></view>
+				</view>
+				<text class="media-note" v-if="uploadingMedia">正在上传媒体，请稍候</text>
+			</view>
+
+			<view class="section-card preview-card">
+				<view class="section-heading">
+					<text class="section-title">基础信息</text>
+					<view class="pill-action" @tap="detailSheetVisible = true"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
+				</view>
+				<view class="preview-list">
+					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ formData.residenceCityCode || '未填写' }}</text></view>
+					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ formData.hometown || '未填写' }}</text></view>
+					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ occupationPreview }}</text></view>
+					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ incomePreview }}</text></view>
+					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ maritalText == '未选择' ? '未填写' : maritalText }}</text></view>
+					<view class="preview-row"><text class="preview-label">脱单目标</text><text class="preview-value">{{ formData.tagSelections?.relationshipGoal || '未填写' }}</text></view>
+					<view class="preview-row"><text class="preview-label">微信号</text><text class="preview-value">{{ formData.wechat || '仅作为紧急联系' }}</text></view>
+				</view>
+			</view>
+
+			<view class="section-card certification-card">
+				<view class="section-heading">
+					<text class="section-title">四重认证</text>
+					<text class="section-caption">已完成 {{ completedCertCount }}/4</text>
+				</view>
+				<view class="cert-row" v-for="cert in certifications" :key="cert.key">
+					<view class="cert-icon-wrap" :class="{ 'cert-icon-done': cert.passed }"><text class="cert-icon">{{ cert.icon }}</text></view>
+					<view class="cert-copy"><text class="cert-label">{{ cert.label }}</text><text class="cert-description">{{ cert.desc }}</text></view>
+					<view v-if="cert.passed" class="cert-done-pill"><text class="cert-done-text">已认证</text></view>
+					<view v-else class="cert-pending" @tap="goCertification(cert.key)"><text class="cert-pending-text">去认证</text></view>
+				</view>
+			</view>
+
+			<view class="section-card intro-card">
+				<text class="section-title">自我介绍</text>
+				<textarea class="intro-main-input" :value="formData.introduction" maxlength="1000" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
+				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
+			</view>
+
+			<view class="section-card tags-card" @tap="goTagsEdit">
+				<view class="section-heading"><text class="section-title">我的标签</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">选择最能代表你的个性标签（最多20个）</text>
+				<view class="tag-list">
+					<view class="tag-chip" v-for="tag in displayTags" :key="tag"><text>{{ tag }}</text></view>
+					<view class="tag-chip tag-add"><text>+ 添加</text></view>
+				</view>
+			</view>
+
+			<view class="section-card qa-card">
+				<text class="section-title">关于我</text>
+				<text class="section-caption">你的回答将展示在个人主页，帮助对方更深入了解你</text>
+				<view class="qa-item">
+					<text class="qa-question">你理想中的另一半是什么样的</text>
+					<view class="qa-answer-row"><text class="qa-hint">点击填写你的回答...</text><text class="qa-edit-icon">✎</text></view>
+				</view>
+				<view class="qa-item">
+					<text class="qa-question">喜欢什么运动</text>
+					<view class="qa-answer-row"><text class="qa-hint">点击填写你的回答...</text><text class="qa-edit-icon">✎</text></view>
+				</view>
+				<view class="qa-item">
+					<text class="qa-question">你期待的爱情是什么样子的</text>
+					<view class="qa-answer-row"><text class="qa-hint">点击填写你的回答...</text><text class="qa-edit-icon">✎</text></view>
+				</view>
+			</view>
+
+			<view class="scroll-bottom-spacer"></view>
+		</scroll-view>
+
+		<view v-if="!loading && loadError == ''" class="bottom-bar">
+			<view class="cancel-button" @tap="onCancel"><text>取消</text></view>
+			<view class="save-button" :class="{ disabled: saving || uploadingMedia }" @tap="handleSave"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
+		</view>
+
+		<view class="sheet-overlay" v-if="detailSheetVisible" @click="detailSheetVisible = false">
+			<view class="sheet-panel" @click.stop>
+				<view class="sheet-handle"></view>
+				<view class="sheet-nav">
+					<text class="sheet-title">编辑资料</text>
+					<text class="sheet-close" @tap="detailSheetVisible = false">✕</text>
+				</view>
+				<scroll-view class="sheet-body" scroll-y enhanced show-scrollbar="false">
+					<view class="sheet-row">
+						<text class="sheet-row-label">昵称</text>
+						<input class="sheet-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">性别</text>
+						<picker class="sheet-row-right" mode="selector" :range="genderOptions" :disabled="isIdentityLocked" @change="onGenderChange"><text class="sheet-row-value">{{ genderText == '未选择' ? '请选择' : genderText }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<text v-if="isIdentityLocked" class="sheet-locked-note">实名认证后不可修改性别和生日</text>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">生日</text>
+						<picker class="sheet-row-right" mode="date" :value="formData.birthday" start="1966-01-01" end="2008-07-30" :disabled="isIdentityLocked" @change="onBirthdayChange"><text class="sheet-row-value">{{ formData.birthday || '请选择出生日期' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">身高</text>
+						<picker class="sheet-row-right" mode="selector" :range="heightOptions" :value="heightPickerIndex" @change="onHeightChange"><text class="sheet-row-value">{{ formData.height != '' ? formData.height + ' cm' : '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">体重</text>
+						<picker class="sheet-row-right" mode="selector" :range="weightOptions" :value="weightPickerIndex" @change="onWeightChange"><text class="sheet-row-value">{{ formData.weight != '' ? formData.weight + ' kg' : '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">现居地</text>
+						<picker class="sheet-row-right" mode="region" @change="onResidenceChange"><text class="sheet-row-value">{{ formData.residenceCityCode || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">家乡</text>
+						<picker class="sheet-row-right" mode="region" @change="onHometownChange"><text class="sheet-row-value">{{ formData.hometown || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">婚姻状况</text>
+						<picker class="sheet-row-right" mode="selector" :range="maritalOptions" @change="onMaritalChange"><text class="sheet-row-value">{{ maritalText == '未选择' ? '请选择' : maritalText }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">学历</text>
+						<picker class="sheet-row-right" mode="selector" :range="educationOptions" @change="onEducationChange"><text class="sheet-row-value">{{ educationText == '未选择' ? '请选择' : educationText }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">职业</text>
+						<input class="sheet-input" :value="formData.occupation" placeholder="请选择" @input="onInput('occupation', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">公司</text>
+						<input class="sheet-input" :value="formData.company" placeholder="搜索公司名称" @input="onCompanyInput" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view v-if="companySuggestions.length > 0" class="sheet-suggestion-list"><view v-for="company in companySuggestions" :key="company" class="sheet-suggestion" @tap="chooseCompany(company)"><text>{{ company }}</text></view></view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">收入</text>
+						<picker class="sheet-row-right" mode="selector" :range="incomeOptions" :value="incomePickerIndex" @change="onIncomeChange"><text class="sheet-row-value">{{ incomeText }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">MBTI</text>
+						<picker class="sheet-row-right" mode="selector" :range="mbtiOptions" :value="mbtiPickerIndex" @change="onMbtiChange"><text class="sheet-row-value">{{ formData.mbti || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">微信号</text>
+						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-section-label">择偶要求</view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">年龄下限</text>
+						<input class="sheet-input" type="number" :value="formData.ageMin" placeholder="不限" @input="onInput('ageMin', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">年龄上限</text>
+						<input class="sheet-input" type="number" :value="formData.ageMax" placeholder="不限" @input="onInput('ageMax', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">身高下限</text>
+						<input class="sheet-input" type="number" :value="formData.heightMin" placeholder="不限" @input="onInput('heightMin', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">身高上限</text>
+						<input class="sheet-input" type="number" :value="formData.heightMax" placeholder="不限" @input="onInput('heightMax', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">最低学历</text>
+						<input class="sheet-input" type="number" :value="formData.educationMin" placeholder="不限" @input="onInput('educationMin', $event)" /><text class="sheet-row-arrow">›</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">接受异地</text>
+						<switch :checked="formData.acceptLongDistance" color="var(--accent)" @change="onSwitchChange('acceptLongDistance', $event)" />
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">接受跨省</text>
+						<switch :checked="formData.acceptCrossProvince" color="var(--accent)" @change="onSwitchChange('acceptCrossProvince', $event)" />
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row column-row">
+						<text class="sheet-row-label">其他要求</text>
+						<textarea class="sheet-textarea" :value="formData.extraRequirement" maxlength="255" placeholder="填写希望对方了解的边界" @input="onInput('extraRequirement', $event)"></textarea>
+					</view>
+					<view class="sheet-bottom-spacer"></view>
+				</scroll-view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { getOwnProfile, updateOwnProfile, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile } from '@/api'
+	import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
+	import { resolveMediaUrl } from '@/api/config.uts'
+
+	const loading = ref(true)
+	const loadError = ref('')
+	const saving = ref(false)
+	const uploadingMedia = ref(false)
+	const detailSheetVisible = ref(false)
+	const realNameStatus = ref('missing')
+	const educationStatus = ref('missing')
+	const genderOptions = ['未选择', '男', '女']
+	const numericOptions = (start: number, end: number): string[] => {
+		const options = [] as string[]
+		for (let value = start; value <= end; value++) options.push('' + value)
+		return options
+	}
+	const heightOptions = numericOptions(140, 220)
+	const weightOptions = numericOptions(40, 120)
+	const educationOptions = ['未选择', '高中及以下', '大专', '本科', '硕士', '博士']
+	const maritalOptions = ['未选择', '未婚', '离异', '丧偶']
+	const incomeOptions = ['请选择', '小于10w', '10-20w', '30-50w', '50-100w', '100w以上', '保密']
+	const mbtiOptions = ['未选择', 'INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP']
+	const companyDirectory = ['腾讯', '阿里巴巴', '字节跳动', '华为', '京东', '美团', '小米', '网易', '比亚迪', '中国平安', '招商银行', '中国移动']
+	const companySuggestions = ref([] as string[])
+	const formData = ref({
+		userId: 0,
+		nickname: '',
+		gender: null as any,
+		birthday: '',
+		height: '' as any,
+		weight: '' as any,
+		educationLevel: null as any,
+		residenceCityCode: '',
+		hometown: '',
+		occupation: '',
+		industry: '',
+		company: '',
+		income: '',
+		isMarried: null as any,
+		mbti: '',
+		introduction: '',
+		wechat: '',
+		interestTags: [] as string[],
+		personalityTags: [] as string[],
+		tagSelections: {} as any,
+		avatar: '',
+		coverBg: '',
+		photos: [] as any[],
+		ageMin: '' as any,
+		ageMax: '' as any,
+		heightMin: '' as any,
+		heightMax: '' as any,
+		educationMin: '' as any,
+		acceptLongDistance: true,
+		acceptCrossProvince: true,
+		extraRequirement: ''
+	})
+	const completionScore = ref(0)
+	const usingLocalDraft = ref(false)
+
+	const textValue = (value: any): string => value == null ? '' : '' + value
+	const optionalNumber = (value: any): any => {
+		if (value == null || ('' + value).trim() == '') return null
+		const parsed = Number(value)
+		return isNaN(parsed) ? null : parsed
+	}
+	const profileMedia = (raw: any): any[] => {
+		const list = raw != null && Array.isArray(raw) ? raw as any[] : []
+		return list.map((item: any) => ({ id: item.id, url: resolveMediaUrl(item.file_url), sortOrder: item.sort_order }))
+	}
+
+	const applyProfile = (raw: any) => {
+		const data = raw != null ? raw : {}
+		formData.value.userId = data.user_id != null ? Number(data.user_id) : 0
+		formData.value.nickname = textValue(data.nickname)
+		formData.value.gender = data.gender
+		formData.value.birthday = textValue(data.birthday)
+		formData.value.height = data.height != null ? data.height : ''
+		formData.value.weight = data.weight != null ? data.weight : ''
+		formData.value.educationLevel = data.education_level
+		formData.value.residenceCityCode = textValue(data.residence_city_code)
+		formData.value.hometown = textValue(data.hometown)
+		formData.value.occupation = textValue(data.occupation)
+		formData.value.industry = textValue(data.industry)
+		formData.value.company = textValue(data.company)
+		formData.value.income = textValue(data.income_range != null ? data.income_range : data.income)
+		formData.value.isMarried = data.is_married
+		formData.value.mbti = textValue(data.mbti)
+		formData.value.introduction = textValue(data.self_intro)
+		formData.value.wechat = textValue(data.wechat)
+		formData.value.interestTags = data.interest_tags != null ? data.interest_tags : []
+		formData.value.personalityTags = data.personality_tags != null ? data.personality_tags : []
+		formData.value.tagSelections = data.tag_selections != null ? data.tag_selections : {}
+		formData.value.avatar = resolveMediaUrl(data.avatar)
+		formData.value.coverBg = resolveMediaUrl(data.background_wall)
+		formData.value.photos = profileMedia(data.photos)
+		completionScore.value = data.completion_score != null ? Math.round(Number(data.completion_score)) : 0
+	}
+
+	const applyPreferences = (raw: any) => {
+		const data = raw != null ? raw : {}
+		formData.value.ageMin = data.age_min != null ? data.age_min : ''
+		formData.value.ageMax = data.age_max != null ? data.age_max : ''
+		formData.value.heightMin = data.height_min != null ? data.height_min : ''
+		formData.value.heightMax = data.height_max != null ? data.height_max : ''
+		formData.value.educationMin = data.education_min != null ? data.education_min : ''
+		formData.value.acceptLongDistance = data.accept_long_distance == true
+		formData.value.acceptCrossProvince = data.accept_cross_province == true
+		formData.value.extraRequirement = textValue(data.extra_requirement)
+	}
+
+	const load = async () => {
+		loading.value = true
+		loadError.value = ''
+		try {
+			const profileRes = await getOwnProfile()
+			if (!profileRes.success || profileRes.data == null) {
+				loadError.value = profileRes.message != null ? '' + profileRes.message : '个人资料接口暂不可用'
+				return
+			}
+			applyProfile(profileRes.data)
+			const preferenceRes = await getOwnPreferences()
+			if (!preferenceRes.success || preferenceRes.data == null) {
+				loadError.value = preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求接口暂不可用'
+				return
+			}
+			applyPreferences(preferenceRes.data)
+			const meRes = await getMeProfile()
+			if (meRes.success && meRes.data != null) {
+				realNameStatus.value = meRes.data.realNameStatus != null ? '' + meRes.data.realNameStatus : 'missing'
+				educationStatus.value = meRes.data.educationStatus != null ? '' + meRes.data.educationStatus : 'missing'
+			}
+		} catch (e) {
+			loadError.value = '网络不可用，请重试'
+		} finally {
+			loading.value = false
+		}
+	}
+
+	const completeness = computed(() => completionScore.value > 0 ? completionScore.value : Math.min(100, [formData.value.avatar, formData.value.occupation, formData.value.introduction].filter((item: any) => item != null && ('' + item).trim() != '').length * 25))
+	const isIdentityLocked = computed(() => realNameStatus.value == 'passed')
+	const heightPickerIndex = computed(() => {
+		const value = Number(formData.value.height)
+		return value >= 140 && value <= 220 ? value - 140 : 0
+	})
+	const weightPickerIndex = computed(() => {
+		const value = Number(formData.value.weight)
+		return value >= 40 && value <= 120 ? value - 40 : 0
+	})
+	const genderText = computed(() => formData.value.gender == 1 ? '男' : formData.value.gender == 2 ? '女' : '未选择')
+	const educationText = computed(() => formData.value.educationLevel != null ? educationOptions[Number(formData.value.educationLevel)] || '未选择' : '未选择')
+	const maritalText = computed(() => formData.value.isMarried != null ? maritalOptions[Number(formData.value.isMarried)] || '未选择' : '未选择')
+	const incomeText = computed(() => formData.value.income != '' ? textValue(formData.value.income) : '请选择')
+	const incomePickerIndex = computed(() => {
+		const index = incomeOptions.indexOf(textValue(formData.value.income))
+		return index >= 0 ? index : 0
+	})
+	const mbtiPickerIndex = computed(() => {
+		const index = mbtiOptions.indexOf(textValue(formData.value.mbti))
+		return index >= 0 ? index : 0
+	})
+	const occupationPreview = computed(() => {
+		const parts = [formData.value.occupation, formData.value.industry].filter((v: any) => v != null && ('' + v).trim() != '')
+		return parts.length > 0 ? parts.join(' · ') : '未填写'
+	})
+	const incomePreview = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '未填写')
+	const incomePreviewText = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '请选择')
+	const completedCertCount = computed(() => certifications.value.filter((c: any) => c.passed).length)
+	const displayTags = computed(() => {
+		const result: string[] = []
+		const selections = formData.value.tagSelections
+		let hasGroupedTags = false
+		if (selections != null && typeof selections === 'object') {
+			for (const category of TAG_CATEGORIES) {
+				const values = selections[category.id]
+				if (Array.isArray(values)) {
+					hasGroupedTags = true
+					for (const value of values as string[]) result.push(value)
+				}
+			}
+		}
+		if (!hasGroupedTags) {
+			for (const tag of formData.value.interestTags) result.push(tag)
+			for (const tag of formData.value.personalityTags) result.push(tag)
+		}
+		return result.slice(0, 20)
+	})
+	const certifications = computed(() => [
+		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
+		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
+		{ key: 'avatar', label: '头像认证', icon: '像', passed: false, desc: '上传真实本人照片' },
+		{ key: 'marriage', label: '婚况认证', icon: '♥', passed: false, desc: '提交婚况证明材料' }
+	])
+
+	onMounted(() => load())
+	onShow(() => {
+		if (!loading.value) syncLocalTagDraft()
+	})
+
+	const onInput = (field: string, event: any) => {
+		(formData.value as any)[field] = event.detail.value
+	}
+	const onSwitchChange = (field: string, event: any) => {
+		(formData.value as any)[field] = event.detail.value == true
+	}
+	const onGenderChange = (event: any) => { if (!isIdentityLocked.value) formData.value.gender = Number(event.detail.value) == 1 ? 1 : Number(event.detail.value) == 2 ? 2 : null }
+	const onEducationChange = (event: any) => formData.value.educationLevel = Number(event.detail.value) > 0 ? Number(event.detail.value) : null
+	const onMaritalChange = (event: any) => formData.value.isMarried = Number(event.detail.value) > 0 ? Number(event.detail.value) : null
+	const onBirthdayChange = (event: any) => { if (!isIdentityLocked.value) formData.value.birthday = event.detail.value }
+	const onHeightChange = (event: any) => formData.value.height = Number(heightOptions[Number(event.detail.value)])
+	const onWeightChange = (event: any) => formData.value.weight = Number(weightOptions[Number(event.detail.value)])
+	const regionText = (event: any): string => {
+		const values = event.detail.value as string[]
+		return values.join(' ')
+	}
+	const onResidenceChange = (event: any) => formData.value.residenceCityCode = regionText(event)
+	const onHometownChange = (event: any) => formData.value.hometown = regionText(event)
+	const onIncomeChange = (event: any) => {
+		const index = Number(event.detail.value)
+		formData.value.income = index > 0 ? incomeOptions[index] : ''
+	}
+	const onMbtiChange = (event: any) => {
+		const index = Number(event.detail.value)
+		formData.value.mbti = index > 0 ? mbtiOptions[index] : ''
+	}
+	const onCompanyInput = (event: any) => {
+		formData.value.company = event.detail.value
+		const keyword = textValue(event.detail.value).trim().toLowerCase()
+		companySuggestions.value = keyword == '' ? [] : companyDirectory.filter((company: string) => company.toLowerCase().indexOf(keyword) >= 0).slice(0, 6)
+	}
+	const chooseCompany = (company: string) => {
+		formData.value.company = company
+		companySuggestions.value = []
+	}
+
+	const uploadMedia = async (path: string, kind: string) => {
+		if (path == '') return null
+		uploadingMedia.value = true
+		try {
+			const res = await uploadUserProfileMedia(path, kind)
+			if (!res.success || res.data == null) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '上传失败，请重试', icon: 'none' })
+				return null
+			}
+			return res.data
+		} catch (e) {
+			uni.showToast({ title: '上传失败，请检查网络', icon: 'none' })
+			return null
+		} finally {
+			uploadingMedia.value = false
+		}
+	}
+
+	const chooseAvatar = () => {
+		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
+			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
+			const media = await uploadMedia(path, 'avatar')
+			if (media != null) formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : path
+		} })
+	}
+
+	const changeBackground = () => {
+		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
+			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
+			const media = await uploadMedia(path, 'background')
+			if (media != null) formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : path
+		} })
+	}
+
+	const addPhoto = () => {
+		const count = 9 - formData.value.photos.length
+		if (count <= 0) return
+		uni.chooseImage({ count, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
+			const paths = res != null && res.tempFilePaths != null ? res.tempFilePaths as string[] : []
+			for (let i = 0; i < paths.length; i++) {
+				const media = await uploadMedia('' + paths[i], 'photo')
+				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + paths[i] })
+			}
+		} })
+	}
+
+	const deletePhoto = async (index: number) => {
+		const list = formData.value.photos as any[]
+		if (index < 0 || index >= list.length) return
+		const item = list[index]
+		if (item.id == null || Number(item.id) <= 0) return
+		const res = await deleteUserProfilePhoto(Number(item.id))
+		if (res.success) list.splice(index, 1)
+		else uni.showToast({ title: res.message != null ? '' + res.message : '删除失败，请重试', icon: 'none' })
+	}
+
+	const goCertification = (key: string) => uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	const goTagsEdit = () => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit' })
+	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
+
+	const syncLocalTagDraft = () => {
+		try {
+			const savedMap = uni.getStorageSync('xsa_my_tag_selections')
+			if (savedMap != null && typeof savedMap === 'object') {
+				formData.value.tagSelections = savedMap
+				const personality: string[] = []
+				const interest: string[] = []
+				for (const category of TAG_CATEGORIES) {
+					const values = Array.isArray(savedMap[category.id]) ? savedMap[category.id] as string[] : []
+					for (const value of values) {
+						if (category.id == 'personality') personality.push(value)
+						else interest.push(value)
+					}
+				}
+				formData.value.personalityTags = personality.slice(0, 5)
+				formData.value.interestTags = interest.slice(0, 5)
+				return
+			}
+			const savedTags = uni.getStorageSync('xsa_my_tags')
+			if (Array.isArray(savedTags)) {
+				const next: any = {}
+				for (const category of TAG_CATEGORIES) next[category.id] = []
+				for (const rawTag of savedTags as any[]) {
+					if (typeof rawTag != 'string') continue
+					const categoryId = findTagCategoryId(rawTag)
+					const values = next[categoryId] as string[]
+					if (values.indexOf(rawTag) < 0) values.push(rawTag)
+				}
+				formData.value.tagSelections = next
+			}
+		} catch (e) {
+			// 本地草稿不可用时继续使用接口数据。
+		}
+	}
+
+	const onCancel = () => {
+		uni.navigateBack({ delta: 1 })
+	}
+
+	const buildProfilePayload = () => ({
+		gender: formData.value.gender,
+		birthday: formData.value.birthday != '' ? formData.value.birthday : null,
+		is_married: formData.value.isMarried,
+		height: optionalNumber(formData.value.height),
+		weight: optionalNumber(formData.value.weight),
+		occupation: textValue(formData.value.occupation) || null,
+		industry: textValue(formData.value.industry) || null,
+		education_level: formData.value.educationLevel,
+		income_range: textValue(formData.value.income) || null,
+		residence_city_code: textValue(formData.value.residenceCityCode) || null,
+		hometown: textValue(formData.value.hometown) || null,
+		company: textValue(formData.value.company) || null,
+		self_intro: textValue(formData.value.introduction) || null,
+		interest_tags: formData.value.interestTags.length >= 3 ? formData.value.interestTags.slice(0, 5) : null,
+		personality_tags: formData.value.personalityTags.length >= 3 ? formData.value.personalityTags.slice(0, 5) : null,
+		mbti: textValue(formData.value.mbti).toUpperCase() || null,
+		tag_selections: formData.value.tagSelections
+	})
+
+	const buildPreferencePayload = () => ({
+		age_min: optionalNumber(formData.value.ageMin),
+		age_max: optionalNumber(formData.value.ageMax),
+		height_min: optionalNumber(formData.value.heightMin),
+		height_max: optionalNumber(formData.value.heightMax),
+		education_min: optionalNumber(formData.value.educationMin),
+		accept_long_distance: formData.value.acceptLongDistance,
+		accept_cross_province: formData.value.acceptCrossProvince,
+		extra_requirement: textValue(formData.value.extraRequirement) || null
+	})
+
+	const handleSave = async () => {
+		if (saving.value || uploadingMedia.value) return
+		const height = optionalNumber(formData.value.height)
+		const weight = optionalNumber(formData.value.weight)
+		if (height != null && (height < 140 || height > 220)) {
+			uni.showToast({ title: '身高需在140至220厘米之间', icon: 'none' })
+			return
+		}
+		if (weight != null && (weight < 40 || weight > 120)) {
+			uni.showToast({ title: '体重需在40至120千克之间', icon: 'none' })
+			return
+		}
+		saving.value = true
+		try {
+			const profileRes = await updateOwnProfile(buildProfilePayload())
+			if (!profileRes.success) {
+				uni.showToast({ title: profileRes.message != null ? '' + profileRes.message : '基础资料保存失败', icon: 'none' })
+				return
+			}
+			const preferenceRes = await updateOwnPreferences(buildPreferencePayload())
+			if (!preferenceRes.success) {
+				uni.showToast({ title: preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求保存失败', icon: 'none' })
+				return
+			}
+			uni.showToast({ title: '资料已保存', icon: 'success' })
+			setTimeout(() => uni.navigateBack({ delta: 1 }), 700)
+		} catch (e) {
+			uni.showToast({ title: '网络异常，资料未保存', icon: 'none' })
+		} finally {
+			saving.value = false
+		}
+	}
+</script>
+
+<style scoped>
+.edit-page { min-height: 100vh; background: var(--canvas); display: flex; flex-direction: column; }
+.nav-bar { height: 72px; margin-top: 32px; padding: 36px 16px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; background: var(--paper); border-bottom: 1px solid var(--line); }
+.nav-back { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
+.nav-back-icon { font-size: 28px; font-weight: 700; color: var(--ink); line-height: 1; }
+.nav-title { font-size: 18px; font-weight: 700; color: var(--ink); }
+.state-block { flex: 1; min-height: 420px; padding: 100px 24px 140px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-state { flex: 1; min-height: 420px; padding: 72px 32px 140px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-mark { width: 76px; height: 76px; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-md); }
+.error-mark text { color: var(--accent2); font-size: 38px; font-weight: 700; line-height: 1; }
+.error-title { color: var(--ink); font-size: 18px; font-weight: 700; }
+.error-description { max-width: 560rpx; margin-top: 12px; color: var(--ink2); font-size: 14px; line-height: 1.5; text-align: center; }
+.error-hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.error-actions { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-top: 28px; }
+.error-retry, .error-cancel { height: 42px; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 21px; font-size: 14px; }
+.error-retry { min-width: 116px; background: var(--sage); color: var(--text-invert); box-shadow: var(--shadow-sm); }
+.error-cancel { min-width: 76px; border: 1px solid var(--line); background: var(--surface); color: var(--ink2); }
+.loading-orbit { position: relative; width: 92px; height: 92px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; }
+.loading-ring { position: absolute; width: 78px; height: 78px; border: 4px solid var(--sage-soft); border-top-color: var(--sage); border-right-color: var(--accent); border-radius: 50%; animation: loading-spin 1.15s linear infinite; }
+.loading-core { width: 50px; height: 50px; border-radius: 25px; display: flex; align-items: center; justify-content: center; background: var(--sage); box-shadow: 0 8px 20px rgba(51,141,107,0.2); }
+.loading-core text { color: var(--text-invert); font-size: 22px; font-weight: 700; }
+.state-title { font-size: 17px; font-weight: 700; color: var(--ink); }
+.state-description { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.loading-dots { display: flex; flex-direction: row; gap: 6px; margin-top: 14px; }
+.loading-dots view { width: 6px; height: 6px; border-radius: 3px; background: var(--sage); opacity: 0.35; animation: loading-pulse 1.2s ease-in-out infinite; }
+.loading-dots view:nth-child(2) { animation-delay: 0.18s; }
+.loading-dots view:nth-child(3) { animation-delay: 0.36s; }
+@keyframes loading-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes loading-pulse { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+.scroll-content { flex: 1; height: 0; padding: 36px 16px 100px; box-sizing: border-box; }
+.progress-section { padding: 12px 16px 4px; display: flex; flex-direction: column; gap: 6px; }
+.progress-header, .section-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.heading-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.progress-label, .section-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.progress-value { font-size: 14px; font-weight: 700; color: var(--sage); }
+.progress-track { height: 6px; border-radius: 3px; background: var(--warm); overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--sage), var(--accent)); }
+.progress-hint { font-size: 11px; color: var(--muted); }
+.preview-action { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 16px; background: var(--sage-soft); color: var(--sage); }
+.preview-action text { font-size: 13px; font-weight: 600; }
+.preview-action-arrow { font-size: 16px !important; }
+.section-caption { font-size: 12px; color: var(--sage); font-weight: 500; }
+.section-card { margin-bottom: 14px; padding: 16px 18px; background: var(--surface); border-radius: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 14px; }
+.avatar-row { display: flex; flex-direction: row; gap: 16px; align-items: center; }
+.avatar-box { position: relative; width: 72px; height: 72px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: var(--warm); }
+.avatar-image { width: 100%; height: 100%; }
+.camera-badge { position: absolute; right: 0; bottom: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--sage); display: flex; align-items: center; justify-content: center; }
+.camera-icon { font-size: 14px; color: var(--text-invert); }
+.avatar-copy { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.avatar-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.avatar-description { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.avatar-rule { font-size: 11px; color: var(--ink2); line-height: 1.4; }
+
+/* Pill action */
+.pill-action { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 999px; background: var(--warm); }
+.pill-action-text { font-size: 13px; color: var(--muted); }
+.pill-action-arrow { font-size: 15px; color: var(--muted); }
+
+/* Album */
+.album-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.album-cell { position: relative; height: 96px; overflow: hidden; border-radius: 12px; background: var(--warm); }
+.album-photo { width: 100%; height: 100%; }
+.album-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(12,19,19,0.7); color: var(--text-invert); font-size: 16px; }
+.add-cell { display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); }
+.add-icon { font-size: 28px; color: var(--muted); }
+.media-note { display: block; margin-top: 2px; color: var(--accent2); font-size: 12px; }
+
+/* Preview */
+.preview-list { display: flex; flex-direction: column; }
+.preview-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 0; }
+.preview-row + .preview-row { border-top: 1px solid var(--line); }
+.preview-label { font-size: 13px; color: var(--muted); }
+.preview-value { font-size: 13px; color: var(--ink); font-weight: 500; }
+
+/* Certification */
+.certification-card { gap: 10px; }
+.cert-row { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 4px 0; }
+.cert-row + .cert-row { border-top: 1px solid var(--line); padding-top: 12px; }
+.cert-icon-wrap { width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: var(--warm); display: flex; align-items: center; justify-content: center; }
+.cert-icon-wrap.cert-icon-done { background: var(--sage-soft); }
+.cert-icon { font-size: 16px; color: var(--muted); font-weight: 700; }
+.cert-icon-wrap.cert-icon-done .cert-icon { color: var(--sage); }
+.cert-copy { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.cert-label { font-size: 14px; color: var(--ink); font-weight: 600; }
+.cert-description { font-size: 11px; color: var(--muted); }
+.cert-done-pill { flex-shrink: 0; padding: 5px 12px; border-radius: 12px; background: var(--sage-soft); }
+.cert-done-text { font-size: 12px; color: var(--sage); font-weight: 600; }
+.cert-pending-text { font-size: 12px; color: var(--sage); font-weight: 600; }
+
+/* Intro */
+.intro-card { gap: 10px; }
+.intro-main-input { width: 100%; min-height: 100px; padding: 12px; box-sizing: border-box; border: none; border-radius: 12px; background: var(--warm); color: var(--ink); font-size: 13px; line-height: 1.5; }
+
+/* Tags */
+.tags-card { gap: 6px; }
+.tag-list { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.tag-chip { padding: 6px 14px; border-radius: 999px; background: var(--warm); color: var(--ink2); font-size: 13px; font-weight: 500; }
+.tag-chip.tag-accent { background: var(--sage-soft); color: var(--sage); }
+.tag-chip.tag-add { background: var(--sage-soft); color: var(--sage); font-weight: 600; }
+
+/* QA */
+.qa-card { gap: 8px; }
+.qa-item { padding: 12px; border-radius: 12px; background: var(--warm); display: flex; flex-direction: column; gap: 6px; }
+.qa-question { font-size: 13px; font-weight: 600; color: var(--ink); }
+.qa-answer-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; }
+.qa-hint { font-size: 12px; color: var(--muted); }
+.qa-edit-icon { font-size: 14px; color: var(--sage); }
+
+/* Bottom bar */
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-direction: row; gap: 12px; align-items: center; z-index: 10; }
+.cancel-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--warm); color: var(--ink2); font-size: 15px; font-weight: 600; }
+.save-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--sage); color: var(--text-invert); font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(51,141,107,0.25); }
+.save-button.disabled { opacity: 0.55; }
+.scroll-bottom-spacer { height: 60px; }
+
+/* Sheet overlay */
+.sheet-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; width: 100%; height: 100vh; background: rgba(12,19,19,0.36); z-index: 100; display: flex; align-items: flex-end; }
+.sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 80vh; max-height: 80vh; min-height: 0; background: var(--surface); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+.sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 10px auto 0; flex-shrink: 0; }
+.sheet-nav { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 12px 18px 10px; position: relative; }
+.sheet-title { font-size: 18px; font-weight: 700; color: var(--ink); }
+.sheet-close { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--muted); padding: 4px; }
+.sheet-body { flex: 1; padding: 0 18px 24px; }
+.sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 14px 6px; }
+.sheet-row-label { font-size: 14px; color: var(--ink); flex-shrink: 0; }
+.sheet-row-right { display: flex; flex-direction: row; align-items: center; gap: 6px; }
+.sheet-row-value { font-size: 14px; color: var(--muted); }
+.sheet-row-arrow { font-size: 18px; color: var(--muted); }
+.sheet-input { flex: 1; min-width: 0; text-align: right; font-size: 14px; color: var(--muted); height: 24px; }
+.sheet-locked-note { padding: 0 6px 10px; text-align: right; font-size: 11px; color: var(--muted); }
+.sheet-suggestion-list { margin: -4px 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
+.sheet-suggestion { padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink2); }
+.sheet-suggestion:last-child { border-bottom: 0; }
+.sheet-divider { height: 1px; background: var(--line); }
+.sheet-section-label { font-size: 15px; font-weight: 700; color: var(--ink); padding: 18px 6px 8px; }
+.sheet-row.column-row { flex-direction: column; align-items: stretch; gap: 10px; }
+.sheet-textarea { width: 100%; min-height: 80px; padding: 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 13px; line-height: 1.5; }
+.sheet-bottom-spacer { height: 20px; }
+
+@media (max-width: 350px) { .scroll-content { padding-left: 12px; padding-right: 12px; } .section-card { padding: 13px 14px; } }
+.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { font-size: 16px; line-height: 1; color: var(--ink); }
+</style>

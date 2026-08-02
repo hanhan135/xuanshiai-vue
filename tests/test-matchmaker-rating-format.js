@@ -22,7 +22,7 @@ expectAbsent(card, 'rating', 'service card has no rating UI')
 const ranking = read('components/MatchmakerRank.uvue')
 expectAbsent(ranking, 'rating', 'ranking has no rating UI')
 
-const detail = read('pages/matchmaker/detail.uvue')
+const detail = read('pagesSub/matchmaker/detail.uvue')
 expectAbsent(detail, 'rating', 'detail has no rating UI')
 expectAbsent(detail, '好评率', 'detail has no favorable-rate UI')
 
