@@ -535,6 +535,9 @@ const applyPlan = () => {
 			+ '&planName=' + encodeURIComponent(activePlan.value.name)
 			+ '&planPrice=' + activePlan.value.price
 			+ '&planDuration=' + encodeURIComponent(activePlan.value.duration)
+			+ '&planOriginalPrice=' + (activePlan.value.originalPrice != null ? activePlan.value.originalPrice : 0)
+			+ '&planDescription=' + encodeURIComponent(activePlan.value.description)
+			+ '&planBenefits=' + encodeURIComponent(activePlan.value.benefits.join('|'))
 	})
 }
 </script>

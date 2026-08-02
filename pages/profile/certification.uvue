@@ -1,257 +1,197 @@
 <template>
 	<view class="page">
-		<!-- 四重认证 -->
 		<view class="section-card">
 			<view class="card-header">
-				<text class="section-title">四重认证</text>
-				<view class="progress-wrap">
-					<text class="progress-text">已完成 {{ completed }}/4</text>
-					<view class="dots">
-						<view v-for="i in 4" :key="i" class="dot" :class="i <= completed ? 'dot-on' : 'dot-off'" />
-					</view>
+				<view>
+					<text class="section-title">申请前置认证</text>
+					<text class="section-note">申请红娘或合伙人前需完成以下两项</text>
 				</view>
+				<text class="progress-text">已完成 {{ completed }}/2</text>
 			</view>
-			<view class="cert-item" v-for="c in mainList" :key="c.key">
-				<view class="cert-icon-wrap" :class="{ 'cert-done': c.done }">
-					<text class="cert-icon-text">{{ c.icon }}</text>
-				</view>
+
+			<view class="cert-item">
+				<view class="cert-icon-wrap" :class="{ 'cert-done': phoneVerified }"><text class="cert-icon-text">📱</text></view>
 				<view class="cert-text-wrap">
-					<text class="cert-label">{{ c.label }}</text>
-					<text class="cert-desc">{{ c.desc }}</text>
+					<text class="cert-label">手机号绑定</text>
+					<text class="cert-desc">{{ phoneVerified ? phoneMasked : '用于接收审核和服务通知' }}</text>
 				</view>
-				<view v-if="c.done" class="cert-check">
-					<text class="check-icon">✓</text>
+				<text v-if="phoneVerified" class="status passed">已绑定</text>
+				<view v-else class="action-pill" @tap="openStep('phone')"><text>去绑定</text></view>
+			</view>
+
+			<view class="cert-item">
+				<view class="cert-icon-wrap" :class="{ 'cert-done': realnameStatus == 2 }"><text class="cert-icon-text">🛡</text></view>
+				<view class="cert-text-wrap">
+					<text class="cert-label">实名认证</text>
+					<text class="cert-desc">{{ realnameDescription }}</text>
 				</view>
-				<view v-else class="cert-pending" @tap="onUpload(c.key)">
-					<text class="pending-text">去认证</text>
-				</view>
+				<text v-if="realnameStatus == 2" class="status passed">已通过</text>
+				<text v-else-if="realnameStatus == 1" class="status reviewing">审核中</text>
+				<view v-else class="action-pill" @tap="openStep('realname')"><text>去认证</text></view>
 			</view>
 		</view>
 
-		<!-- 更多认证 -->
-		<view class="section-card">
-			<text class="section-title">更多认证</text>
-			<view class="cert-item" v-for="c in moreList" :key="c.key">
-				<view class="cert-icon-wrap">
-					<text class="cert-icon-text">{{ c.icon }}</text>
-				</view>
-				<view class="cert-text-wrap">
-					<text class="cert-label">{{ c.label }}</text>
-					<text class="cert-desc">{{ c.desc }}</text>
-				</view>
-				<view v-if="c.done" class="cert-check">
-					<text class="check-icon">✓</text>
-				</view>
-				<view v-else class="cert-pending" @tap="onUpload(c.key)">
-					<text class="pending-text">去认证</text>
-				</view>
+		<view v-if="activeStep == 'phone' && !phoneVerified" class="section-card form-card">
+			<text class="section-title">绑定手机号</text>
+			<text class="section-note">验证码仅用于绑定当前微信账号</text>
+			<input class="field-input" type="number" maxlength="11" placeholder="请输入11位手机号" :value="phone" @input="onPhoneInput" />
+			<view class="code-row">
+				<input class="field-input code-input" type="number" maxlength="6" placeholder="请输入验证码" :value="smsCode" @input="onCodeInput" />
+				<view class="code-button" :class="{ disabled: codeSending || countdown > 0 }" @tap="sendBindCode"><text>{{ codeButtonText }}</text></view>
 			</view>
+			<view class="primary-button" :class="{ disabled: binding }" @tap="confirmBindPhone"><text>{{ binding ? '绑定中…' : '确认绑定' }}</text></view>
 		</view>
 
-		<!-- 认证特权 -->
-		<view class="section-card">
-			<text class="section-title">认证特权</text>
-			<view class="cert-item" v-for="p in privList" :key="p.title">
-				<view class="cert-icon-wrap">
-					<text class="cert-icon-text">{{ p.icon }}</text>
-				</view>
-				<view class="cert-text-wrap">
-					<text class="cert-label">{{ p.title }}</text>
-					<text class="cert-desc">{{ p.desc }}</text>
-				</view>
-			</view>
+		<view v-if="activeStep == 'realname' && realnameStatus != 2" class="section-card form-card">
+			<text class="section-title">实名认证</text>
+			<text v-if="realnameStatus == 1" class="review-tip">资料已提交，正在审核。审核通过后即可申请。</text>
+			<template v-else>
+				<text class="section-note">请填写本人真实姓名和有效身份证号</text>
+				<input class="field-input" maxlength="64" placeholder="真实姓名" :value="realName" @input="onRealNameInput" />
+				<input class="field-input" maxlength="18" placeholder="18位身份证号" :value="idCard" @input="onIdCardInput" />
+				<view class="primary-button" :class="{ disabled: realnameSubmitting }" @tap="confirmRealname"><text>{{ realnameSubmitting ? '提交中…' : '提交实名认证' }}</text></view>
+			</template>
 		</view>
 
-		<text class="footer-tip">认证越多，信任度越高，匹配更精准</text>
+		<view v-if="returnTo != ''" class="return-link" @tap="backToApplication"><text>返回申请页面</text></view>
+		<text class="footer-tip">认证状态以平台审核结果为准，不再使用本地演示状态。</text>
 	</view>
 </template>
 
 <script setup lang="uts">
-	const mainList = ref([
-		{ key: 'realname',  label: '实名认证', desc: '已通过平台实名认证', icon: '🛡', done: true },
-		{ key: 'education', label: '学历认证', desc: '学历信息已核验',       icon: '🎓', done: true },
-		{ key: 'avatar',    label: '头像认证', desc: '上传真实本人照片（需上传图片）',     icon: '📷', done: false },
-		{ key: 'marriage',  label: '婚况认证', desc: '提交婚况证明材料（需上传图片）',     icon: '💍', done: false }
-	])
+import { bindPhone, getMeProfile, sendSms, submitRealname } from '@/api'
 
-	const moreList = ref([
-		{ key: 'occupation', label: '职业认证', desc: '上传工牌/在职证明',      icon: '💼', done: false },
-		{ key: 'housing',    label: '房产认证', desc: '上传房产证或购房合同',   icon: '🏠', done: false },
-		{ key: 'vehicle',    label: '车辆认证', desc: '上传行驶证或购车发票',   icon: '🚗', done: false },
-		{ key: 'income',     label: '收入认证', desc: '上传收入证明或银行流水', icon: '💰', done: false }
-	])
+const phoneVerified = ref(false)
+const phoneMasked = ref('')
+const realnameStatus = ref(0)
+const activeStep = ref('')
+const returnTo = ref('')
+const phone = ref('')
+const smsCode = ref('')
+const realName = ref('')
+const idCard = ref('')
+const binding = ref(false)
+const realnameSubmitting = ref(false)
+const codeSending = ref(false)
+const countdown = ref(0)
 
-	const privList = ref([
-		{ icon: '✨', title: '专属标识', desc: '个人主页展示金色认证徽章' },
-		{ icon: '📈', title: '优先推荐', desc: '首页推荐排名提升30%' },
-		{ icon: '💬', title: '无限畅聊', desc: '认证后可解锁无限畅聊特权' },
-		{ icon: '🛡', title: '安全保障', desc: '平台权益保障，投诉优先处理' }
-	])
+const completed = computed(() => (phoneVerified.value ? 1 : 0) + (realnameStatus.value == 2 ? 1 : 0))
+const codeButtonText = computed(() => countdown.value > 0 ? countdown.value + '秒后重试' : (codeSending.value ? '发送中…' : '获取验证码'))
+const realnameDescription = computed(() => {
+	if (realnameStatus.value == 2) return '已通过平台实名认证'
+	if (realnameStatus.value == 1) return '资料正在审核，请耐心等待'
+	if (realnameStatus.value == 3) return '认证未通过，请重新提交'
+	return '填写本人真实身份信息后提交审核'
+})
 
-	const completed = computed(() => mainList.value.filter(c => c.done).length)
+const messageOf = (res: any, fallback: string): string => res != null && res.message != null && String(res.message) != '' ? String(res.message) : fallback
 
-	const onUpload = (type: string) => {
-		uni.chooseImage({
-			count: 3,
-			sizeType: ['compressed'],
-			sourceType: ['album', 'camera'],
-			success: (res) => {
-				uni.showLoading({ title: '上传中...' })
-				setTimeout(() => {
-					uni.hideLoading()
-					uni.showToast({ title: '已提交审核', icon: 'success' })
-				}, 1500)
-			}
-		})
+const refreshStatus = async () => {
+	const res = await getMeProfile()
+	if (!res.success || res.data == null) return
+	phoneVerified.value = res.data.phone_verified == true
+	phoneMasked.value = res.data.phone_masked != null ? String(res.data.phone_masked) : ''
+	realnameStatus.value = res.data.realname_status != null ? Number(res.data.realname_status) : 0
+}
+
+const openStep = (step: string) => { activeStep.value = step }
+const onPhoneInput = (e: any) => { phone.value = e.detail.value }
+const onCodeInput = (e: any) => { smsCode.value = e.detail.value }
+const onRealNameInput = (e: any) => { realName.value = e.detail.value }
+const onIdCardInput = (e: any) => { idCard.value = e.detail.value }
+
+const startCountdown = () => {
+	countdown.value = 60
+	const timer = setInterval(() => {
+		countdown.value -= 1
+		if (countdown.value <= 0) clearInterval(timer)
+	}, 1000)
+}
+
+const sendBindCode = async () => {
+	if (codeSending.value || countdown.value > 0) return
+	if (!/^1[3-9]\d{9}$/.test(phone.value.trim())) {
+		uni.showToast({ title: '请输入正确的11位手机号', icon: 'none' })
+		return
 	}
+	codeSending.value = true
+	try {
+		const res = await sendSms(phone.value.trim(), 'bind_phone')
+		if (!res.success) {
+			uni.showToast({ title: messageOf(res, '验证码发送失败'), icon: 'none' })
+			return
+		}
+		startCountdown()
+		uni.showToast({ title: '验证码已发送', icon: 'success' })
+	} finally { codeSending.value = false }
+}
+
+const confirmBindPhone = async () => {
+	if (binding.value) return
+	if (!/^1[3-9]\d{9}$/.test(phone.value.trim()) || !/^\d{6}$/.test(smsCode.value.trim())) {
+		uni.showToast({ title: '请填写手机号和6位验证码', icon: 'none' })
+		return
+	}
+	binding.value = true
+	try {
+		const res = await bindPhone(phone.value.trim(), smsCode.value.trim())
+		if (!res.success) {
+			uni.showToast({ title: messageOf(res, '绑定失败'), icon: 'none' })
+			return
+		}
+		uni.showToast({ title: '手机号已绑定', icon: 'success' })
+		activeStep.value = 'realname'
+		await refreshStatus()
+	} finally { binding.value = false }
+}
+
+const confirmRealname = async () => {
+	if (realnameSubmitting.value) return
+	if (realName.value.trim().length < 2 || !/^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[0-9Xx]$/.test(idCard.value.trim())) {
+		uni.showToast({ title: '请填写真实姓名和有效身份证号', icon: 'none' })
+		return
+	}
+	realnameSubmitting.value = true
+	try {
+		const res = await submitRealname(realName.value.trim(), idCard.value.trim())
+		if (!res.success) {
+			uni.showToast({ title: messageOf(res, '提交失败'), icon: 'none' })
+			return
+		}
+		realnameStatus.value = 1
+		uni.showToast({ title: '已提交审核', icon: 'success' })
+	} finally { realnameSubmitting.value = false }
+}
+
+const backToApplication = () => { uni.navigateBack() }
+
+onLoad((options: any) => {
+	if (options != null && options.focus != null) activeStep.value = String(options.focus)
+	if (options != null && options.returnTo != null) returnTo.value = String(options.returnTo)
+	refreshStatus()
+})
+onShow(() => { refreshStatus() })
 </script>
 
 <style scoped>
-.page {
-	min-height: 100vh;
-	background-color: #FAF8F5;
-	padding: 32rpx;
-}
-
-/* ---- 卡片（与 edit.uvue 完全一致） ---- */
-.section-card {
-	display: flex;
-	flex-direction: column;
-	gap: 28rpx;
-	padding: 32rpx;
-	background-color: #FFFFFF;
-	border-radius: 40rpx;
-	box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
-	margin-bottom: 28rpx;
-}
-
-.section-title {
-	font-size: 32rpx;
-	font-weight: 700;
-	color: #1A1A1A;
-}
-
-.card-header {
-	display: flex;
-	flex-direction: row;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.progress-wrap {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	gap: 12rpx;
-}
-
-.progress-text {
-	font-size: 26rpx;
-	font-weight: 500;
-	color: #7EC8A0;
-}
-
-.dots {
-	display: flex;
-	flex-direction: row;
-	gap: 8rpx;
-	align-items: center;
-}
-
-.dot {
-	width: 12rpx;
-	height: 12rpx;
-	border-radius: 6rpx;
-}
-
-.dot-on {
-	background-color: #7EC8A0;
-}
-
-.dot-off {
-	background-color: #E0DFD8;
-}
-
-/* ---- 认证行（与 edit.uvue 完全一致） ---- */
-.cert-item {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	gap: 24rpx;
-	padding: 8rpx 0;
-}
-
-.cert-icon-wrap {
-	width: 80rpx;
-	height: 80rpx;
-	border-radius: 40rpx;
-	background-color: #F5F9F2;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-}
-
-.cert-icon-wrap.cert-done {
-	background-color: #E8F5EE;
-}
-
-.cert-icon-text {
-	font-size: 36rpx;
-}
-
-.cert-text-wrap {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	gap: 4rpx;
-}
-
-.cert-label {
-	font-size: 28rpx;
-	font-weight: 600;
-	color: #1A1A1A;
-}
-
-.cert-desc {
-	font-size: 22rpx;
-	color: #A0B0A2;
-}
-
-.cert-check {
-	width: 40rpx;
-	height: 40rpx;
-	flex-shrink: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.check-icon {
-	font-size: 36rpx;
-	font-weight: 700;
-	color: #7EC8A0;
-}
-
-.cert-pending {
-	padding: 10rpx 24rpx;
-	border-radius: 24rpx;
-	background-color: #E8F5EE;
-	flex-shrink: 0;
-}
-
-.pending-text {
-	font-size: 24rpx;
-	font-weight: 600;
-	color: #5BAF80;
-}
-
-/* ---- 底部提示 ---- */
-.footer-tip {
-	display: block;
-	text-align: center;
-	font-size: 24rpx;
-	color: #A0B0A2;
-	padding-bottom: 48rpx;
-}
+.page { min-height: 100vh; background-color: #FAF8F5; padding: 32rpx; box-sizing: border-box; }
+.section-card { display: flex; flex-direction: column; gap: 28rpx; padding: 32rpx; background-color: #FFFFFF; border-radius: 32rpx; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04); margin-bottom: 28rpx; }
+.card-header { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 20rpx; }
+.section-title { display: block; font-size: 32rpx; font-weight: 700; color: #1A1A1A; }
+.section-note, .footer-tip { display: block; margin-top: 8rpx; font-size: 23rpx; color: #A0B0A2; line-height: 1.5; }
+.progress-text { font-size: 25rpx; font-weight: 600; color: #E78A9A; white-space: nowrap; }
+.cert-item { display: flex; flex-direction: row; align-items: center; gap: 20rpx; padding: 10rpx 0; }
+.cert-icon-wrap { width: 76rpx; height: 76rpx; border-radius: 38rpx; background-color: #F8F2F3; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cert-icon-wrap.cert-done { background-color: #E8F5EE; }
+.cert-icon-text { font-size: 34rpx; }
+.cert-text-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4rpx; }
+.cert-label { font-size: 28rpx; font-weight: 600; color: #1A1A1A; }
+.cert-desc { font-size: 22rpx; color: #A0B0A2; }
+.status { font-size: 24rpx; font-weight: 600; white-space: nowrap; }.passed { color: #5BAF80; }.reviewing { color: #D89B4A; }
+.action-pill, .code-button { padding: 12rpx 22rpx; border-radius: 24rpx; background-color: #FCECEF; color: #D85E78; font-size: 24rpx; flex-shrink: 0; }
+.form-card { gap: 22rpx; }.field-input { height: 84rpx; padding: 0 24rpx; border-radius: 16rpx; background-color: #FAF8F5; color: #1A1A1A; font-size: 27rpx; box-sizing: border-box; }
+.code-row { display: flex; flex-direction: row; gap: 16rpx; align-items: center; }.code-input { flex: 1; }.code-button { min-width: 168rpx; text-align: center; }.disabled { opacity: 0.5; }
+.primary-button { height: 88rpx; border-radius: 44rpx; background-color: #D85E78; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 29rpx; font-weight: 600; }
+.review-tip { padding: 22rpx; border-radius: 16rpx; background-color: #FFF7E8; color: #B77C2D; font-size: 25rpx; line-height: 1.5; }
+.return-link { padding: 18rpx; text-align: center; color: #D85E78; font-size: 27rpx; }.footer-tip { text-align: center; padding: 0 12rpx 48rpx; }
 </style>

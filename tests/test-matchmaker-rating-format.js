@@ -7,24 +7,23 @@ function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8')
 }
 
-function expect(content, fragment, label) {
-  if (!content.includes(fragment)) {
-    throw new Error(`${label}: missing ${fragment}`)
-  }
-  console.log(`PASS ${label}`)
+function expectAbsent(content, fragment, label) {
+	if (content.includes(fragment)) {
+		throw new Error(`${label}: found ${fragment}`)
+	}
+	console.log(`PASS ${label}`)
 }
 
-console.log('Matchmaker rating formatting checks')
+console.log('Matchmaker rating removal checks')
 
 const card = read('components/MatchmakerCard.uvue')
-expect(card, "rating.toFixed(1)", 'card keeps one decimal place')
+expectAbsent(card, 'rating', 'service card has no rating UI')
 
 const ranking = read('components/MatchmakerRank.uvue')
-expect(ranking, 'formatRating(item.rating)', 'ranking uses rating formatter')
-expect(ranking, "rating.toFixed(1)", 'ranking keeps one decimal place')
+expectAbsent(ranking, 'rating', 'ranking has no rating UI')
 
 const detail = read('pages/matchmaker/detail.uvue')
-expect(detail, '{{ ratingText }}', 'detail uses formatted rating text')
-expect(detail, "rating.toFixed(1)", 'detail keeps one decimal place')
+expectAbsent(detail, 'rating', 'detail has no rating UI')
+expectAbsent(detail, '好评率', 'detail has no favorable-rate UI')
 
-console.log('Matchmaker rating formatting checks passed')
+console.log('Matchmaker rating removal checks passed')

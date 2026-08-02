@@ -57,6 +57,24 @@ export async function loginByWechat(code: string) {
   return res
 }
 
+/** Bind a phone number to the currently logged-in WeChat account. */
+export async function bindPhone(phone: string, code: string) {
+  return request({
+    url: '/auth/bind-phone',
+    method: 'POST',
+    data: { phone, code, purpose: 'bind_phone' }
+  })
+}
+
+/** Submit real-name information. The server returns status 1 while reviewing. */
+export async function submitRealname(realName: string, idCard: string) {
+  return request({
+    url: '/auth/realname',
+    method: 'POST',
+    data: { real_name: realName, id_card: idCard }
+  })
+}
+
 export async function logout() {
   try {
     await request({

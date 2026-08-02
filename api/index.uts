@@ -8,6 +8,8 @@ export {
   sendSms,
   loginByPhone,
   loginByWechat,
+  bindPhone,
+  submitRealname,
   logout
 } from './auth.uts'
 
@@ -109,14 +111,17 @@ export {
 // 牵线/红娘相关
 export {
   getMockMatchmakerContact,
-  getMatchmakerBanners,
   getMatchmakerDetail,
   getServiceMatchmakers,
   getCustomMatchmakers,
+  createMatchmakerServiceProduct,
   getCustomPlans,
   getVolunteerMatchmakers,
-  getAiRecommendations,
   getCustomPackages,
+  getRegionProvinces,
+  getRegionCities,
+  createCustomServiceOrder,
+  getCustomServiceOrder,
   saveCustomServiceApplicationDraft,
   getCustomServiceApplicationDraft,
   payCustomServiceApplication,

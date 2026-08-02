@@ -42,13 +42,11 @@ export {
 export {
   mockMatchmakerContact,
   mockRoleApplications,
-  mockMatchmakerBanners,
   mockServiceMatchmakers,
   mockCustomMatchmakers,
   mockCustomPlans,
   mockCustomServicePaymentOrders,
   mockVolunteerMatchmakers,
-  mockAiRecommendations,
   mockCustomPackages,
   mockAiChatSeed
 } from './matchmaker.uts'

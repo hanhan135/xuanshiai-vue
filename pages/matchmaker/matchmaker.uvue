@@ -32,31 +32,34 @@
 					</view>
 
 					<view v-if="currentTabValue === 'service'" class="tab-panel">
-						<view class="section-header">
-							<view>
-								<text class="section-title">服务红娘</text>
-								<text class="section-desc">专业顾问会先理解你的关系目标，再决定如何帮你更稳地认识一个人。</text>
+						<view class="service-showcase">
+							<view class="section-header service-showcase-header">
+								<view>
+									<text class="section-title">服务红娘</text>
+									<text class="section-desc">专业顾问会先理解你的关系目标，再决定如何帮你更稳地认识一个人。</text>
+								</view>
 							</view>
-							<text v-if="serviceMatchmakers.length > 3" class="section-link" @click="showServiceMore">{{ showAllServiceMatchmakers ? '收起' : '查看更多' }}</text>
-						</view>
 
-						<XsaEmpty
-							v-if="serviceMatchmakers.length === 0 && !pageLoading"
-							text="暂无服务红娘"
-							description="稍后再来看看，我们正在整理最新排期。"
-							size="small"
-						/>
-
-						<view v-else class="service-card-grid">
-								<MatchmakerCard
-									v-for="item in visibleServiceMatchmakers"
-									:key="item.id"
-									:data="item"
-									actionText="联系她"
-									unitText="/次"
-									@detail="handleMatchmakerDetail"
-									@contact="handleMatchmakerContact"
+							<view v-if="serviceMatchmakers.length === 0 && !pageLoading" class="service-empty">
+								<XsaEmpty
+									text="暂无服务红娘"
+									description="稍后再来看看，我们正在整理最新排期。"
+									size="small"
 								/>
+							</view>
+
+							<scroll-view v-else scroll-x enhanced :enable-flex="true" :show-scrollbar="false" class="service-card-scroll">
+								<view class="service-card-list" :style="'width: ' + serviceCardListWidth + 'rpx;'">
+									<view v-for="item in serviceMatchmakers" :key="item.id" class="service-card-item">
+										<MatchmakerCard
+											:data="item"
+											actionText="联系她"
+											@detail="handleMatchmakerDetail"
+											@contact="handleMatchmakerContact"
+										/>
+									</view>
+								</view>
+							</scroll-view>
 						</view>
 
 						<MatchmakerRank v-if="rankList.length > 0" :list="rankList" @item-click="handleMatchmakerDetail" />
@@ -198,6 +201,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import MatchmakerRank from '@/components/MatchmakerRank.uvue'
 	import {
 		getServiceMatchmakers,
+		getVolunteerMatchmakers,
 		getCustomPlans
 	} from '@/api'
 
@@ -243,32 +247,18 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	const nextAiMessageId = ref(3)
 
 	const serviceMatchmakers = ref<any[]>([])
+	const rankList = ref<any[]>([])
 	const customPlans = ref<any[]>([])
 	const selectedCustomPlanId = ref(0)
-	const showAllServiceMatchmakers = ref(false)
 
 	const currentTabValue = computed(() => {
 		return tabValues[currentTabIndex.value]
 	})
 
-	const rankList = computed(() => {
-		const list = serviceMatchmakers.value.slice()
-		list.sort((a : any, b : any) => {
-			const aCount = a.serviceCount != null ? a.serviceCount : 0
-			const bCount = b.serviceCount != null ? b.serviceCount : 0
-			if (bCount != aCount) {
-				return bCount - aCount
-			}
-			const aRate = a.rating != null ? a.rating : 0
-			const bRate = b.rating != null ? b.rating : 0
-			return bRate - aRate
-		})
-		return list.slice(0, 3)
-	})
-
-	const visibleServiceMatchmakers = computed(() => {
-		if (showAllServiceMatchmakers.value) return serviceMatchmakers.value
-		return serviceMatchmakers.value.slice(0, 3)
+	const serviceCardListWidth = computed((): number => {
+		const count = serviceMatchmakers.value.length
+		if (count == 0) return 0
+		return count * 300 + (count - 1) * 14 + 56
 	})
 
 	const customPlanListWidth = computed((): number => {
@@ -296,8 +286,11 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		pageLoading.value = true
 		loadError.value = ''
 		try {
-			await loadServiceMatchmakers()
-			await loadCustomContent()
+			await Promise.all([
+				loadServiceMatchmakers(),
+				loadMatchmakerRanking(),
+				loadCustomContent()
+			])
 		} catch (e) {
 			loadError.value = '页面已展示可用内容，但有少量模块暂时未加载完整。'
 		} finally {
@@ -320,6 +313,21 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		}
 	}
 
+	const loadMatchmakerRanking = async () => {
+		try {
+			const res = await getVolunteerMatchmakers()
+			if (res.success && res.data != null) {
+				rankList.value = res.data as any[]
+			} else if (loadError.value.length == 0) {
+				loadError.value = '红娘排行榜加载失败，请稍后重试。'
+			}
+		} catch (e) {
+			if (loadError.value.length == 0) {
+				loadError.value = '红娘排行榜加载失败，请稍后重试。'
+			}
+		}
+	}
+
 	const loadCustomContent = async () => {
 		try {
 			const planRes = await getCustomPlans()
@@ -333,10 +341,6 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 				loadError.value = '私人定制内容加载失败。'
 			}
 		}
-	}
-
-	const showServiceMore = () => {
-		showAllServiceMatchmakers.value = !showAllServiceMatchmakers.value
 	}
 
 	const handleMatchmakerDetail = (item : any) => {
@@ -441,7 +445,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 <style scoped>
 	.matchmaker-page {
 		height: 100vh;
-		background: var(--canvas);
+		background: #F3F9F4;
 	}
 
 	.page-shell {
@@ -451,21 +455,26 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	}
 
 	.page-head {
-		padding: 20rpx 32rpx 12rpx;
+		margin: 18rpx 28rpx 0;
+		padding: 30rpx 28rpx 42rpx;
 		display: flex;
 		flex-direction: column;
-		gap: 8rpx;
+		gap: 10rpx;
+		border: 1px solid var(--match-line);
+		border-radius: 18rpx 42rpx 18rpx 30rpx;
+		background: var(--match-paper);
+		box-shadow: var(--match-shadow);
 	}
 
 	.page-kicker {
 		font-size: 20rpx;
 		font-weight: 800;
 		letter-spacing: 0.08em;
-		color: var(--accent2);
+		color: var(--match-coral);
 	}
 
 	.page-title {
-		font-size: 44rpx;
+		font-size: 46rpx;
 		line-height: 1.25;
 		font-family: var(--serif);
 		font-weight: 700;
@@ -479,7 +488,10 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	}
 
 	.page-tabs {
-		padding: 16rpx 32rpx 12rpx;
+		position: relative;
+		z-index: 2;
+		margin-top: -34rpx;
+		padding: 0 44rpx 14rpx;
 	}
 
 	.matchmaker-tab-bar {
@@ -488,10 +500,11 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		flex-direction: row;
 		align-items: center;
 		gap: 8rpx;
-		padding: 6rpx;
+		padding: 8rpx;
 		border-radius: 999rpx;
 		background: var(--surface);
-		box-shadow: var(--shadow-sm);
+		box-shadow: var(--match-shadow);
+		border: 1px solid var(--match-line);
 	}
 
 	.matchmaker-tab {
@@ -511,7 +524,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	}
 
 	.matchmaker-tab.active {
-		background: var(--accent);
+		background: var(--match-deep);
 		color: var(--paper);
 	}
 
@@ -521,7 +534,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	}
 
 	.page-content {
-		padding: 8rpx 32rpx 188rpx;
+		padding: 12rpx 28rpx 188rpx;
 		display: flex;
 		flex-direction: column;
 		gap: 24rpx;
@@ -710,7 +723,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		line-height: 1.2;
 		font-family: var(--serif);
 		font-weight: 700;
-		color: var(--ink);
+		color: var(--match-deep);
 	}
 
 	.section-desc {
@@ -725,37 +738,53 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		flex-shrink: 0;
 		font-size: 22rpx;
 		font-weight: 800;
-		color: var(--accent2);
+		color: var(--match-coral);
 	}
 
-	.horizontal-scroll {
+	.service-showcase {
+		padding: 28rpx 0 26rpx;
+		border-radius: 18rpx 38rpx 18rpx 30rpx;
+		background: linear-gradient(145deg, var(--match-paper), var(--match-mist));
+		border: 1px solid var(--match-line);
+		box-shadow: var(--match-shadow);
+		overflow: hidden;
+	}
+
+	.service-showcase-header {
+		padding: 0 26rpx 22rpx;
+	}
+
+	.service-empty {
+		padding: 12rpx 26rpx 4rpx;
+	}
+
+	.service-card-scroll {
 		width: 100%;
-		margin: 0 -32rpx;
-		padding: 0 32rpx;
+		padding: 0 24rpx;
+		box-sizing: border-box;
 	}
 
-	.horizontal-list {
+	.service-card-list {
 		display: flex;
 		flex-direction: row;
 		flex-wrap: nowrap;
 		align-items: flex-start;
-		gap: 20rpx;
-		padding-right: 32rpx;
+		gap: 14rpx;
+		padding-right: 24rpx;
+		box-sizing: border-box;
 	}
 
-	.service-card-grid {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 20rpx;
-		width: 100%;
-		align-items: start;
+	.service-card-item {
+		width: 300rpx;
+		flex-shrink: 0;
 	}
 
 	.notice-card {
-		padding: 24rpx;
-		border-radius: 22rpx;
-		background: var(--surface);
-		box-shadow: var(--shadow-sm);
+		padding: 24rpx 26rpx;
+		border-radius: 14rpx 28rpx 14rpx 24rpx;
+		background: var(--match-mist);
+		box-shadow: none;
+		border: 1px solid var(--match-line);
 		display: flex;
 		flex-direction: column;
 		gap: 10rpx;
@@ -764,7 +793,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	.notice-title {
 		font-size: 28rpx;
 		font-weight: 800;
-		color: var(--accent2);
+		color: var(--match-deep);
 	}
 
 	.notice-text {
@@ -1220,8 +1249,8 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 .join-entry-row {
 	display: flex;
 	flex-direction: row;
-	gap: 16rpx;
-	padding: 24rpx 0 8rpx;
+	gap: 12rpx;
+	padding: 18rpx 0 6rpx;
 }
 
 .join-entry {
@@ -1230,41 +1259,41 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 10rpx;
-	padding: 24rpx 12rpx;
-	border-radius: 16rpx;
-	background: var(--surface);
+	gap: 8rpx;
+	padding: 20rpx 10rpx;
+	border-radius: 14rpx 24rpx 14rpx 18rpx;
+	background: var(--match-paper);
 	box-shadow: var(--shadow-sm);
-	border: 1px solid var(--line);
+	border: 1px solid var(--match-line);
 }
 
 .join-entry-icon {
 	width: 64rpx;
 	height: 64rpx;
 	border-radius: 50%;
-	background: linear-gradient(135deg, rgba(194, 106, 65, 0.18), rgba(56, 152, 141, 0.18));
+	background: var(--match-mist);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	font-size: 26rpx;
 	font-weight: 800;
-	color: var(--accent2);
+	color: var(--match-deep);
 }
 
 .join-entry-icon.partner {
-	background: linear-gradient(135deg, rgba(240, 163, 50, 0.18), rgba(194, 106, 65, 0.18));
-	color: var(--brown);
+	background: var(--match-blush);
+	color: var(--match-coral);
 }
 
 .join-entry-icon.promoter {
-	background: linear-gradient(135deg, rgba(139, 88, 232, 0.18), rgba(56, 152, 141, 0.18));
-	color: #8B58E8;
+	background: var(--match-sky);
+	color: var(--match-deep);
 }
 
 .join-entry-label {
 	font-size: 22rpx;
 	font-weight: 700;
-	color: var(--ink);
+	color: var(--match-deep);
 	text-align: center;
 	line-height: 1.3;
 }

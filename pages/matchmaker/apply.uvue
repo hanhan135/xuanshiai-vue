@@ -32,11 +32,19 @@
 							<view class="plan-card-main">
 								<text class="plan-card-tag">专属牵线服务</text>
 								<text class="custom-plan-name">{{ customPlan.name }}</text>
+								<text v-if="customPlan.description" class="custom-plan-desc">{{ customPlan.description }}</text>
 								<text class="custom-plan-duration">服务周期：{{ customPlan.duration }}</text>
 							</view>
 							<view class="plan-price-wrap">
 								<text class="plan-price-label">服务费用</text>
 								<text class="custom-plan-price"><text class="price-symbol">¥</text>{{ customPlan.price }}</text>
+								<text v-if="customPlan.originalPrice > customPlan.price" class="custom-plan-original-price">¥{{ customPlan.originalPrice }}</text>
+							</view>
+							<view v-if="customPlan.benefits.length > 0" class="custom-plan-benefits">
+								<view v-for="(benefit, index) in customPlan.benefits" :key="index" class="custom-plan-benefit">
+									<text class="custom-plan-benefit-dot"></text>
+									<text class="custom-plan-benefit-text">{{ benefit }}</text>
+								</view>
 							</view>
 						</view>
 					</view>
@@ -71,12 +79,21 @@
 							</view>
 							<view class="custom-form-divider"></view>
 							<view class="custom-input-row">
-								<XsaInput
-									label="所在城市"
-									placeholder="例如：杭州"
-									:modelValue="formData.city"
-									@update:modelValue="(value: string) => formData.city = value"
-								/>
+								<text class="custom-city-label">所在城市</text>
+								<picker
+									class="custom-city-picker"
+									mode="multiSelector"
+									:range="cityPickerRange"
+									:value="cityPickerValue"
+									:disabled="isCityPickerLoading || cityPickerRange[0].length == 0"
+									@columnchange="handleCityPickerColumnChange"
+									@change="handleCityPickerChange"
+								>
+									<view class="custom-city-picker-value">
+										<text :class="{ 'city-picker-placeholder': !formData.city }">{{ formData.city || (isCityPickerLoading ? '正在加载省市…' : '请选择省份和城市') }}</text>
+										<text class="city-picker-arrow">›</text>
+									</view>
+								</picker>
 							</view>
 						</view>
 					</view>
@@ -258,7 +275,7 @@
 <script setup lang="uts">
 	import XsaInput from '@/components/XsaInput.uvue'
 	import XsaButton from '@/components/XsaButton.uvue'
-	import { saveCustomServiceApplicationDraft } from '@/api'
+	import { createCustomServiceOrder, getRegionCities, getRegionProvinces } from '@/api'
 
 	const formData = reactive({
 		name: '',
@@ -278,7 +295,26 @@
 		id: 0,
 		name: '',
 		price: 0,
-		duration: ''
+		originalPrice: 0,
+		duration: '',
+		description: '',
+		benefits: [] as string[]
+	})
+
+	interface RegionOption {
+		code: string
+		name: string
+	}
+
+	const provinceOptions = ref<RegionOption[]>([])
+	const cityOptions = ref<RegionOption[]>([])
+	const cityPickerValue = ref<number[]>([0, 0])
+	const isCityPickerLoading = ref(false)
+	const cityPickerRange = computed((): string[][] => {
+		return [
+			provinceOptions.value.map((item: RegionOption) => item.name),
+			cityOptions.value.map((item: RegionOption) => item.name)
+		]
 	})
 
 	const customHeroTitle = computed((): string => {
@@ -305,6 +341,67 @@
 		}
 	}
 
+	const normalizeRegionOptions = (source: any): RegionOption[] => {
+		const items = source != null && source.items != null ? source.items as any[] : []
+		return items.map((item: any): RegionOption => ({
+			code: item.code != null ? String(item.code) : '',
+			name: item.name != null ? String(item.name) : ''
+		})).filter((item: RegionOption) => item.code.length > 0 && item.name.length > 0)
+	}
+
+	const loadCities = async (provinceIndex: number): Promise<void> => {
+		const province = provinceOptions.value[provinceIndex]
+		if (province == null) return
+		const response = await getRegionCities(province.code)
+		if (!response.success) throw new Error(response.message)
+		cityOptions.value = normalizeRegionOptions(response.data)
+		cityPickerValue.value = [provinceIndex, 0]
+	}
+
+	const loadCityPicker = async (): Promise<void> => {
+		isCityPickerLoading.value = true
+		try {
+			const response = await getRegionProvinces()
+			if (!response.success) throw new Error(response.message)
+			provinceOptions.value = normalizeRegionOptions(response.data)
+			if (provinceOptions.value.length == 0) throw new Error('暂无可选省市')
+			await loadCities(0)
+		} catch (e) {
+			provinceOptions.value = []
+			cityOptions.value = []
+			uni.showToast({ title: '省市数据加载失败，请稍后重试', icon: 'none' })
+		} finally {
+			isCityPickerLoading.value = false
+		}
+	}
+
+	const formatSelectedCity = (province: RegionOption, city: RegionOption): string => {
+		return province.name == city.name ? province.name : province.name + ' · ' + city.name
+	}
+
+	const handleCityPickerColumnChange = async (event: any) => {
+		const column = Number(event.detail.column)
+		const value = Number(event.detail.value)
+		if (column != 0 || value == cityPickerValue.value[0]) return
+		isCityPickerLoading.value = true
+		try {
+			await loadCities(value)
+		} catch (e) {
+			uni.showToast({ title: '城市数据加载失败，请稍后重试', icon: 'none' })
+		} finally {
+			isCityPickerLoading.value = false
+		}
+	}
+
+	const handleCityPickerChange = (event: any) => {
+		const values = event.detail.value as number[]
+		const province = provinceOptions.value[values[0]]
+		const city = cityOptions.value[values[1]]
+		if (province == null || city == null) return
+		cityPickerValue.value = [values[0], values[1]]
+		formData.city = formatSelectedCity(province, city)
+	}
+
 	onMounted(() => {
 		try {
 			const pages = getCurrentPages()
@@ -318,9 +415,14 @@
 				customPlan.id = Number(readRouteOption(options, 'planId'))
 				customPlan.name = readRouteOption(options, 'planName')
 				customPlan.price = Number(readRouteOption(options, 'planPrice'))
+				customPlan.originalPrice = Number(readRouteOption(options, 'planOriginalPrice'))
 				customPlan.duration = readRouteOption(options, 'planDuration')
+				customPlan.description = readRouteOption(options, 'planDescription')
+				const benefitText = readRouteOption(options, 'planBenefits')
+				customPlan.benefits = benefitText.length > 0 ? benefitText.split('|').filter((item: string) => item.length > 0) : []
 			}
 		} catch (e) {}
+		if (isCustomApplication.value) loadCityPicker()
 	})
 
 	const handleUploadAvatar = () => {
@@ -334,13 +436,13 @@
 		})
 	}
 
-	const handleCustomSubmit = () => {
+	const handleCustomSubmit = async () => {
 		if (isCustomSubmitting.value) return
 		if (customPlan.id <= 0 || customPlan.name.length == 0 || customPlan.price <= 0) {
 			uni.showToast({ title: '请选择有效的私人定制套餐', icon: 'none' })
 			return
 		}
-		if (!formData.name.trim()) {
+		if (formData.name.trim().length < 2) {
 			uni.showToast({ title: '请填写真实姓名', icon: 'none' })
 			return
 		}
@@ -352,13 +454,13 @@
 			uni.showToast({ title: '请填写所在城市', icon: 'none' })
 			return
 		}
-		if (!formData.requirements.trim()) {
-			uni.showToast({ title: '请填写关系期待', icon: 'none' })
+		if (formData.requirements.trim().length < 10) {
+			uni.showToast({ title: '请至少填写 10 个字的关系期待', icon: 'none' })
 			return
 		}
 		isCustomSubmitting.value = true
 		try {
-			const result = saveCustomServiceApplicationDraft({
+			const result = await createCustomServiceOrder({
 				planId: customPlan.id,
 				planName: customPlan.name,
 				planPrice: customPlan.price,
@@ -374,7 +476,7 @@
 				return
 			}
 			uni.navigateTo({
-				url: '/pages/matchmaker/payment?draftId=' + encodeURIComponent(result.data.draftId),
+				url: '/pages/matchmaker/payment?orderNo=' + encodeURIComponent(String(result.data.order_no)),
 				success: () => { isCustomSubmitting.value = false },
 				fail: () => {
 					isCustomSubmitting.value = false
@@ -590,14 +692,15 @@
 	}
 
 	.custom-plan-card {
-		min-height: 116px;
+		min-height: 150px;
 		padding: 16px;
 		border: 1px solid #B7D7D2;
 		border-radius: 16px;
 		background: #F0F8F6;
 		display: flex;
 		flex-direction: row;
-		align-items: stretch;
+		align-items: flex-start;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: 16px;
 		box-sizing: border-box;
@@ -654,12 +757,55 @@
 		color: var(--ink2);
 	}
 
+	.custom-plan-desc {
+		display: block;
+		font-size: 12px;
+		line-height: 1.45;
+		color: var(--ink2);
+	}
+
 	.custom-plan-price {
 		flex-shrink: 0;
 		font-size: 24px;
 		font-weight: 800;
 		line-height: 1;
 		color: var(--accent2);
+	}
+
+	.custom-plan-original-price {
+		font-size: 11px;
+		color: var(--muted);
+		text-decoration: line-through;
+	}
+
+	.custom-plan-benefits {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+		padding-top: 10px;
+		border-top: 1px solid rgba(107, 145, 138, 0.2);
+	}
+
+	.custom-plan-benefit {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.custom-plan-benefit-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background: var(--accent2);
+		flex-shrink: 0;
+	}
+
+	.custom-plan-benefit-text {
+		font-size: 11px;
+		line-height: 1.35;
+		color: var(--ink2);
 	}
 
 	.price-symbol {
@@ -677,6 +823,43 @@
 
 	.custom-input-row {
 		padding: 15px 0;
+	}
+
+	.custom-city-label {
+		display: block;
+		margin-bottom: 8px;
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--ink);
+	}
+
+	.custom-city-picker {
+		display: block;
+	}
+
+	.custom-city-picker-value {
+		height: 46px;
+		padding: 0 13px;
+		border: 1px solid #DCE7E4;
+		border-radius: 12px;
+		background: #FAFCFC;
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		font-size: 13px;
+		color: var(--ink);
+		box-sizing: border-box;
+	}
+
+	.city-picker-placeholder {
+		color: #9AA8A5;
+	}
+
+	.city-picker-arrow {
+		font-size: 22px;
+		line-height: 1;
+		color: var(--muted);
 	}
 
 	.custom-form-divider {

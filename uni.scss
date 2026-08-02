@@ -22,14 +22,14 @@ page,
 	--line: #D3D9D8;
 
 	/* 主色（青瓷绿） */
-	--accent: #38988D;
-	--accent2: #007565;
-	--soft: #79B1A9;
+	--accent: #2D7C72;
+	--accent2: #006052;
+	--soft: #669C92;
 
 	/* 功能色 */
 	--brown: #2C807C;
 	--navy: #18415D;
-	--sage: #338D6B;
+	--sage: #28775B;
 	--sage-soft: #C2E0CF;
 
 	/* 辅助色 */
@@ -38,6 +38,16 @@ page,
 	--accent-bg: #C3DEDA;
 	--accent-glow: rgba(56, 152, 141, 0.15);
 	--text-invert: #FCFCFC;
+
+	/* 牵线域：纸张档案视觉 */
+	--match-paper: #FFFDF8;
+	--match-mist: #E6F0EC;
+	--match-sky: #E9F1F5;
+	--match-blush: #F9E7E8;
+	--match-deep: #154A45;
+	--match-coral: #C95C58;
+	--match-line: #DBE4DF;
+	--match-shadow: 0 12px 28px rgba(27, 91, 86, 0.09);
 	--shortcut-application: #ECEBF8;
 	--shortcut-plane: #DDF1F5;
 	--shortcut-dynamic: #DDF2EC;

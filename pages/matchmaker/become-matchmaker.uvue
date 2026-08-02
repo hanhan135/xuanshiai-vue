@@ -322,18 +322,48 @@ const processSteps = [
 
 // ===== 计算属性 =====
 const canSubmit = computed(() => {
-	return realName.value.trim().length > 0
-		&& phone.value.trim().length > 0
+	return realName.value.trim().length >= 2
+		&& realName.value.trim().length <= 64
+		&& /^1[3-9]\d{9}$/.test(phone.value.trim())
 		&& wechat.value.trim().length > 0
+		&& wechat.value.trim().length <= 128
 		&& avatar.value.length > 0
-		&& introduction.value.trim().length > 0
+		&& avatar.value.length <= 512
+		&& introduction.value.trim().length >= 10
+		&& introduction.value.trim().length <= 2000
 		&& specialties.value.length > 0
+		&& isValidOptionalPrice()
 })
 
 // ===== Toast =====
 const showToast = (msg: string) => {
 	toastMessage.value = msg
 	toastVisible.value = true
+}
+
+const guideToRequiredVerification = (message: string) => {
+	const needsPhone = message.indexOf('绑定手机号') >= 0
+	uni.showModal({
+		title: needsPhone ? '请先绑定手机号' : '请先完成实名认证',
+		content: needsPhone ? '绑定手机号后，还需要完成实名认证才可提交申请。' : '实名认证审核通过后即可提交申请。',
+		confirmText: '去完成',
+		success: (modal: any) => {
+			if (modal.confirm) {
+				uni.navigateTo({ url: '/pages/profile/certification?focus=' + (needsPhone ? 'phone' : 'realname') + '&returnTo=matchmaker' })
+			}
+		}
+	})
+}
+
+const showExistingApplication = () => {
+	uni.showModal({
+		title: '申请正在审核',
+		content: '你已提交服务红娘申请，请等待平台审核结果，无需重复提交。',
+		confirmText: '查看状态',
+		success: (modal: any) => {
+			if (modal.confirm) uni.redirectTo({ url: '/pages/matchmaker/application-success?type=service_matchmaker' })
+		}
+	})
 }
 
 // ===== 导航 =====
@@ -369,6 +399,13 @@ const onPhoneInput = (e: any) => { phone.value = e.detail.value }
 const onWechatInput = (e: any) => { wechat.value = e.detail.value }
 const onIntroductionInput = (e: any) => { introduction.value = e.detail.value }
 const onPriceInput = (e: any) => { price.value = e.detail.value }
+
+const isValidOptionalPrice = (): boolean => {
+	const value = price.value.trim()
+	if (value.length == 0) return true
+	const amount = Number(value)
+	return !isNaN(amount) && amount >= 0 && amount <= 1000000
+}
 
 // ===== 头像上传 =====
 const uploadAvatar = () => {
@@ -442,31 +479,42 @@ const submitApplication = async () => {
 	if (submitting.value) return
 
 	// 基本信息校验
-	if (realName.value.trim().length === 0) {
-		showToast('请填写真实姓名')
+	if (realName.value.trim().length < 2 || realName.value.trim().length > 64) {
+		showToast('真实姓名需为 2-64 个字符')
 		return
 	}
-	if (!/^1\d{10}$/.test(phone.value)) {
+	if (!/^1[3-9]\d{9}$/.test(phone.value.trim())) {
 		showToast('请填写正确的 11 位手机号')
 		return
 	}
-	if (wechat.value.trim().length === 0) {
-		showToast('请填写微信号')
+	if (wechat.value.trim().length === 0 || wechat.value.trim().length > 128) {
+		showToast('微信号需为 1-128 个字符')
 		return
 	}
 
 	// 红娘资料校验
-	if (avatar.value.length === 0) {
-		showToast('请上传头像')
+	if (avatar.value.length === 0 || avatar.value.length > 512) {
+		showToast('请上传有效头像')
 		return
 	}
-	if (introduction.value.trim().length === 0) {
-		showToast('请填写个人简介')
+	if (introduction.value.trim().length < 10 || introduction.value.trim().length > 2000) {
+		showToast('个人简介需为 10-2000 个字符')
 		return
 	}
 	if (specialties.value.length === 0) {
 		showToast('请至少选择一个擅长领域')
 		return
+	}
+	if (!isValidOptionalPrice()) {
+		showToast('服务价格需为 0-1000000 的数字')
+		return
+	}
+	for (let index = 0; index < successCases.value.length; index++) {
+		const description = successCases.value[index].description.trim()
+		if (description.length > 1000) {
+			showToast('成功案例说明最多 1000 个字符')
+			return
+		}
 	}
 
 	try {
@@ -474,12 +522,12 @@ const submitApplication = async () => {
 
 		const formData = {
 			realName: realName.value.trim(),
-			phone: phone.value,
+			phone: phone.value.trim(),
 			wechat: wechat.value.trim(),
 			avatar: avatar.value,
 			introduction: introduction.value.trim(),
 			specialties: specialties.value,
-			price: price.value ? parseFloat(price.value) : undefined,
+			price: price.value.trim().length > 0 ? Number(price.value.trim()) : undefined,
 			cases: successCases.value
 				.filter((c: CaseItem) => c.description.trim().length > 0)
 				.map((c: CaseItem) => ({
@@ -497,7 +545,14 @@ const submitApplication = async () => {
 				url: '/pages/matchmaker/application-success?type=service_matchmaker&id=' + applicationId + '&mock=' + (isMock ? '1' : '0')
 			})
 		} else {
-			showToast(result.message != null ? result.message : '提交失败，请稍后重试')
+			const message = result.message != null ? String(result.message) : '提交失败，请稍后重试'
+			if (result.code == 403 && (message.indexOf('绑定手机号') >= 0 || message.indexOf('实名认证') >= 0)) {
+				guideToRequiredVerification(message)
+			} else if (result.code == 409) {
+				showExistingApplication()
+			} else {
+				showToast(message)
+			}
 		}
 	} catch (e) {
 		showToast('提交失败，请稍后重试')
@@ -1050,7 +1105,8 @@ const submitApplication = async () => {
 /* ===== 咨询入口 ===== */
 .consult-icons {
 	position: absolute;
-	right: -36rpx;
+	/* 保持在审核流程卡片内，避免悬出页面边缘。 */
+	right: 16rpx;
 	top: 50%;
 	transform: translateY(-50%);
 	display: flex;

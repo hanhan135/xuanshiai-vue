@@ -138,6 +138,14 @@ components:
 | `--bg-subtle` | `#DCE3E2` | 更浅的分区底 |
 | `--accent-bg` | `#C3DEDA` | 强调浅底 |
 | `--accent-glow` | `rgba(56, 152, 141, 0.15)` | 强调光晕 / 弱高亮 |
+| `--match-paper` | `#FFFDF8` | 牵线域纸张主表面 |
+| `--match-mist` | `#E6F0EC` | 牵线域青绿雾面弱强调底 |
+| `--match-sky` | `#E9F1F5` | 牵线域资料 / 流程浅色底 |
+| `--match-blush` | `#F9E7E8` | 牵线域关系与身份提示底 |
+| `--match-deep` | `#1B5B56` | 牵线域深青主色与高权重操作 |
+| `--match-coral` | `#C95C58` | 牵线域少量编号与提示点缀 |
+| `--match-line` | `#DBE4DF` | 牵线域纸张分隔线 |
+| `--match-shadow` | `0 12px 28px rgba(27, 91, 86, 0.09)` | 牵线域纸片层级阴影 |
 
 ### 使用规则
 
