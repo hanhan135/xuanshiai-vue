@@ -1,0 +1,109 @@
+import { request } from './request.uts'
+import { resolveMediaUrl } from './config.uts'
+
+function mapCard(row: any): any {
+  const source = row != null && row.target != null ? row.target : row
+  const card = source != null ? source : {}
+  const tags = card.interest_tags != null && Array.isArray(card.interest_tags) ? card.interest_tags : []
+  const certifications = card.certification_tags != null && Array.isArray(card.certification_tags) ? card.certification_tags : []
+  const photo = card.avatar != null ? resolveMediaUrl(card.avatar) : ''
+  return {
+    id: Number(card.user_id != null ? card.user_id : (card.id != null ? card.id : 0)),
+    userId: Number(card.user_id != null ? card.user_id : 0),
+    name: card.nickname != null ? '' + card.nickname : '用户',
+    nickname: card.nickname != null ? '' + card.nickname : '用户',
+    avatar: photo,
+    photos: photo != '' ? [photo] : [],
+    age: card.age != null ? Number(card.age) : 0,
+    height: card.height_cm != null ? Number(card.height_cm) : (card.height != null ? Number(card.height) : 0),
+    weight: card.weight_kg != null ? Number(card.weight_kg) : (card.weight != null ? Number(card.weight) : 0),
+    gender: card.gender != null ? '' + card.gender : '',
+    zodiac: card.zodiac != null ? '' + card.zodiac : '',
+    hometown: card.hometown != null ? '' + card.hometown : '',
+    income: card.income != null ? '' + card.income : '',
+    bio: card.bio != null ? '' + card.bio : (card.introduction != null ? '' + card.introduction : ''),
+    education: card.education_level != null ? '' + card.education_level : '未填写',
+    educationLevel: card.education_level,
+    job: card.occupation != null ? '' + card.occupation : '未填写',
+    occupation: card.occupation != null ? '' + card.occupation : '',
+    city: card.city_code != null ? '' + card.city_code : '未填写',
+    cityCode: card.city_code != null ? '' + card.city_code : '',
+    distance: card.distance_km != null ? Number(card.distance_km) : 0,
+    online: card.online_status == 1,
+    mbti: card.mbti != null ? '' + card.mbti : '',
+    interestTags: tags,
+    certificationTags: certifications,
+    isVip: certifications.indexOf('VIP') >= 0 || certifications.indexOf('会员') >= 0,
+    isFavorite: card.is_favorite == true,
+    matchScore: card.match_score != null ? Number(card.match_score) : 0,
+    viewCount: card.view_count != null ? Number(card.view_count) : 0,
+    matchReason: card.match_reason != null ? '' + card.match_reason : '',
+    raw: card
+  }
+}
+
+function mapPage(raw: any): any {
+  const body = raw != null ? raw : {}
+  const rows = body.items != null && Array.isArray(body.items) ? body.items : []
+  const items: any[] = []
+  for (let i = 0; i < rows.length; i++) items.push(mapCard(rows[i]))
+  return {
+    items,
+    page: body.page != null ? Number(body.page) : 1,
+    pageSize: body.page_size != null ? Number(body.page_size) : 20,
+    total: body.total != null ? Number(body.total) : items.length,
+    hasMore: body.has_more == true
+  }
+}
+
+export async function getDiscoveryRecommendations(filters: any = null) {
+  const res = await request({ url: '/discovery/recommendations', method: 'GET', data: filters != null ? filters : {} })
+  if (!res.success) return res
+  return { success: true, data: mapPage(res.data), code: res.code, message: res.message }
+}
+
+export async function getDiscoveryPlaza(filters: any = null) {
+  const res = await request({ url: '/discovery/plaza', method: 'GET', data: filters != null ? filters : {} })
+  if (!res.success) return res
+  return { success: true, data: mapPage(res.data), code: res.code, message: res.message }
+}
+
+export async function getMembershipPackages() {
+  return request({ url: '/membership/packages', method: 'GET' })
+}
+
+export async function getProfileOverview() {
+  return request({ url: '/users/me/overview', method: 'GET' })
+}
+
+export async function getBrowseHistory(page: number = 1, pageSize: number = 20) {
+  return request({ url: '/discovery/browse-history', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function getVisitors(page: number = 1, pageSize: number = 20) {
+  return request({ url: '/discovery/visitors', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function getDiscoveryFavorites(page: number = 1, pageSize: number = 20) {
+  return request({ url: '/discovery/favorites', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function searchDiscovery(filters: any = null) {
+  return request({ url: '/discovery/search', method: 'GET', data: filters != null ? filters : {} })
+}
+
+export async function getOutgoingApplications(page: number = 1, pageSize: number = 20) {
+  return request({ url: '/discovery/applications/outgoing', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function getIncomingApplications(page: number = 1, pageSize: number = 20) {
+  return request({ url: '/discovery/applications/incoming', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function acceptDiscoveryApplication(applicationId: number) {
+  return request({ url: '/discovery/applications/' + applicationId + '/accept', method: 'POST', data: {} })
+}
+
+export async function rejectDiscoveryApplication(applicationId: number, reason: string = '') {
+  return request({ url: '/discovery/applications/' + applicationId + '/reject', method: 'POST', data: reason != '' ? { reason } : {} })
+}
