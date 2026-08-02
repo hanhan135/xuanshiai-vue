@@ -122,6 +122,18 @@ export {
   getCommentReplies
 } from './community.uts'
 
+// 客服与帮助相关
+export {
+  getHelpQuickActions,
+  sendAiSupportMessage,
+  submitFeedback
+} from './help.uts'
+
+// 安全中心相关
+export {
+  getSecurityCenterData
+} from './security.uts'
+
 // 爆灯相关
 export {
   SPOTLIGHT_AMOUNT,

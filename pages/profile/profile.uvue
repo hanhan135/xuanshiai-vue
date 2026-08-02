@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<view class="page">
 		<!-- 导航栏 -->
 		<view class="nav-bar" :style="{ paddingTop: (statusBarHeight + 12) + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
@@ -60,7 +60,7 @@
 
 			<!-- 主菜单 -->
 			<view class="menu-card">
-				<view class="menu-row" v-for="item in mainMenuItems" :key="item.label" @tap="item.action">
+				<view class="menu-row" v-for="item in mainMenuItems" :key="item.label" @tap="handleMenuItem(item)">
 					<view class="menu-icon-wrap" :style="{ backgroundColor: item.iconBg }">
 						<text :class="item.iconClass + ' menu-icon'"></text>
 					</view>
@@ -75,7 +75,7 @@
 
 			<!-- 底部菜单 -->
 			<view class="menu-card">
-				<view class="menu-row" v-for="item in bottomMenuItems" :key="item.label" @tap="item.action">
+				<view class="menu-row" v-for="item in bottomMenuItems" :key="item.label" @tap="item.label == '安全中心' ? onSecurity() : handleMenuItem(item)">
 					<view class="menu-icon-wrap" :style="{ backgroundColor: item.iconBg }">
 						<text :class="item.iconClass + ' menu-icon'"></text>
 					</view>
@@ -92,6 +92,26 @@
 			<view class="scroll-bottom-spacer"></view>
 			</view>
 		</scroll-view>
+	</view>
+
+	<!-- 邀请分享弹窗：复用“我的任务.pen”的邀请分享弹窗-遮罩 -->
+	<view v-if="inviteShareVisible" class="invite-share-mask" @tap="closeInviteShare">
+		<view class="invite-share-sheet" @tap.stop>
+			<view class="invite-share-handle"></view>
+			<text class="invite-share-title">分享邀请好友</text>
+			<view class="invite-share-options">
+				<view class="invite-share-option" @tap="shareToWechat">
+					<view class="invite-share-option-icon invite-share-option-icon-green"><text class="invite-share-symbol">↗</text></view>
+					<text class="invite-share-option-label">发送给朋友</text>
+				</view>
+				<view class="invite-share-option" @tap="goMyPoster">
+					<view class="invite-share-option-icon invite-share-option-icon-gold"><text class="invite-share-symbol">▧</text></view>
+					<text class="invite-share-option-label">生成海报</text>
+				</view>
+			</view>
+			<text class="invite-share-note">好友通过你的分享卡片/海报完成注册后，邀请人和新好友双方均可获得平台积分，分享可兑现奖励。</text>
+			<view class="invite-share-cancel" @tap="closeInviteShare"><text>取消</text></view>
+		</view>
 	</view>
 
 	<!-- 自定义底部导航栏 -->
@@ -158,7 +178,10 @@ const onOpenVIP = () => {
 const openStatPage = (url: string) => { if (url != '') uni.navigateTo({ url }) }
 
 const onMyTasks = () => {
-	uni.showToast({ title: '我的任务', icon: 'none' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-tasks',
+		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
 }
 
 const onMyMoments = () => {
@@ -166,11 +189,17 @@ const onMyMoments = () => {
 }
 
 const onMyPoster = () => {
-	uni.showToast({ title: '我的海报', icon: 'none' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-posters?userId=9001',
+		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
 }
 
 const onMyRegistration = () => {
-	uni.showToast({ title: '我的报名', icon: 'none' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-registration',
+		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
 }
 
 const onCertification = () => {
@@ -178,7 +207,24 @@ const onCertification = () => {
 }
 
 const onInviteFriend = () => {
-	uni.showToast({ title: '推荐给好友', icon: 'none' })
+	inviteShareVisible.value = true
+}
+
+const inviteShareVisible = ref(false)
+
+const closeInviteShare = () => { inviteShareVisible.value = false }
+
+const shareToWechat = () => {
+	inviteShareVisible.value = false
+	uni.showToast({ title: '已准备好分享内容', icon: 'success' })
+}
+
+const goMyPoster = () => {
+	inviteShareVisible.value = false
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-posters?userId=9001',
+		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
 }
 
 const onMenuSettings = () => {
@@ -186,7 +232,7 @@ const onMenuSettings = () => {
 }
 
 const onHelp = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/support' })
+	uni.navigateTo({ url: '/pagesSub/profileExtra/help', fail: () => { uni.showToast({ title: '客服与帮助打开失败，请重试', icon: 'none' }) } })
 }
 
 const onAbout = () => {
@@ -194,7 +240,41 @@ const onAbout = () => {
 }
 
 const onSecurity = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/security' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/security',
+		animationType: 'slide-in-right',
+		fail: (err) => {
+			console.log('安全中心导航失败', err)
+			uni.showToast({ title: '安全中心暂不可用，请重试', icon: 'none' })
+		}
+	})
+}
+
+const handleMenuItem = (item: any) => {
+	if (item == null) return
+	const directUrl = item.url != null ? '' + item.url : ''
+	if (directUrl != '') {
+		uni.navigateTo({ url: directUrl, fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) } })
+		return
+	}
+	const label = item.label != null ? '' + item.label : ''
+	if (label == '客服与帮助') {
+		onHelp()
+	} else if (label == '安全中心') {
+		onSecurity()
+	} else if (label == '设置') {
+		onMenuSettings()
+	} else if (label == '关于我们') {
+		onAbout()
+	} else if (label == '我的动态') {
+		onMyMoments()
+	} else if (label == '诚信认证') {
+		onCertification()
+	} else if (label == '会员中心') {
+		onOpenVIP()
+	} else if (item.action != null) {
+		item.action()
+	}
 }
 
 const mainMenuItems = [
@@ -210,7 +290,7 @@ const mainMenuItems = [
 const bottomMenuItems = [
 	{ iconClass: 'ic ic-me ic-kefu', iconBg: '#F7F4F0', label: '客服与帮助', subtitle: 'AI客服 . 意见反馈', action: onHelp },
 	{ iconClass: 'ic ic-me ic-bangzhu', iconBg: '#F7F4F0', label: '关于我们', subtitle: '版本 1.0.0', action: onAbout },
-	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '安全中心', action: onSecurity },
+	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '安全中心', url: '/pagesSub/profileExtra/security', action: onSecurity },
 ]
 
 onMounted(() => { loadOverview() })
@@ -617,4 +697,104 @@ page {
 
 /* 个人中心图标尺寸 */
 .avatar-icon { font-size: 28px; color: var(--profile-text-inverse); }
+
+/* ==================== 邀请分享弹窗（对应我的任务.pen） ==================== */
+.invite-share-mask {
+	position: fixed;
+	z-index: 20;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: calc(72px + env(safe-area-inset-bottom));
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	background-color: rgba(12, 19, 19, 0.68);
+}
+
+.invite-share-sheet {
+	display: flex;
+	flex-direction: column;
+	align-self: stretch;
+	width: 100%;
+	padding: 24rpx 32rpx 26rpx;
+	border-radius: 28rpx 28rpx 0 0;
+	background-color: #EDF1EC;
+}
+
+.invite-share-handle {
+	width: 64rpx;
+	height: 6rpx;
+	margin: 0 auto 32rpx;
+	border-radius: 999px;
+	background-color: #D7DDD5;
+}
+
+.invite-share-title {
+	margin-bottom: 28rpx;
+	color: #1A1A1A;
+	font-size: 30rpx;
+	font-weight: 600;
+}
+
+.invite-share-options {
+	display: flex;
+	flex-direction: row;
+	gap: 24rpx;
+}
+
+.invite-share-option {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 220rpx;
+	padding: 20rpx 8rpx;
+	border: 1px solid #B9CFB5;
+	border-radius: 24rpx;
+	background-color: #F8FAF7;
+}
+
+.invite-share-option + .invite-share-option { border-color: #D5B477; background-color: #FCF8EF; }
+
+.invite-share-option-icon {
+	width: 72rpx;
+	height: 72rpx;
+	margin-bottom: 20rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	font-size: 34rpx;
+}
+
+.invite-share-option-icon-green { color: #627A5F; background-color: #E2EBE0; }
+.invite-share-option-icon-gold { color: #B8944A; background-color: #F7F1E5; }
+.invite-share-symbol { line-height: 1; }
+
+.invite-share-option-label {
+	color: #1A1A1A;
+	font-size: 26rpx;
+	font-weight: 600;
+}
+
+.invite-share-note {
+	margin: 28rpx 4rpx 24rpx;
+	color: #9CA3AF;
+	font-size: 20rpx;
+	line-height: 1.5;
+	text-align: center;
+}
+
+.invite-share-cancel {
+	height: 72rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 36rpx;
+	background-color: rgba(255, 255, 255, 0.22);
+	color: #627A5F;
+	font-size: 24rpx;
+}
 </style>

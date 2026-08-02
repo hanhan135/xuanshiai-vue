@@ -238,6 +238,18 @@
           }
         },
         {
+          "path": "help",
+          "style": {
+            "navigationBarTitleText": "客服与帮助"
+          }
+        },
+        {
+          "path": "security",
+          "style": {
+            "navigationBarTitleText": "安全中心"
+          }
+        },
+        {
           "path": "certification",
           "style": {
             "navigationBarTitleText": "我的认证"
@@ -253,6 +265,34 @@
           "path": "my-moments",
           "style": {
             "navigationBarTitleText": "我的动态",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-tasks",
+          "style": {
+            "navigationBarTitleText": "我的任务",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-registration",
+          "style": {
+            "navigationBarTitleText": "我的报名",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-posters",
+          "style": {
+            "navigationBarTitleText": "选择海报",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "my-poster-preview",
+          "style": {
+            "navigationBarTitleText": "生成海报",
             "navigationStyle": "custom"
           }
         },
@@ -302,10 +342,6 @@
         {
           "path": "support",
           "style": { "navigationBarTitleText": "帮助与客服", "navigationStyle": "custom" }
-        },
-        {
-          "path": "security",
-          "style": { "navigationBarTitleText": "安全中心", "navigationStyle": "custom" }
         }
       ]
     },
