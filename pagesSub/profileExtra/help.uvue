@@ -274,7 +274,7 @@ const submitFeedbackForm = async () => {
 .section-caption { color: var(--muted); font-size: 11px; }
 .card-hit { margin: 0 16px 12px; }
 .quick-card { box-sizing: border-box; }
-.ai-card { min-height: 142px; padding: 18px; border-radius: 16px; background: var(--navy); }
+.ai-card { min-height: 142px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .quick-card-main { display: flex; flex-direction: row; align-items: center; gap: 12px; }
 .feedback-card { min-height: 86px; display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 18px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .quick-icon { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 12px; font-weight: 800; }
@@ -282,12 +282,16 @@ const submitFeedbackForm = async () => {
 .quick-icon.feedback { background: var(--warm); color: var(--accent2); font-size: 21px; }
 .quick-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .quick-title { color: var(--text-invert); font-size: 16px; font-weight: 800; }
+.ai-card .quick-title { color: var(--ink); }
 .quick-title.light { color: var(--ink); }
 .quick-desc { color: var(--soft); font-size: 12px; line-height: 1.5; }
+.ai-card .quick-desc { color: var(--muted); }
 .quick-desc.light { color: var(--muted); }
 .quick-arrow { flex-shrink: 0; width: 30px; color: var(--text-invert); font-size: 28px; text-align: center; }
+.ai-card .quick-arrow { color: var(--muted); }
 .quick-arrow.light { color: var(--muted); }
 .quick-note { display: block; width: 100%; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--accent-glow); color: var(--soft); font-size: 11px; line-height: 1.6; }
+.ai-card .quick-note { border-top-color: var(--line); color: var(--muted); }
 .category-tabs { width: 100%; height: 58px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .category-tabs-inner { display: flex; flex-direction: row; align-items: flex-end; gap: 28px; height: 58px; padding: 0 16px; white-space: nowrap; }
 .category-tab { flex-shrink: 0; height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 9px; color: var(--muted); }
