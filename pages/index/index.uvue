@@ -516,11 +516,7 @@
 				<view class="vip-filter-row">
 					<text class="vip-result-count">{{ squareTotal > 0 ? '共' + squareTotal + '位嘉宾' : '' }}</text>
 					<view class="vip-filter-right">
-						<view class="vip-sort-btn">
-							<text class="vip-sort-text">综合排序</text>
-							<text class="ic ic-sys ic-xiala vip-sort-icon"></text>
-						</view>
-						<view class="vip-accelerate-btn">
+						<view class="vip-accelerate-btn" @click="onSearch">
 							<text class="ic ic-home ic-star vip-accel-icon"></text>
 							<text class="vip-accel-text">加速匹配</text>
 						</view>
@@ -1288,9 +1284,6 @@
 .vip-filter-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 24rpx 0; }
 .vip-result-count { font-size: 28rpx; font-weight: 600; color: var(--text-primary); }
 .vip-filter-right { display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
-.vip-sort-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--bg-card); }
-.vip-sort-text { font-size: 24rpx; color: var(--text-secondary); }
-.vip-sort-icon { font-size: 20rpx; color: var(--text-muted); }
 .vip-accelerate-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--accent); }
 .vip-accel-icon { font-size: 24rpx; color: var(--text-inverse); }
 .vip-accel-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
