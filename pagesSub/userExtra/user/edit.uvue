@@ -22,16 +22,17 @@
 			</view>
 		</view>
 
-		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false">
+		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false" refresher-enabled="true" :refresher-triggered="refreshing" @refresherrefresh="onPullRefresh" @refresherrestore="refreshing = false">
 			<view class="progress-section">
 				<view class="progress-header"><text class="progress-label">资料完整度</text><text class="progress-value">{{ completeness }}%</text></view>
 				<view class="progress-track"><view class="progress-fill" :style="{ width: completeness + '%' }"></view></view>
 				<text class="progress-hint">资料越完整，推荐权重越高，更容易遇见对的人</text>
+				<text v-if="missingCompletionSummary != ''" class="progress-missing">待完善：{{ missingCompletionSummary }}</text>
 			</view>
 
 			<view class="section-card avatar-section">
 				<view class="section-heading">
-					<text class="section-title">头像 · +15%</text>
+					<text class="section-title">头像{{ completionSuffix('avatar', 15) }}</text>
 					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
 				</view>
 				<view class="avatar-row">
@@ -45,7 +46,7 @@
 			</view>
 
 			<view class="section-card album-card">
-				<view class="section-heading"><text class="section-title">我的相册 · +10%</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
+				<view class="section-heading"><text class="section-title">我的相册{{ completionSuffix('album', 8) }}</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
 				<view class="album-grid">
 					<view class="album-cell" v-for="(photo, index) in formData.photos" :key="photo.id != null ? photo.id : index">
 						<image class="album-photo" :src="photo.url" mode="aspectFill"></image>
@@ -72,16 +73,17 @@
 					<view class="pill-action" @tap="openBasicEditor"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
 				</view>
 				<view class="preview-list">
-					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ agePreview }} · +7%</text></view>
-					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ formData.height != '' ? formData.height + ' cm' : '未填写' }} · +4%</text></view>
-					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ formData.weight != '' ? formData.weight + ' kg' : '未填写' }} · 不计入</text></view>
-					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ educationText == '未选择' ? '未填写' : educationText }} · +4%</text></view>
-					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ formData.residenceCityCode || '未填写' }} · +7%</text></view>
-					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ formData.hometown || '未填写' }} · 不计入</text></view>
-					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ occupationPreview }} · +4%</text></view>
-					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ incomePreview }} · +4%</text></view>
-					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ maritalText == '未选择' ? '未填写' : maritalText }} · +5%</text></view>
-					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ formData.mbti || '未填写' }} · +2%</text></view>
+					<view class="preview-row"><text class="preview-label">性别</text><text class="preview-value">{{ completionText('gender', genderText == '未选择' ? '' : genderText, '未填写', 7) }}</text></view>
+					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ completionText('birthday', agePreview == '未填写' ? '' : agePreview, '未填写', 7) }}</text></view>
+					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ completionText('height', formData.height != '' ? formData.height + ' cm' : '', '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ completionText('weight', formData.weight != '' ? formData.weight + ' kg' : '', '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ completionText('education', educationText == '未选择' ? '' : educationText, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ completionText('location', formData.residenceCityCode, '未填写', 5) }}</text></view>
+					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ completionText('hometown', formData.hometown, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ completionText('occupation', occupationPreview == '未填写' ? '' : occupationPreview, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ completionText('income', incomePreview == '未填写' ? '' : incomePreview, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ completionText('marriage', maritalText == '未选择' ? '' : maritalText, '未填写', 5) }}</text></view>
+					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ completionText('mbti', formData.mbti, '未填写', 2) }}</text></view>
 					<view class="preview-row"><text class="preview-label">微信号</text><text class="preview-value">{{ formData.wechat || '仅作为紧急联系' }}</text></view>
 				</view>
 			</view>
@@ -89,7 +91,7 @@
 			<view class="section-card certification-card">
 				<view class="section-heading">
 					<text class="section-title">四重认证</text>
-					<text class="section-caption">已完成 {{ completedCertCount }}/4 · 实名+5% / 单身承诺+5%</text>
+					<text class="section-caption">已完成 {{ completedCertCount }}/4{{ completionSuffix('realname', 5, ' · 实名') }}{{ completionSuffix('single_pledge', 1, ' · 单身承诺') }}</text>
 				</view>
 				<view class="cert-row" v-for="cert in certifications" :key="cert.key">
 					<view class="cert-icon-wrap" :class="{ 'cert-icon-done': cert.passed }"><text class="cert-icon">{{ cert.icon }}</text></view>
@@ -100,33 +102,37 @@
 			</view>
 
 			<view class="section-card intro-card">
-				<text class="section-title">自我介绍 · +10%</text>
-				<textarea class="intro-main-input" :value="formData.introduction" maxlength="1000" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
+				<view class="section-heading"><text class="section-title">自我介绍{{ completionSuffix('intro', 10) }}</text><view class="pill-action" @tap="saveIntroduction"><text class="pill-action-text">保存</text></view></view>
+				<textarea class="intro-main-input" :class="{ 'has-content': introHasContent }" :value="formData.introduction" maxlength="500" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
 				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
+				<text v-if="!completionPassed('intro')" class="completion-warning">自我介绍：少于后台要求的 20 字</text>
 			</view>
 
-			<view class="section-card tags-card" @tap="goTagsEdit">
-				<view class="section-heading"><text class="section-title">兴趣标签 · +5%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+			<view class="section-card tags-card" @tap="goTagsEdit('interest')">
+				<view class="section-heading"><text class="section-title">兴趣标签{{ completionSuffix('interest', 5) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">选择能代表你的兴趣爱好</text>
 				<view class="tag-list">
 					<view class="tag-chip" v-for="tag in interestDisplayTags" :key="'interest-' + tag"><text>{{ tag }}</text></view>
 					<view v-if="interestDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
 				</view>
+				<text v-if="!completionPassed('interest')" class="completion-warning">兴趣标签：少于 3 个</text>
 			</view>
 
-			<view class="section-card tags-card" @tap="goTagsEdit">
-				<view class="section-heading"><text class="section-title">性格标签 · +3%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+			<view class="section-card tags-card" @tap="goTagsEdit('personality')">
+				<view class="section-heading"><text class="section-title">性格标签{{ completionSuffix('personality', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">选择能代表你的性格特征</text>
 				<view class="tag-list">
 					<view class="tag-chip tag-accent" v-for="tag in personalityDisplayTags" :key="'personality-' + tag"><text>{{ tag }}</text></view>
 					<view v-if="personalityDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
 				</view>
+				<text v-if="!completionPassed('personality')" class="completion-warning">性格标签：少于 3 个</text>
 			</view>
 
 			<view class="section-card preference-card" @tap="openPreferenceEditor">
-				<view class="section-heading"><text class="section-title">择偶标准 · +3%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<view class="section-heading"><text class="section-title">择偶标准{{ completionSuffix('preference', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">设置你期待的年龄、身高、学历和距离范围</text>
 				<view class="preference-summary"><text>{{ preferencePreview }}</text></view>
+				<text v-if="!completionPassed('preference')" class="completion-warning">择偶要求：未看到有效年龄范围</text>
 			</view>
 
 			<view class="section-card qa-card">
@@ -305,7 +311,7 @@
 					<button class="crop-confirm" :disabled="uploadingMedia || cropConfirming" @tap="onCropConfirmTap" @click="onCropConfirmTap">{{ uploadingMedia || cropConfirming ? '处理中...' : '裁剪并上传' }}</button>
 				</view>
 			</view>
-			<canvas canvas-id="profileCropCanvas" class="crop-canvas" width="1280" height="800"></canvas>
+			<canvas canvas-id="profileCropCanvas" class="crop-canvas" width="800" height="800"></canvas>
 		</view>
 	</view>
 </template>
@@ -317,6 +323,7 @@
 	import locationJson from '@/static/location.json'
 
 	const loading = ref(true)
+	const refreshing = ref(false)
 	const loadError = ref('')
 	const profileLoaded = ref(false)
 	const saving = ref(false)
@@ -393,6 +400,7 @@
 		extraRequirement: ''
 	})
 	const completionScore = ref(0)
+	const completionItems = ref({} as any)
 	const usingLocalDraft = ref(false)
 
 	const textValue = (value: any): string => value == null ? '' : '' + value
@@ -515,14 +523,16 @@
 			const completion = await getProfileCompletion()
 			if (!completion.success || completion.data == null) return
 			const data = completion.data as any
-			if (data.score != null) completionScore.value = Math.round(Number(data.score))
+			const returnedScore = data.score != null ? data.score : data.completion_score
+			if (returnedScore != null) completionScore.value = Math.round(Number(returnedScore))
 			const items = Array.isArray(data.items) ? data.items as any[] : []
+			const nextItems = {} as any
 			for (const item of items) {
-				if (item.key == 'single_pledge') {
-					singlePledgePassed.value = item.completed == true
-					break
-				}
+				if (item.key == null) continue
+				nextItems['' + item.key] = { completed: item.completed == true, weight: Number(item.weight) }
+				if (item.key == 'single_pledge') singlePledgePassed.value = item.completed == true
 			}
+			completionItems.value = nextItems
 		} catch (e) {
 			console.error('[EditProfile] completion refresh failed', e)
 		}
@@ -559,6 +569,7 @@
 			} catch (meError) {
 				console.error('[EditProfile] auth profile unavailable', meError)
 			}
+			syncLocalTagDraft()
 			await refreshCompletion()
 		} catch (e) {
 			loadError.value = '网络不可用，请重试'
@@ -567,7 +578,50 @@
 		}
 	}
 
-	const completeness = computed(() => completionScore.value > 0 ? completionScore.value : Math.min(100, [formData.value.avatar, formData.value.occupation, formData.value.introduction].filter((item: any) => item != null && ('' + item).trim() != '').length * 25))
+	const hasPreferenceValues = (): boolean => formData.value.ageMin != '' || formData.value.ageMax != '' || formData.value.heightMin != '' || formData.value.heightMax != '' || formData.value.educationMin != '' || formData.value.acceptLongDistance || formData.value.acceptCrossProvince || textValue(formData.value.extraRequirement).trim() != ''
+	const completeness = computed(() => completionScore.value)
+	const fallbackCompletion = (key: string): boolean => {
+		if (key == 'avatar') return formData.value.avatar != ''
+		if (key == 'album') return formData.value.photos.length > 0
+		if (key == 'intro') return textValue(formData.value.introduction).trim() != ''
+		if (key == 'weight') return formData.value.weight != ''
+		if (key == 'hometown') return textValue(formData.value.hometown).trim() != ''
+		if (key == 'interest') return formData.value.interestTags.length >= 3
+		if (key == 'personality') return formData.value.personalityTags.length >= 3
+		if (key == 'preference') return formData.value.ageMin != '' || formData.value.ageMax != ''
+		return false
+	}
+	const completionPassed = (key: string): boolean => {
+		const item = completionItems.value[key]
+		return item != null ? item.completed == true : fallbackCompletion(key)
+	}
+	const completionWeight = (key: string, fallback: number): number => {
+		const weights: any = {
+			gender: 7, birthday: 7, location: 5, marriage: 5, occupation: 4, education: 4, income: 4,
+			height: 4, weight: 4, hometown: 4, avatar: 15, intro: 10, album: 8, interest: 5,
+			personality: 3, mbti: 2, preference: 3, realname: 5, single_pledge: 1
+		}
+		return weights[key] != null ? weights[key] : fallback
+	}
+	const completionSuffix = (key: string, fallback: number, prefix: string = ' ·'): string => completionPassed(key) ? '' : prefix + ' +' + completionWeight(key, fallback) + '%'
+	const completionText = (key: string, value: any, emptyText: string, fallback: number): string => {
+		const text = textValue(value).trim()
+		return completionPassed(key) && text != '' ? text : emptyText + completionSuffix(key, fallback)
+	}
+	const missingCompletionSummary = computed(() => {
+		const keys = Object.keys(completionItems.value)
+		if (keys.length == 0) return ''
+		const missing = keys.filter((key: string) => completionItems.value[key].completed != true)
+		if (missing.length == 0) return ''
+		const labels: any = {
+			gender: '性别', birthday: '出生日期', location: '所在地区', marriage: '婚姻状况', occupation: '职业',
+			education: '学历', income: '收入', height: '身高', weight: '体重', hometown: '家乡', avatar: '头像',
+			intro: '自我介绍', album: '相册', interest: '兴趣标签', personality: '性格标签', mbti: 'MBTI',
+			preference: '择偶要求', realname: '实名认证', single_pledge: '单身承诺'
+		}
+		const names = missing.map((key: string) => labels[key] || key)
+		return names.length > 4 ? names.slice(0, 4).join('、') + '等' + names.length + '项' : names.join('、')
+	})
 	const isIdentityLocked = computed(() => realNameStatus.value == 'passed')
 	const heightPickerIndex = computed(() => {
 		const value = Number(formData.value.height)
@@ -606,30 +660,13 @@
 	})
 	const incomePreview = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '未填写')
 	const incomePreviewText = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '请选择')
+	const introHasContent = computed(() => textValue(formData.value.introduction).trim() != '')
 	const completedCertCount = computed(() => certifications.value.filter((c: any) => c.passed).length)
-	const groupedTags = (categoryId: string): string[] => {
-		const result: string[] = []
-		const selections = formData.value.tagSelections
-		if (selections != null && typeof selections === 'object') {
-			const values = selections[categoryId]
-			if (Array.isArray(values)) {
-				for (const value of values as string[]) result.push(value)
-			}
-		}
-		return result
-	}
 	const interestDisplayTags = computed(() => {
-		const grouped: string[] = []
-		for (const category of TAG_CATEGORIES) {
-			if (category.id != 'personality') {
-				for (const tag of groupedTags(category.id)) grouped.push(tag)
-			}
-		}
-		return grouped.length > 0 ? grouped.slice(0, 20) : formData.value.interestTags.slice(0, 20)
+		return formData.value.interestTags.slice(0, 5)
 	})
 	const personalityDisplayTags = computed(() => {
-		const grouped = groupedTags('personality')
-		return grouped.length > 0 ? grouped.slice(0, 20) : formData.value.personalityTags.slice(0, 20)
+		return formData.value.personalityTags.slice(0, 5)
 	})
 	const preferencePreview = computed(() => {
 		const age = formData.value.ageMin != '' || formData.value.ageMax != '' ? (formData.value.ageMin || '不限') + '-' + (formData.value.ageMax || '不限') + '岁' : '年龄不限'
@@ -637,6 +674,7 @@
 		const education = formData.value.educationMin != '' ? educationOptions[Number(formData.value.educationMin)] || '学历不限' : '学历不限'
 		return age + ' · ' + height + ' · ' + education
 	})
+	const preferenceHasContent = computed(() => hasPreferenceValues())
 	const certifications = computed(() => [
 		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
 		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
@@ -676,6 +714,15 @@
 		formData.value.residenceCityCode = regionText(event)
 		formData.value.residenceDistrictCode = codes.district
 	}
+	const onPullRefresh = async () => {
+		if (refreshing.value || loading.value) return
+		refreshing.value = true
+		try {
+			await load()
+		} finally {
+			refreshing.value = false
+		}
+	}
 	const onHometownChange = (event: any) => {
 		const values = event.detail.value as string[]
 		const codes = locationCodesByNames(values)
@@ -701,6 +748,14 @@
 		formData.value.company = company
 		companySuggestions.value = []
 	}
+	const prepareUploadPath = (path: string): Promise<string> => new Promise((resolve) => {
+		uni.compressImage({
+			src: path,
+			quality: 80,
+			success: (res: any) => resolve(res != null && res.tempFilePath != null ? '' + res.tempFilePath : path),
+			fail: () => resolve(path)
+		})
+	})
 
 	const uploadMedia = async (path: string, kind: string) => {
 		if (path == '') return null
@@ -722,14 +777,12 @@
 	}
 
 	const selectCropImage = (kind: string) => {
-		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: (res: any) => {
+		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
 			if (path == '') return
-			cropKind.value = kind
-			cropPath.value = path
-			cropOffsetX.value = 0
-			cropOffsetY.value = 0
-			cropVisible.value = true
+			const uploadPath = await prepareUploadPath(path)
+			const media = await uploadMedia(uploadPath, kind)
+			applyUploadedMedia(media, kind, uploadPath)
 		} })
 	}
 	const chooseAvatar = () => selectCropImage('avatar')
@@ -777,6 +830,12 @@
 		cropOffsetY.value = Math.max(-limit.y, Math.min(limit.y, cropDragOriginY.value + point.y - cropDragStartY.value))
 	}
 	const endCropDrag = () => { cropDragging.value = false }
+	const applyUploadedMedia = (media: any, kind: string, fallbackPath: string) => {
+		if (media == null) return
+		if (kind == 'avatar') formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : fallbackPath
+		else formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : fallbackPath
+		cancelCrop()
+	}
 	const confirmCrop = () => {
 		if (uploadingMedia.value || cropPath.value == '') {
 			cropConfirming.value = false
@@ -801,7 +860,7 @@
 				const renderScale = Math.max(stageWidth / sourceWidth, stageHeight / sourceHeight)
 				const cropX = Math.max(0, Math.min(sourceWidth - cropWidth, (sourceWidth - cropWidth) / 2 - cropOffsetX.value / renderScale))
 				const cropY = Math.max(0, Math.min(sourceHeight - cropHeight, (sourceHeight - cropHeight) / 2 - cropOffsetY.value / renderScale))
-				const outputWidth = kind == 'avatar' ? 800 : 1280
+				const outputWidth = kind == 'avatar' ? 600 : 800
 				const outputHeight = Math.round(outputWidth / ratio)
 				const context = uni.createCanvasContext('profileCropCanvas')
 				context.clearRect(0, 0, outputWidth, outputHeight)
@@ -810,22 +869,25 @@
 				const exportCanvas = () => {
 					if (exportStarted) return
 					exportStarted = true
-					uni.canvasToTempFilePath({ canvasId: 'profileCropCanvas', x: 0, y: 0, width: outputWidth, height: outputHeight, destWidth: outputWidth, destHeight: outputHeight, success: async (file: any) => {
+					uni.canvasToTempFilePath({ canvasId: 'profileCropCanvas', x: 0, y: 0, width: outputWidth, height: outputHeight, destWidth: outputWidth, destHeight: outputHeight, fileType: 'jpg', quality: 0.9, success: async (file: any) => {
 						const media = await uploadMedia('' + file.tempFilePath, kind)
 						cropConfirming.value = false
-						if (media != null) {
-							if (kind == 'avatar') formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : '' + file.tempFilePath
-							else formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : '' + file.tempFilePath
-							cancelCrop()
-						}
-					}, fail: () => {
+						applyUploadedMedia(media, kind, '' + file.tempFilePath)
+					}, fail: (error: any) => {
 						cropConfirming.value = false
-						uni.showToast({ title: '裁剪失败，请重试', icon: 'none' })
+						console.error('[EditProfile] crop export failed', error)
+						uni.showToast({ title: '裁剪组件不可用，正在上传原图', icon: 'none' })
+						setTimeout(async () => {
+							const media = await uploadMedia(sourcePath, kind)
+							applyUploadedMedia(media, kind, sourcePath)
+						}, 250)
 					} })
 				}
-				context.draw(false)
-				setTimeout(exportCanvas, 180)
+				context.draw(false, exportCanvas)
 				setTimeout(() => {
+					if (!exportStarted) {
+						exportCanvas()
+					}
 					if (!exportStarted) {
 						cropConfirming.value = false
 						uni.showToast({ title: '裁剪处理超时，请重试', icon: 'none' })
@@ -833,7 +895,11 @@
 				}, 8000)
 			}, fail: () => {
 				cropConfirming.value = false
-				uni.showToast({ title: '图片读取失败，请重试', icon: 'none' })
+				uni.showToast({ title: '图片裁剪不可用，正在上传原图', icon: 'none' })
+				setTimeout(async () => {
+					const media = await uploadMedia(sourcePath, kind)
+					applyUploadedMedia(media, kind, sourcePath)
+				}, 250)
 			}
 		})
 	}
@@ -844,8 +910,9 @@
 		uni.chooseImage({ count, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const paths = res != null && res.tempFilePaths != null ? res.tempFilePaths as string[] : []
 			for (let i = 0; i < paths.length; i++) {
-				const media = await uploadMedia('' + paths[i], 'photo')
-				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + paths[i] })
+				const uploadPath = await prepareUploadPath('' + paths[i])
+				const media = await uploadMedia(uploadPath, 'photo')
+				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + uploadPath })
 			}
 		} })
 	}
@@ -892,7 +959,22 @@
 			singlePledgeSubmitting.value = false
 		}
 	}
-	const goTagsEdit = () => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit' })
+	const saveIntroduction = async () => {
+		if (saving.value || uploadingMedia.value) return
+		saving.value = true
+		try {
+			const res = await updateOwnProfile({ self_intro: textValue(formData.value.introduction) || null })
+			if (!res.success) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '自我介绍保存失败', icon: 'none' })
+				return
+			}
+			await refreshCompletion()
+			uni.showToast({ title: '自我介绍已保存', icon: 'success' })
+		} finally {
+			saving.value = false
+		}
+	}
+	const goTagsEdit = (type: string = 'all') => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit?type=' + type })
 	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
 
 	const syncLocalTagDraft = () => {
@@ -945,28 +1027,39 @@
 		if (!saving.value && !uploadingMedia.value) detailSheetVisible.value = false
 	}
 
-	const buildProfilePayload = () => ({
-		gender: formData.value.gender,
-		birthday: formData.value.birthday != '' ? formData.value.birthday : null,
-		is_married: formData.value.isMarried,
-		height: optionalNumber(formData.value.height),
-		weight: optionalNumber(formData.value.weight),
-		occupation: textValue(formData.value.occupation) || null,
-		industry: textValue(formData.value.industry) || null,
-		education_level: formData.value.educationLevel,
-		income: incomeValue(formData.value.income),
-		residence_province_code: textValue(formData.value.residenceProvinceCode) || null,
-		residence_city_code: textValue(formData.value.residenceApiCityCode) || null,
-		residence_district_code: textValue(formData.value.residenceDistrictCode) || null,
-		hometown_province_code: textValue(formData.value.hometownProvinceCode) || null,
-		hometown_city_code: textValue(formData.value.hometownCityCode) || null,
-		hometown_district_code: textValue(formData.value.hometownDistrictCode) || null,
-		self_intro: textValue(formData.value.introduction) || null,
-		interest_tags: formData.value.interestTags.length >= 3 ? formData.value.interestTags.slice(0, 5) : null,
-		personality_tags: formData.value.personalityTags.length >= 3 ? formData.value.personalityTags.slice(0, 5) : null,
-		mbti: textValue(formData.value.mbti).toUpperCase() || null,
-		tag_selections: formData.value.tagSelections
-	})
+	const buildProfilePayload = () => {
+		const payload: any = {
+			gender: formData.value.gender,
+			birthday: formData.value.birthday != '' ? formData.value.birthday : null,
+			is_married: formData.value.isMarried,
+			height: optionalNumber(formData.value.height),
+			weight: optionalNumber(formData.value.weight),
+			occupation: textValue(formData.value.occupation) || null,
+			industry: textValue(formData.value.industry) || null,
+			education_level: formData.value.educationLevel,
+			income: incomeValue(formData.value.income),
+			residence_province_code: textValue(formData.value.residenceProvinceCode) || null,
+			residence_city_code: textValue(formData.value.residenceApiCityCode) || null,
+			residence_district_code: textValue(formData.value.residenceDistrictCode) || null,
+			hometown_province_code: textValue(formData.value.hometownProvinceCode) || null,
+			hometown_city_code: textValue(formData.value.hometownCityCode) || null,
+			hometown_district_code: textValue(formData.value.hometownDistrictCode) || null,
+			self_intro: textValue(formData.value.introduction) || null,
+			interest_tags: formData.value.interestTags.length >= 3 ? formData.value.interestTags.slice(0, 5) : null,
+			personality_tags: formData.value.personalityTags.length >= 3 ? formData.value.personalityTags.slice(0, 5) : null,
+			mbti: textValue(formData.value.mbti).toUpperCase() || null
+		}
+		const selections = formData.value.tagSelections
+		if (selections != null && typeof selections === 'object') {
+			const supportedSelections: any = {}
+			const relationshipExpectation = selections.relationship_expectation
+			if (Array.isArray(relationshipExpectation) && relationshipExpectation.length > 0) {
+				supportedSelections.relationship_expectation = relationshipExpectation.slice(0, 5)
+			}
+			if (Object.keys(supportedSelections).length > 0) payload.tag_selections = supportedSelections
+		}
+		return payload
+	}
 
 	const buildPreferencePayload = () => ({
 		age_min: optionalNumber(formData.value.ageMin),
@@ -1056,7 +1149,7 @@
 .crop-cancel, .crop-confirm { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; font-size: 14px; font-weight: 600; line-height: 44px; padding: 0; margin: 0; }
 .crop-cancel { background: var(--warm); color: var(--ink2); }
 .crop-confirm { border: none; background: var(--sage); color: var(--text-invert); }
-.crop-canvas { position: fixed; left: 0; top: 0; z-index: 1; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.crop-canvas { position: fixed; left: -900px; top: -900px; z-index: 1; width: 800px; height: 800px; opacity: 0.01; pointer-events: none; }
 .edit-page { min-height: 100vh; background: var(--canvas); display: flex; flex-direction: column; }
 .nav-bar { height: 72px; margin-top: 32px; padding: 36px 16px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; background: var(--paper); border-bottom: 1px solid var(--line); }
 .nav-back { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
@@ -1094,6 +1187,8 @@
 .progress-track { height: 6px; border-radius: 3px; background: var(--warm); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--sage), var(--accent)); }
 .progress-hint { font-size: 11px; color: var(--muted); }
+.progress-missing { font-size: 12px; line-height: 18px; color: var(--accent2); font-weight: 600; }
+.completion-warning { display: block; margin-top: 8px; font-size: 12px; line-height: 18px; color: #D64545; font-weight: 600; }
 .preview-action { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 16px; background: var(--sage-soft); color: var(--sage); }
 .preview-action text { font-size: 13px; font-weight: 600; }
 .preview-action-arrow { font-size: 16px !important; }
@@ -1151,7 +1246,8 @@
 
 /* Intro */
 .intro-card { gap: 10px; }
-.intro-main-input { width: 100%; min-height: 100px; padding: 12px; box-sizing: border-box; border: none; border-radius: 12px; background: var(--warm); color: var(--ink); font-size: 13px; line-height: 1.5; }
+.intro-main-input { width: 100%; min-height: 100px; padding: 12px; box-sizing: border-box; border: none; border-radius: 12px; background: var(--warm); color: var(--muted); font-size: 13px; line-height: 1.5; }
+.intro-main-input.has-content { color: var(--ink); }
 
 /* Tags */
 .tags-card { gap: 6px; }

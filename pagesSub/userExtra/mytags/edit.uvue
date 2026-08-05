@@ -26,7 +26,7 @@
 
 		<view class="tag-workspace">
 			<scroll-view scroll-y class="category-sidebar" enhanced show-scrollbar="false">
-				<view v-for="category in categories" :key="category.id" class="category-side-item" :class="{ active: activeCategoryId === category.id }" @tap="selectCategory(category.id)">
+				<view v-for="category in categories" :key="category.id" class="category-side-item" :class="{ active: activeCategoryId === category.id, 'category-hidden': !isCategoryVisible(category.id) }" @tap="selectCategory(category.id)">
 					<view class="category-side-mark"></view>
 					<text class="category-side-name">{{ category.name }}</text>
 					<text v-if="categorySelectedCount(category.id) > 0" class="category-side-count">{{ categorySelectedCount(category.id) }}</text>
@@ -61,10 +61,17 @@ const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBa
 const categories = TAG_CATEGORIES
 const maxTags = 20
 const activeCategoryId = ref(categories[0].id)
+const tagMode = ref('all')
 const selectedByCategory = ref<any>({})
 const saving = ref(false)
 
 const activeCategory = computed((): TagCategory => {
+	if (tagMode.value === 'personality') {
+		for (const category of categories) if (category.id === 'personality') return category
+	}
+	if (tagMode.value === 'interest' && activeCategoryId.value === 'personality') {
+		for (const category of categories) if (category.id !== 'personality') return category
+	}
 	for (const category of categories) {
 		if (category.id == activeCategoryId.value) return category
 	}
@@ -74,6 +81,7 @@ const activeCategory = computed((): TagCategory => {
 const selectedItems = computed((): TagItem[] => {
 	const result: TagItem[] = []
 	for (const category of categories) {
+		if (!isCategoryVisible(category.id)) continue
 		const values = selectedByCategory.value[category.id] as string[]
 		if (!Array.isArray(values)) continue
 		for (const tag of category.tags) {
@@ -82,6 +90,12 @@ const selectedItems = computed((): TagItem[] => {
 	}
 	return result
 })
+
+function isCategoryVisible(categoryId: string): boolean {
+	if (tagMode.value === 'personality') return categoryId === 'personality'
+	if (tagMode.value === 'interest') return categoryId !== 'personality'
+	return true
+}
 
 const copySelectionMap = (source: any): any => {
 	const next: any = {}
@@ -174,6 +188,7 @@ const load = () => {
 }
 
 const selectCategory = (categoryId: string) => {
+	if (!isCategoryVisible(categoryId)) return
 	activeCategoryId.value = categoryId
 }
 
@@ -221,7 +236,10 @@ const removeTag = (tagId: string) => {
 
 const clearTags = () => {
 	const next: any = {}
-	for (const category of categories) next[category.id] = []
+	for (const category of categories) {
+		const values = selectedByCategory.value[category.id]
+		next[category.id] = isCategoryVisible(category.id) ? [] : (Array.isArray(values) ? values : [])
+	}
 	selectedByCategory.value = next
 }
 
@@ -237,6 +255,12 @@ const goBack = () => {
 	uni.navigateBack({ delta: 1 })
 }
 
+onLoad((options: any) => {
+	const type = options != null && options.type != null ? '' + options.type : 'all'
+	if (type === 'interest' || type === 'personality') tagMode.value = type
+	if (tagMode.value === 'personality') activeCategoryId.value = 'personality'
+	else if (tagMode.value === 'interest') activeCategoryId.value = categories[0].id
+})
 onMounted(() => load())
 </script>
 
@@ -263,6 +287,7 @@ onMounted(() => load())
 .tag-workspace { flex: 1; min-height: 0; display: flex; flex-direction: row; gap: 14rpx; margin-top: 20rpx; }
 .category-sidebar { width: 160rpx; height: 100%; flex: 0 0 160rpx; padding: 14rpx 0; box-sizing: border-box; border: 1px solid var(--line); border-radius: 14rpx; background: var(--surface); }
 .category-side-item { position: relative; min-height: 84rpx; margin-bottom: 8rpx; display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 8rpx 12rpx; box-sizing: border-box; color: var(--muted); }
+.category-side-item.category-hidden { display: none; }
 .category-side-item.active { color: var(--ink); background: var(--accent-bg); }
 .category-side-mark { width: 5rpx; height: 34rpx; flex-shrink: 0; border-radius: 999rpx; background: transparent; }
 .category-side-item.active .category-side-mark { background: var(--accent); }

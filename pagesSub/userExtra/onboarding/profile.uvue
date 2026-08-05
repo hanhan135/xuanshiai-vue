@@ -123,6 +123,7 @@
 	const pickerIndex = ref(0)
 	const pickerViewValue = computed(() => [pickerIndex.value])
 	const questions = [
+		{ title: '您的性别', type: 'picker', options: ['男', '女'] },
 		{ title: '您的出生日期', type: 'date', options: [] as string[] },
 		{ title: '您的老家是哪里', type: 'location', options: [] as string[] },
 		{ title: '您的工作地区', type: 'location', options: [] as string[] },
@@ -220,8 +221,8 @@
 			return ''
 		})
 		if (locationLabel.value != '') {
-			selections.value[1] = locationLabel.value
 			selections.value[2] = locationLabel.value
+			selections.value[3] = locationLabel.value
 			const initialCodes = selectedLocationCodes([0, 0, 0])
 			locationCodesByQuestion.value = [initialCodes, initialCodes]
 		}
@@ -280,8 +281,8 @@
 		locationIndexes.value = [provinceIndex, cityIndex, districtIndex]
 		if (locationLabel.value != '') {
 			selectOption(locationLabel.value)
-			if (step.value == 2) locationCodesByQuestion.value[0] = selectedLocationCodes(locationIndexes.value)
-			if (step.value == 3) locationCodesByQuestion.value[1] = selectedLocationCodes(locationIndexes.value)
+			if (step.value == 3) locationCodesByQuestion.value[0] = selectedLocationCodes(locationIndexes.value)
+			if (step.value == 4) locationCodesByQuestion.value[1] = selectedLocationCodes(locationIndexes.value)
 		}
 	}
 
@@ -292,20 +293,22 @@
 	const buildProfilePayload = (): any => {
 		const hometown = locationCodesByQuestion.value[0]
 		const residence = locationCodesByQuestion.value[1]
-		const birthday = selections.value[0]
-		const heightText = selections.value[3].replace('cm', '')
-		const weightText = selections.value[4].replace('kg', '')
+		const gender = selections.value[0] == '男' ? 1 : selections.value[0] == '女' ? 2 : null
+		const birthday = selections.value[1]
+		const heightText = selections.value[4].replace('cm', '')
+		const weightText = selections.value[5].replace('kg', '')
 		const educationMap: any = { '大专': 4, '本科': 3, '硕士': 2, '博士': 1 }
 		const marriageMap: any = { '未婚': 1, '离异': 2, '丧偶': 3 }
 		const incomeMap: any = { '小于10w': 50000, '10-20w': 150000, '30-50w': 400000, '50-100w': 750000, '100w以上': 1000000 }
 		const payload: any = {
+			gender,
 			birthday,
 			height: Number(heightText),
 			weight: Number(weightText),
-			education_level: educationMap[selections.value[5]],
-			occupation: selections.value[6],
-			is_married: marriageMap[selections.value[7]],
-			income: incomeMap[selections.value[8]] != null ? incomeMap[selections.value[8]] : null,
+			education_level: educationMap[selections.value[6]],
+			occupation: selections.value[7],
+			is_married: marriageMap[selections.value[8]],
+			income: incomeMap[selections.value[9]] != null ? incomeMap[selections.value[9]] : null,
 			hometown_province_code: hometown.province,
 			hometown_city_code: hometown.city,
 			hometown_district_code: hometown.district,

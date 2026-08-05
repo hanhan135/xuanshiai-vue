@@ -5,7 +5,7 @@
  */
 
 import { request } from './request.uts'
-import { USE_MOCK, getAccessToken, clearAuthTokens, buildApiUrl } from './config.uts'
+import { USE_MOCK, getAccessToken, clearAuthTokens, buildApiUrl, resolveMediaUrl } from './config.uts'
 import {
   mockRecommendUsers,
   mockSquareUsers,
@@ -397,13 +397,15 @@ export async function uploadUserProfileMedia(filePath: string, kind: string) {
   }
 
   return new Promise<any>((resolve) => {
-    uni.uploadFile({
-      url: buildApiUrl(profileMediaPath(normalizedKind)),
-      filePath,
-      name: 'file',
-      header: getAccessToken() != '' ? { Authorization: 'Bearer ' + getAccessToken() } : {},
-      success: (res: any) => {
-        if (res.statusCode == 401) clearAuthTokens()
+	uni.uploadFile({
+		url: buildApiUrl(profileMediaPath(normalizedKind)),
+		filePath,
+		name: 'file',
+		header: getAccessToken() != '' ? { Authorization: 'Bearer ' + getAccessToken(), Accept: 'application/json' } : { Accept: 'application/json' },
+		timeout: 60000,
+		success: (res: any) => {
+			console.log('[UserAPI] media upload response', normalizedKind, res.statusCode, res.data)
+			if (res.statusCode == 401) clearAuthTokens()
         let data: any = null
         try {
           data = JSON.parse('' + res.data)
@@ -418,7 +420,8 @@ export async function uploadUserProfileMedia(filePath: string, kind: string) {
           resolve({ success: false, data, code: res.statusCode, message: '' + detail })
         }
       },
-      fail: (err: any) => {
+		fail: (err: any) => {
+			console.error('[UserAPI] media upload failed', normalizedKind, err)
         const message = err != null && err.errMsg != null ? '' + err.errMsg : '上传失败，请检查网络'
         resolve({ success: false, data: null, code: -1, message })
       }
