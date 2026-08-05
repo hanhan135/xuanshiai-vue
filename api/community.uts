@@ -3456,7 +3456,7 @@ export async function getMyPosts(query: any = null) {
   const res = await request({
     url: '/community/posts',
     method: 'GET',
-    data: { mode: 'latest', page, page_size: pageSize }
+    data: { mode: 'mine', page, page_size: pageSize }
   })
   if (!res.success) return res
   const raw = res.data

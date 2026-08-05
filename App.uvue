@@ -32,6 +32,7 @@
 
 	onLaunch(() => {
 		console.log('App Launch')
+		uni.setStorageSync('xsa_new_app_launch', true)
 		tryAutoEnterFastApiCommunity()
 	})
 

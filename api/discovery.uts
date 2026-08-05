@@ -85,7 +85,49 @@ export async function getVisitors(page: number = 1, pageSize: number = 20) {
 }
 
 export async function getDiscoveryFavorites(page: number = 1, pageSize: number = 20) {
-  return request({ url: '/discovery/favorites', method: 'GET', data: { page, page_size: pageSize } })
+	return request({ url: '/discovery/favorites', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+function mapRelationPage(raw: any): any {
+	const body = raw != null ? raw : {}
+	const rows = body.items != null && Array.isArray(body.items) ? body.items as any[] : []
+	const items: any[] = []
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i] != null ? rows[i] : {}
+		const user = row.user != null ? row.user : {}
+		items.push({
+			id: Number(row.id != null ? row.id : (user.user_id != null ? user.user_id : 0)),
+			userId: Number(user.user_id != null ? user.user_id : 0),
+			name: user.nickname != null ? '' + user.nickname : '用户',
+			avatar: user.avatar != null ? resolveMediaUrl(user.avatar) : '',
+			age: user.age != null ? Number(user.age) : 0,
+			city: user.city_code != null ? '' + user.city_code : '',
+			direction: row.direction != null ? '' + row.direction : '',
+			status: row.status != null ? '' + row.status : '',
+			createdAt: row.created_at != null ? '' + row.created_at : '',
+			matched: row.matched == true,
+			orderNo: row.order_no != null ? '' + row.order_no : ''
+		})
+	}
+	return { items, page: Number(body.page != null ? body.page : 1), pageSize: Number(body.page_size != null ? body.page_size : 20), total: Number(body.total != null ? body.total : items.length), hasMore: body.has_more == true }
+}
+
+export async function getReceivedFavorites(page: number = 1, pageSize: number = 20) {
+	const res = await request({ url: '/discovery/favorites/received', method: 'GET', data: { page, page_size: pageSize } })
+	if (!res.success) return res
+	return { success: true, data: mapRelationPage(res.data), code: res.code, message: res.message }
+}
+
+export async function getSentSuperlikes(page: number = 1, pageSize: number = 20) {
+	const res = await request({ url: '/discovery/superlikes/sent', method: 'GET', data: { page, page_size: pageSize } })
+	if (!res.success) return res
+	return { success: true, data: mapRelationPage(res.data), code: res.code, message: res.message }
+}
+
+export async function getReceivedSuperlikes(page: number = 1, pageSize: number = 20) {
+	const res = await request({ url: '/discovery/superlikes/received', method: 'GET', data: { page, page_size: pageSize } })
+	if (!res.success) return res
+	return { success: true, data: mapRelationPage(res.data), code: res.code, message: res.message }
 }
 
 export async function searchDiscovery(filters: any = null) {

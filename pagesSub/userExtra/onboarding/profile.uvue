@@ -95,6 +95,8 @@
 
 <script setup lang="uts">
 	import locationJson from '@/static/location.json'
+	import { updateOwnProfile } from '@/api/user.uts'
+	import { getProfileCompletion } from '@/api/auth.uts'
 
 	const step = ref(0)
 	const mode = ref('')
@@ -154,14 +156,27 @@
 				cities: cities.map((city: any) => {
 					const rawAreas = city.area != null ? city.area : city.districts
 					const areas = rawAreas != null && Array.isArray(rawAreas) ? rawAreas as any[] : []
-					return { name: '' + city.name, districts: areas.map((area: any) => area != null && area.name != null ? '' + area.name : '' + area) }
+					return {
+						name: '' + city.name,
+						code: city.code != null ? '' + city.code : '',
+						districts: areas.map((area: any) => ({
+							name: area != null && area.name != null ? '' + area.name : '' + area,
+							code: area != null && area.code != null ? '' + area.code : ''
+						}))
+					}
 				})
+				,
+				code: province.code != null ? '' + province.code : ''
 			}
 		})
 	}
 	const importedLocations = normalizeLocations(locationJson)
 	const locationData = ref(importedLocations.length > 0 ? importedLocations : fallbackLocations)
 	const locationIndexes = ref([0, 0, 0] as number[])
+	const locationCodesByQuestion = ref([
+		{ province: '', city: '', district: '' },
+		{ province: '', city: '', district: '' }
+	] as any[])
 	const provinceOptions = computed((): string[] => locationData.value.map((item: any) => '' + item.name))
 	const cityOptions = computed((): string[] => {
 		const province = locationData.value[locationIndexes.value[0]]
@@ -173,13 +188,25 @@
 		const cities = province != null && Array.isArray(province.cities) ? province.cities as any[] : []
 		const city = cities[locationIndexes.value[1]]
 		const districts = city != null && Array.isArray(city.districts) ? city.districts as any[] : []
-		return districts.map((item: any) => '' + item)
+		return districts.map((item: any) => item != null && item.name != null ? '' + item.name : '' + item)
 	})
 	const locationPickerValue = computed(() => [locationIndexes.value[0], locationIndexes.value[1], locationIndexes.value[2]])
 	const locationLabel = computed(() => {
 		if (provinceOptions.value.length == 0 || cityOptions.value.length == 0 || districtOptions.value.length == 0) return ''
 		return provinceOptions.value[locationIndexes.value[0]] + ' ' + cityOptions.value[locationIndexes.value[1]] + ' ' + districtOptions.value[locationIndexes.value[2]]
 	})
+	const selectedLocationCodes = (indexes: number[]): any => {
+		const province = locationData.value[indexes[0]]
+		const cities = province != null && Array.isArray(province.cities) ? province.cities as any[] : []
+		const city = cities[indexes[1]]
+		const districts = city != null && Array.isArray(city.districts) ? city.districts as any[] : []
+		const district = districts[indexes[2]]
+		return {
+			province: province != null && province.code != null ? '' + province.code : '',
+			city: city != null && city.code != null ? '' + city.code : '',
+			district: district != null && district.code != null ? '' + district.code : ''
+		}
+	}
 
 	const chooseRole = (key: string) => {
 		if (key === 'parent' || key === 'matchmaker') {
@@ -195,6 +222,8 @@
 		if (locationLabel.value != '') {
 			selections.value[1] = locationLabel.value
 			selections.value[2] = locationLabel.value
+			const initialCodes = selectedLocationCodes([0, 0, 0])
+			locationCodesByQuestion.value = [initialCodes, initialCodes]
 		}
 		step.value = 1
 	}
@@ -249,14 +278,45 @@
 		const districts = city != null && Array.isArray(city.districts) ? city.districts as any[] : []
 		if (districtIndex < 0 || districtIndex >= districts.length) districtIndex = 0
 		locationIndexes.value = [provinceIndex, cityIndex, districtIndex]
-		if (locationLabel.value != '') selectOption(locationLabel.value)
+		if (locationLabel.value != '') {
+			selectOption(locationLabel.value)
+			if (step.value == 2) locationCodesByQuestion.value[0] = selectedLocationCodes(locationIndexes.value)
+			if (step.value == 3) locationCodesByQuestion.value[1] = selectedLocationCodes(locationIndexes.value)
+		}
 	}
 
 	const previousStep = () => {
 		if (step.value > 1) step.value = step.value - 1
 	}
 
-	const nextStep = () => {
+	const buildProfilePayload = (): any => {
+		const hometown = locationCodesByQuestion.value[0]
+		const residence = locationCodesByQuestion.value[1]
+		const birthday = selections.value[0]
+		const heightText = selections.value[3].replace('cm', '')
+		const weightText = selections.value[4].replace('kg', '')
+		const educationMap: any = { '大专': 4, '本科': 3, '硕士': 2, '博士': 1 }
+		const marriageMap: any = { '未婚': 1, '离异': 2, '丧偶': 3 }
+		const incomeMap: any = { '小于10w': 50000, '10-20w': 150000, '30-50w': 400000, '50-100w': 750000, '100w以上': 1000000 }
+		const payload: any = {
+			birthday,
+			height: Number(heightText),
+			weight: Number(weightText),
+			education_level: educationMap[selections.value[5]],
+			occupation: selections.value[6],
+			is_married: marriageMap[selections.value[7]],
+			income: incomeMap[selections.value[8]] != null ? incomeMap[selections.value[8]] : null,
+			hometown_province_code: hometown.province,
+			hometown_city_code: hometown.city,
+			hometown_district_code: hometown.district,
+			residence_province_code: residence.province,
+			residence_city_code: residence.city,
+			residence_district_code: residence.district
+		}
+		return payload
+	}
+
+	const nextStep = async () => {
 		if (selectedValue.value.length === 0) {
 			uni.showToast({ title: '请选择一项后继续', icon: 'none' })
 			return
@@ -265,8 +325,22 @@
 			step.value = step.value + 1
 			return
 		}
+		const payload = buildProfilePayload()
+		console.log('[Onboarding] profile payload', payload)
+		const res = await updateOwnProfile(payload)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? '' + res.message : '资料保存失败，请重试', icon: 'none' })
+			return
+		}
+		const completion = await getProfileCompletion()
+		if (!completion.success || completion.data == null) {
+			uni.showToast({ title: '资料已提交，但服务器校验失败，请重试', icon: 'none' })
+			return
+		}
+		console.log('[Onboarding] completion after save', completion.data)
 		uni.setStorageSync('xsa_onboarding_completed', true)
 		uni.setStorageSync('xsa_onboarding_mode', mode.value)
+		uni.setStorageSync('xsa_skip_welcome_once', true)
 		uni.showToast({ title: '资料已保存', icon: 'success' })
 		setTimeout(() => {
 			uni.switchTab({ url: '/pages/index/index' })

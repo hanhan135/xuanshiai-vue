@@ -48,6 +48,27 @@ export async function loginByPhone(phone: string, code: string) {
   return res
 }
 
+/** Development/testing login for an already-created account. */
+export async function loginByExistingAccount(phone: string, password: string) {
+  const res = await request({
+    url: '/auth/test-login',
+    forceHttp: true,
+    skipAuth: true,
+    method: 'POST',
+    data: {
+      phone,
+      password,
+      device_id: 'wechat-devtools',
+      platform: 'mp-weixin',
+      app_version: 'dev'
+    }
+  })
+  if (res.success && res.data != null && res.data.access_token != null) {
+    setAuthTokens(String(res.data.access_token), res.data.refresh_token != null ? String(res.data.refresh_token) : '')
+  }
+  return res
+}
+
 export async function loginByWechat(code: string) {
   const res = await request({
     url: '/auth/wechat/login',

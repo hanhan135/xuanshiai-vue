@@ -146,9 +146,15 @@ const loadOverview = async () => {
 	const res = await getProfileOverview()
 	if (!res.success || res.data == null) return
 	const data = res.data as any
+	const profile = data.profile != null && typeof data.profile === 'object' ? data.profile : {}
+	const account = data.user != null && typeof data.user === 'object' ? data.user : {}
 	const membership = data.membership != null ? data.membership : {}
-	user.value.nickname = data.nickname != null && data.nickname != '' ? '' + data.nickname : '未设置昵称'
-	user.value.avatar = resolveMediaUrl(data.avatar)
+	const nickname = data.nickname != null && data.nickname != ''
+		? data.nickname
+		: (profile.nickname != null && profile.nickname != '' ? profile.nickname : account.nickname)
+	user.value.nickname = nickname != null && nickname != '' ? '' + nickname : '未设置昵称'
+	const avatar = data.avatar != null && data.avatar != '' ? data.avatar : (profile.avatar != null && profile.avatar != '' ? profile.avatar : account.avatar)
+	user.value.avatar = resolveMediaUrl(avatar)
 	user.value.vipProgress = data.completion_score != null ? Math.round(Number(data.completion_score)) : 0
 	user.value.isVip = membership.is_vip == true
 	const incoming = data.incoming_application_count != null ? Number(data.incoming_application_count) : 0

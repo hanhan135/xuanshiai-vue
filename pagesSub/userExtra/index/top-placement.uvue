@@ -21,7 +21,7 @@
 					<view class="hero-banner"><text class="hero-title"><text class="hero-icon">↑</text> 置顶尊享特权</text><text class="hero-copy">优先排序在最前，吸引更多关注，增加相亲成功率</text></view>
 
 				<view class="active-status"><text class="active-title">{{ activeStatus.active ? '您当前正在置顶' : '您当前还未置顶' }}</text><text class="active-status-copy">{{ activeStatus.active ? '继续购买会在现有有效期基础上延长' : '置顶可让脱单成功率翻倍哦' }}</text></view>
-				<view class="recommend-banner"><view class="recommend-heading"><text>♡ 置顶推荐</text><text class="recommend-link">我要置顶 ›</text></view><view class="recommend-images"><image src="/static/portraits/profile-woman-alt.jpg" mode="aspectFill"></image><image src="/static/portraits/profile-man-light.jpg" mode="aspectFill"></image></view></view>
+				<view v-if="recommendImages.length > 0" class="recommend-banner"><view class="recommend-heading"><text>置顶推荐</text><text class="recommend-link">我要置顶 ›</text></view><view class="recommend-images"><image v-for="image in recommendImages" :key="image" :src="image" mode="aspectFill"></image></view></view>
 
 				<view class="plans-section">
 					<text class="section-title">选择置顶套餐</text>
@@ -38,47 +38,59 @@
 			</view>
 		</scroll-view>
 
-		<view v-if="!loading && !paymentSuccess" class="footer-safe"><view class="total-row"><text>合计：</text><text class="total-price">¥{{ selectedPlan.price }}</text></view><view class="pay-button" :class="{ disabled: paying }" @tap="openPayment"><text>{{ paying ? '支付确认中…' : '确认支付' }}</text></view></view>
+		<view v-if="!loading && !paymentSuccess && plans.length > 0" class="footer-safe"><view class="total-row"><text>合计：</text><text class="total-price">¥{{ selectedPlan.price }}</text></view><view class="pay-button" :class="{ disabled: paying }" @tap="openPayment"><text>{{ paying ? '支付确认中…' : '确认支付' }}</text></view></view>
 		<XsaPaymentSheet :visible="paymentVisible" :amount="selectedPlan.price" :loading="paying" @close="closePayment" @confirm="confirmPayment" />
 	</view>
 </template>
 
 <script setup lang="uts">
-import { getTopPlacementStatus, payTopPlacement, TopPlacementPlan, TopPlacementOrder } from '@/api/top-placement.uts'
+import { getTopPlacementStatus, getTopPlacementPackages, payTopPlacement, TopPlacementPlan, TopPlacementOrder } from '@/api/top-placement.uts'
+import { getDiscoveryPlaza } from '@/api'
+import { resolveMediaUrl } from '@/api/config.uts'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 
-const plans: TopPlacementPlan[] = [
-	{ id: 'top-7', name: '置顶7天', days: 7, price: 19, tag: '推荐', recommended: true },
-	{ id: 'top-30', name: '置顶30天', days: 30, price: 50, tag: '', recommended: false },
-	{ id: 'top-90', name: '置顶90天', days: 90, price: 99, tag: '', recommended: false },
-	{ id: 'top-180', name: '置顶180天', days: 180, price: 150, tag: '', recommended: false },
-	{ id: 'top-270', name: '置顶270天', days: 270, price: 199, tag: '', recommended: false }
-]
+const plans = ref<TopPlacementPlan[]>([])
 const benefits = [
 	{ icon: '↑', title: '优先展示', desc: '推荐列表置顶' },
 	{ icon: '◎', title: '精准触达', desc: '推送给高意向用户' },
 	{ icon: '✦', title: '更多匹配', desc: '更多用户看到你' }
 ]
-const selectedPlanIndex = ref(1)
+const selectedPlanIndex = ref(0)
 const activeStatus = ref<any>({ active: false, remainingDays: 0, expiresAt: 0 })
 const loading = ref(true)
 const paymentVisible = ref(false)
 const paying = ref(false)
 const paymentSuccess = ref(false)
 const successOrder = ref<TopPlacementOrder | null>(null)
-const selectedPlan = computed(() => plans[selectedPlanIndex.value])
+const recommendImages = ref<string[]>([])
+const selectedPlan = computed(() => plans.value.length > selectedPlanIndex.value ? plans.value[selectedPlanIndex.value] : { id: '', name: '', days: 0, price: 0, tag: '', recommended: false } as TopPlacementPlan)
 
 const loadStatus = async () => {
 	loading.value = true
 	try {
-		const result = await getTopPlacementStatus()
-		activeStatus.value = result.success && result.data != null ? result.data : { active: false, remainingDays: 0, expiresAt: 0 }
+		const [statusResult, packageResult] = await Promise.all([getTopPlacementStatus(), getTopPlacementPackages()])
+		activeStatus.value = statusResult.success && statusResult.data != null ? statusResult.data : { active: false, remainingDays: 0, expiresAt: 0 }
+		if (packageResult.success && packageResult.data != null) {
+			plans.value = packageResult.data as TopPlacementPlan[]
+			if (selectedPlanIndex.value >= plans.value.length) selectedPlanIndex.value = 0
+		}
+		const plazaResult = await getDiscoveryPlaza({ page: 1, page_size: 4 })
+		if (plazaResult.success && plazaResult.data != null) {
+			const items = (plazaResult.data as any).items as any[]
+			const images: string[] = []
+			for (let i = 0; i < items.length; i++) {
+				const image = resolveMediaUrl(items[i] != null ? items[i].avatar : '')
+				if (image != '') images.push(image)
+				if (images.length >= 2) break
+			}
+			recommendImages.value = images
+		}
 	} catch (e) {
 		activeStatus.value = { active: false, remainingDays: 0, expiresAt: 0 }
 	} finally { loading.value = false }
 }
 const selectPlan = (index: number) => { if (!paying.value) selectedPlanIndex.value = index }
-const openPayment = () => { if (!paying.value) paymentVisible.value = true }
+const openPayment = () => { if (!paying.value && selectedPlan.value.id != '') paymentVisible.value = true }
 const closePayment = () => { if (!paying.value) paymentVisible.value = false }
 const confirmPayment = async () => {
 	if (paying.value) return

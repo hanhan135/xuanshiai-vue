@@ -7,6 +7,7 @@
 export {
   getProfileCompletion,
   sendSms,
+  loginByExistingAccount,
   loginByPhone,
   loginByWechat,
   bindPhone,
@@ -23,6 +24,7 @@ export {
   getMeProfile,
   getOwnProfile,
   updateOwnProfile,
+  updateOwnNickname,
   getOwnPreferences,
   updateOwnPreferences,
   uploadUserProfileMedia,
@@ -41,12 +43,23 @@ export {
   getBrowseHistory,
   getVisitors,
   getDiscoveryFavorites,
+  getReceivedFavorites,
+  getSentSuperlikes,
+  getReceivedSuperlikes,
+  getMembershipPackages,
   searchDiscovery,
   getOutgoingApplications,
   getIncomingApplications,
   acceptDiscoveryApplication,
   rejectDiscoveryApplication
 } from './discovery.uts'
+
+export {
+  getMembershipStatus,
+  createMembershipOrder,
+  getMembershipOrder,
+  testPayOrder
+} from './membership.uts'
 
 // 消息相关
 export {
