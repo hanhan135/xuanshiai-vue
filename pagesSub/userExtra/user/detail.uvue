@@ -255,6 +255,7 @@ const spotlightTarget = ref({ id: 0, name: '', avatar: '', meta: '' })
 
 const user = ref({
 	id: 1,
+	detailLocked: false,
 	name: '林悦',
 	age: '26',
 	avatar: '/static/portraits/profile-woman-main.jpg',
@@ -368,7 +369,7 @@ const constellationFromBirthday = (birthday: any): string => {
 }
 
 user.value = {
-	id: 0, name: '', age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
+	id: 0, name: '', detailLocked: false, age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
 	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
 	photos: [], lifePhotos: [], expect: [], basicInfo: []
 }
@@ -409,6 +410,8 @@ const mapDetailUser = (raw: any, id: number) => {
 	const avatar = resolveMediaUrl(value(card.avatar, profile.avatar, value(envelope.avatar, account.avatar, user.value.avatar)))
 	const background = resolveMediaUrl(value(card.background_wall, profile.background_wall, value(envelope.background_wall, '', '')))
 	const nickname = value(card.nickname, profile.nickname, value(envelope.nickname, account.nickname, user.value.name))
+	const detailLocked = card.detail_locked === true || envelope.detail_locked === true
+	if (envelope.is_vip_viewer != null) viewerIsVip.value = envelope.is_vip_viewer === true
 	const rawPhotos = card.photos != null ? card.photos : profile.photos
 	const photos = Array.isArray(rawPhotos)
 		? (rawPhotos as any[]).map((photo: any) => photo != null && typeof photo === 'object' ? resolveMediaUrl(value(photo.url, photo.file_url, avatar)) : resolveMediaUrl(photo))
@@ -430,9 +433,10 @@ const mapDetailUser = (raw: any, id: number) => {
 		...user.value,
 		id: envelope.user_id != null ? Number(envelope.user_id) : (card.id != null ? Number(card.id) : id),
 		name: value(nickname, card.name, user.value.name),
+		detailLocked,
 		age,
 		avatar,
-		isVIP: card.isVip === true || card.isVIP === true || profile.isVip === true || profile.isVIP === true,
+		isVIP: card.is_vip === true || card.isVip === true || card.isVIP === true || profile.is_vip === true || profile.isVip === true || profile.isVIP === true,
 		job,
 		edu,
 		city,
@@ -499,8 +503,7 @@ const refreshLockedView = () => {
 	isLockedView.value =
 		!isPreview.value &&
 		!isOwnProfile.value &&
-		viewerIsVip.value !== true &&
-		targetIsVip
+		(user.value.detailLocked === true || (viewerIsVip.value !== true && targetIsVip))
 }
 
 const loadViewerMembership = async () => {
@@ -527,7 +530,8 @@ onMounted(async () => {
 	await load()
 })
 
-onShow(() => {
+onShow(async () => {
+	await loadViewerMembership()
 	refreshLockedView()
 })
 

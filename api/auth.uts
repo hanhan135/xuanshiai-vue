@@ -48,6 +48,18 @@ export async function loginByPhone(phone: string, code: string) {
   return res
 }
 
+export async function getAgreementVersions() {
+  return request({ url: '/auth/agreements', method: 'GET', skipAuth: true })
+}
+
+export async function acceptAgreement(agreementType: string, version: string, scene: string = 'profile') {
+  return request({
+    url: '/auth/agreements/accept',
+    method: 'POST',
+    data: { agreement_type: agreementType, version, scene }
+  })
+}
+
 /** Development/testing login for an already-created account. */
 export async function loginByExistingAccount(phone: string, password: string) {
   const res = await request({

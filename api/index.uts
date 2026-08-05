@@ -6,6 +6,8 @@
 // 认证相关
 export {
   getProfileCompletion,
+  getAgreementVersions,
+  acceptAgreement,
   sendSms,
   loginByExistingAccount,
   loginByPhone,

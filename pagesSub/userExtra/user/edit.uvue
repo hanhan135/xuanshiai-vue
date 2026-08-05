@@ -31,7 +31,7 @@
 
 			<view class="section-card avatar-section">
 				<view class="section-heading">
-					<text class="section-title">头像</text>
+					<text class="section-title">头像 · +15%</text>
 					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
 				</view>
 				<view class="avatar-row">
@@ -45,7 +45,7 @@
 			</view>
 
 			<view class="section-card album-card">
-				<view class="section-heading"><text class="section-title">我的相册</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
+				<view class="section-heading"><text class="section-title">我的相册 · +10%</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
 				<view class="album-grid">
 					<view class="album-cell" v-for="(photo, index) in formData.photos" :key="photo.id != null ? photo.id : index">
 						<image class="album-photo" :src="photo.url" mode="aspectFill"></image>
@@ -69,19 +69,19 @@
 			<view class="section-card preview-card">
 				<view class="section-heading">
 					<text class="section-title">基础信息</text>
-					<view class="pill-action" @tap="detailSheetVisible = true"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
+					<view class="pill-action" @tap="openBasicEditor"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
 				</view>
 				<view class="preview-list">
-					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ agePreview }}</text></view>
-					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ formData.height != '' ? formData.height + ' cm' : '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ formData.weight != '' ? formData.weight + ' kg' : '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ educationText == '未选择' ? '未填写' : educationText }}</text></view>
-					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ formData.residenceCityCode || '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ formData.hometown || '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ occupationPreview }}</text></view>
-					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ incomePreview }}</text></view>
-					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ maritalText == '未选择' ? '未填写' : maritalText }}</text></view>
-					<view class="preview-row"><text class="preview-label">脱单目标</text><text class="preview-value">{{ formData.tagSelections?.relationshipGoal || '未填写' }}</text></view>
+					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ agePreview }} · +7%</text></view>
+					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ formData.height != '' ? formData.height + ' cm' : '未填写' }} · +4%</text></view>
+					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ formData.weight != '' ? formData.weight + ' kg' : '未填写' }} · 不计入</text></view>
+					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ educationText == '未选择' ? '未填写' : educationText }} · +4%</text></view>
+					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ formData.residenceCityCode || '未填写' }} · +7%</text></view>
+					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ formData.hometown || '未填写' }} · 不计入</text></view>
+					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ occupationPreview }} · +4%</text></view>
+					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ incomePreview }} · +4%</text></view>
+					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ maritalText == '未选择' ? '未填写' : maritalText }} · +5%</text></view>
+					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ formData.mbti || '未填写' }} · +2%</text></view>
 					<view class="preview-row"><text class="preview-label">微信号</text><text class="preview-value">{{ formData.wechat || '仅作为紧急联系' }}</text></view>
 				</view>
 			</view>
@@ -89,7 +89,7 @@
 			<view class="section-card certification-card">
 				<view class="section-heading">
 					<text class="section-title">四重认证</text>
-					<text class="section-caption">已完成 {{ completedCertCount }}/4</text>
+					<text class="section-caption">已完成 {{ completedCertCount }}/4 · 实名+5% / 单身承诺+5%</text>
 				</view>
 				<view class="cert-row" v-for="cert in certifications" :key="cert.key">
 					<view class="cert-icon-wrap" :class="{ 'cert-icon-done': cert.passed }"><text class="cert-icon">{{ cert.icon }}</text></view>
@@ -100,18 +100,33 @@
 			</view>
 
 			<view class="section-card intro-card">
-				<text class="section-title">自我介绍</text>
+				<text class="section-title">自我介绍 · +10%</text>
 				<textarea class="intro-main-input" :value="formData.introduction" maxlength="1000" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
 				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
 			</view>
 
 			<view class="section-card tags-card" @tap="goTagsEdit">
-				<view class="section-heading"><text class="section-title">我的标签</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
-				<text class="section-caption">选择最能代表你的个性标签（最多20个）</text>
+				<view class="section-heading"><text class="section-title">兴趣标签 · +5%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">选择能代表你的兴趣爱好</text>
 				<view class="tag-list">
-					<view class="tag-chip" v-for="tag in displayTags" :key="tag"><text>{{ tag }}</text></view>
-					<view class="tag-chip tag-add"><text>+ 添加</text></view>
+					<view class="tag-chip" v-for="tag in interestDisplayTags" :key="'interest-' + tag"><text>{{ tag }}</text></view>
+					<view v-if="interestDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
 				</view>
+			</view>
+
+			<view class="section-card tags-card" @tap="goTagsEdit">
+				<view class="section-heading"><text class="section-title">性格标签 · +3%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">选择能代表你的性格特征</text>
+				<view class="tag-list">
+					<view class="tag-chip tag-accent" v-for="tag in personalityDisplayTags" :key="'personality-' + tag"><text>{{ tag }}</text></view>
+					<view v-if="personalityDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
+				</view>
+			</view>
+
+			<view class="section-card preference-card" @tap="openPreferenceEditor">
+				<view class="section-heading"><text class="section-title">择偶标准 · +3%</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">设置你期待的年龄、身高、学历和距离范围</text>
+				<view class="preference-summary"><text>{{ preferencePreview }}</text></view>
 			</view>
 
 			<view class="section-card qa-card">
@@ -134,14 +149,26 @@
 			<view class="scroll-bottom-spacer"></view>
 		</scroll-view>
 
+		<view v-if="singlePledgeVisible" class="pledge-overlay" @tap="closeSinglePledge">
+			<view class="pledge-dialog" @tap.stop>
+				<text class="pledge-title">单身承诺</text>
+				<text class="pledge-copy">我确认当前为单身状态，并承诺填写的信息真实有效。如状态发生变化，我会及时更新资料。</text>
+				<view class="pledge-actions">
+					<view class="pledge-cancel" @tap="closeSinglePledge"><text>暂不承诺</text></view>
+					<view class="pledge-confirm" :class="{ disabled: singlePledgeSubmitting }" @tap="confirmSinglePledge"><text>{{ singlePledgeSubmitting ? '提交中...' : '同意并承诺' }}</text></view>
+				</view>
+			</view>
+		</view>
+
 		<view class="sheet-overlay" v-if="detailSheetVisible" @click="detailSheetVisible = false">
 			<view class="sheet-panel" @click.stop>
 				<view class="sheet-handle"></view>
 				<view class="sheet-nav">
-					<text class="sheet-title">编辑资料</text>
+					<text class="sheet-title">{{ editSheetMode == 'preference' ? '择偶标准' : '编辑资料' }}</text>
 					<text class="sheet-close" @tap="detailSheetVisible = false">✕</text>
 				</view>
 				<scroll-view class="sheet-body" scroll-y enhanced show-scrollbar="false">
+					<view v-if="editSheetMode == 'basic'">
 					<view class="sheet-row">
 						<text class="sheet-row-label">昵称</text>
 						<input class="sheet-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" /><text class="sheet-row-arrow">›</text>
@@ -213,7 +240,8 @@
 						<text class="sheet-row-label">微信号</text>
 						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" /><text class="sheet-row-arrow">›</text>
 					</view>
-					<view class="sheet-divider"></view>
+					</view>
+					<view v-if="editSheetMode == 'preference'">
 					<view class="sheet-section-label">择偶要求</view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">年龄下限</text>
@@ -254,6 +282,7 @@
 						<text class="sheet-row-label">其他要求</text>
 						<textarea class="sheet-textarea" :value="formData.extraRequirement" maxlength="255" placeholder="填写希望对方了解的边界" @input="onInput('extraRequirement', $event)"></textarea>
 					</view>
+					</view>
 					<view class="sheet-bottom-spacer"></view>
 				</scroll-view>
 				<view class="sheet-footer">
@@ -282,7 +311,7 @@
 </template>
 
 <script setup lang="uts">
-	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile } from '@/api'
+	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile, getProfileCompletion, getAgreementVersions, acceptAgreement } from '@/api'
 	import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
 	import locationJson from '@/static/location.json'
@@ -304,6 +333,10 @@
 	const cropDragOriginY = ref(0)
 	const cropDragging = ref(false)
 	const detailSheetVisible = ref(false)
+	const editSheetMode = ref('basic')
+	const singlePledgeVisible = ref(false)
+	const singlePledgeSubmitting = ref(false)
+	const singlePledgePassed = ref(false)
 	const realNameStatus = ref('missing')
 	const educationStatus = ref('missing')
 	const genderOptions = ['未选择', '男', '女']
@@ -477,6 +510,24 @@
 		return raw
 	}
 
+	const refreshCompletion = async () => {
+		try {
+			const completion = await getProfileCompletion()
+			if (!completion.success || completion.data == null) return
+			const data = completion.data as any
+			if (data.score != null) completionScore.value = Math.round(Number(data.score))
+			const items = Array.isArray(data.items) ? data.items as any[] : []
+			for (const item of items) {
+				if (item.key == 'single_pledge') {
+					singlePledgePassed.value = item.completed == true
+					break
+				}
+			}
+		} catch (e) {
+			console.error('[EditProfile] completion refresh failed', e)
+		}
+	}
+
 	const load = async () => {
 		loading.value = true
 		loadError.value = ''
@@ -508,6 +559,7 @@
 			} catch (meError) {
 				console.error('[EditProfile] auth profile unavailable', meError)
 			}
+			await refreshCompletion()
 		} catch (e) {
 			loadError.value = '网络不可用，请重试'
 		} finally {
@@ -555,35 +607,49 @@
 	const incomePreview = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '未填写')
 	const incomePreviewText = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '请选择')
 	const completedCertCount = computed(() => certifications.value.filter((c: any) => c.passed).length)
-	const displayTags = computed(() => {
+	const groupedTags = (categoryId: string): string[] => {
 		const result: string[] = []
 		const selections = formData.value.tagSelections
-		let hasGroupedTags = false
 		if (selections != null && typeof selections === 'object') {
-			for (const category of TAG_CATEGORIES) {
-				const values = selections[category.id]
-				if (Array.isArray(values)) {
-					hasGroupedTags = true
-					for (const value of values as string[]) result.push(value)
-				}
+			const values = selections[categoryId]
+			if (Array.isArray(values)) {
+				for (const value of values as string[]) result.push(value)
 			}
 		}
-		if (!hasGroupedTags) {
-			for (const tag of formData.value.interestTags) result.push(tag)
-			for (const tag of formData.value.personalityTags) result.push(tag)
+		return result
+	}
+	const interestDisplayTags = computed(() => {
+		const grouped: string[] = []
+		for (const category of TAG_CATEGORIES) {
+			if (category.id != 'personality') {
+				for (const tag of groupedTags(category.id)) grouped.push(tag)
+			}
 		}
-		return result.slice(0, 20)
+		return grouped.length > 0 ? grouped.slice(0, 20) : formData.value.interestTags.slice(0, 20)
+	})
+	const personalityDisplayTags = computed(() => {
+		const grouped = groupedTags('personality')
+		return grouped.length > 0 ? grouped.slice(0, 20) : formData.value.personalityTags.slice(0, 20)
+	})
+	const preferencePreview = computed(() => {
+		const age = formData.value.ageMin != '' || formData.value.ageMax != '' ? (formData.value.ageMin || '不限') + '-' + (formData.value.ageMax || '不限') + '岁' : '年龄不限'
+		const height = formData.value.heightMin != '' || formData.value.heightMax != '' ? (formData.value.heightMin || '不限') + '-' + (formData.value.heightMax || '不限') + 'cm' : '身高不限'
+		const education = formData.value.educationMin != '' ? educationOptions[Number(formData.value.educationMin)] || '学历不限' : '学历不限'
+		return age + ' · ' + height + ' · ' + education
 	})
 	const certifications = computed(() => [
 		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
 		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
 		{ key: 'avatar', label: '头像认证', icon: '像', passed: false, desc: '上传真实本人照片' },
-		{ key: 'marriage', label: '婚况认证', icon: '♥', passed: false, desc: '提交婚况证明材料' }
+		{ key: 'single_pledge', label: '单身承诺', icon: '誓', passed: singlePledgePassed.value, desc: singlePledgePassed.value ? '已签署单身承诺' : '确认当前为单身状态' }
 	])
 
 	onMounted(() => load())
 	onShow(() => {
-		if (!loading.value) syncLocalTagDraft()
+		if (!loading.value) {
+			syncLocalTagDraft()
+			refreshCompletion()
+		}
 	})
 
 	const onInput = (field: string, event: any) => {
@@ -645,6 +711,7 @@
 				uni.showToast({ title: res.message != null ? '' + res.message : '上传失败，请重试', icon: 'none' })
 				return null
 			}
+			await refreshCompletion()
 			return res.data
 		} catch (e) {
 			uni.showToast({ title: '上传失败，请检查网络', icon: 'none' })
@@ -789,11 +856,42 @@
 		const item = list[index]
 		if (item.id == null || Number(item.id) <= 0) return
 		const res = await deleteUserProfilePhoto(Number(item.id))
-		if (res.success) list.splice(index, 1)
+		if (res.success) {
+			list.splice(index, 1)
+			await refreshCompletion()
+		}
 		else uni.showToast({ title: res.message != null ? '' + res.message : '删除失败，请重试', icon: 'none' })
 	}
 
-	const goCertification = (key: string) => uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	const goCertification = (key: string) => {
+		if (key == 'single_pledge') {
+			singlePledgeVisible.value = true
+			return
+		}
+		uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	}
+	const closeSinglePledge = () => { if (!singlePledgeSubmitting.value) singlePledgeVisible.value = false }
+	const confirmSinglePledge = async () => {
+		if (singlePledgeSubmitting.value) return
+		singlePledgeSubmitting.value = true
+		try {
+			const versionsRes = await getAgreementVersions()
+			const versions = versionsRes.success && versionsRes.data != null ? versionsRes.data as any : {}
+			const safetyPledge = versions.safety_pledge != null ? versions.safety_pledge : {}
+			const version = safetyPledge.version != null ? '' + safetyPledge.version : 'v1'
+			const res = await acceptAgreement('safety_pledge', version, 'profile')
+			if (!res.success) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '提交失败，请重试', icon: 'none' })
+				return
+			}
+			singlePledgePassed.value = true
+			singlePledgeVisible.value = false
+			await refreshCompletion()
+			uni.showToast({ title: '单身承诺已完成', icon: 'success' })
+		} finally {
+			singlePledgeSubmitting.value = false
+		}
+	}
 	const goTagsEdit = () => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit' })
 	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
 
@@ -834,6 +932,14 @@
 
 	const onCancel = () => {
 		uni.navigateBack({ delta: 1 })
+	}
+	const openBasicEditor = () => {
+		editSheetMode.value = 'basic'
+		detailSheetVisible.value = true
+	}
+	const openPreferenceEditor = () => {
+		editSheetMode.value = 'preference'
+		detailSheetVisible.value = true
 	}
 	const cancelDetailEdit = () => {
 		if (!saving.value && !uploadingMedia.value) detailSheetVisible.value = false
@@ -888,6 +994,7 @@
 				return
 			}
 			formData.value.nickname = value
+			await refreshCompletion()
 			uni.showToast({ title: '昵称已保存', icon: 'success' })
 		} finally {
 			saving.value = false
@@ -923,6 +1030,7 @@
 				uni.showToast({ title: preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求保存失败', icon: 'none' })
 				return
 			}
+			await refreshCompletion()
 			uni.showToast({ title: '资料已保存', icon: 'success' })
 			if (detailSheetVisible.value) detailSheetVisible.value = false
 			else setTimeout(() => uni.navigateBack({ delta: 1 }), 700)
@@ -1051,6 +1159,9 @@
 .tag-chip { padding: 6px 14px; border-radius: 999px; background: var(--warm); color: var(--ink2); font-size: 13px; font-weight: 500; }
 .tag-chip.tag-accent { background: var(--sage-soft); color: var(--sage); }
 .tag-chip.tag-add { background: var(--sage-soft); color: var(--sage); font-weight: 600; }
+.tag-empty { padding: 6px 0; color: var(--muted); font-size: 13px; }
+.preference-card { gap: 8px; }
+.preference-summary { padding: 12px 14px; border-radius: 12px; background: var(--warm); color: var(--ink2); font-size: 13px; line-height: 1.5; }
 
 /* QA */
 .qa-card { gap: 8px; }
@@ -1068,6 +1179,15 @@
 
 /* Sheet overlay */
 .sheet-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; width: 100%; height: 100vh; background: rgba(12,19,19,0.36); z-index: 100; display: flex; align-items: flex-end; }
+.pledge-overlay { position: fixed; z-index: 120; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; background: rgba(12,19,19,0.38); }
+.pledge-dialog { width: 100%; padding: 24px 20px 20px; box-sizing: border-box; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-md); }
+.pledge-title { display: block; color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; }
+.pledge-copy { display: block; margin-top: 14px; color: var(--ink2); font-size: 14px; line-height: 1.7; }
+.pledge-actions { display: flex; flex-direction: row; gap: 12px; margin-top: 22px; }
+.pledge-cancel, .pledge-confirm { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; font-size: 14px; font-weight: 700; }
+.pledge-cancel { border: 1px solid var(--line); color: var(--ink2); background: var(--paper); }
+.pledge-confirm { color: var(--text-invert); background: var(--sage); }
+.pledge-confirm.disabled { opacity: .55; }
 .sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 80vh; max-height: 80vh; min-height: 0; background: var(--surface); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; }
 .sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 10px auto 0; flex-shrink: 0; }
 .sheet-nav { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 12px 18px 10px; position: relative; }
