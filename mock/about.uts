@@ -9,7 +9,6 @@ export const mockArticles = [
 	{ title: '隐私政策', type: 'privacy', clickable: true },
 	{ title: '儿童/青少年个人信息保护规则及监护人须知', type: 'children', clickable: true },
 	{ title: '第三方信息共享清单', type: 'thirdparty', clickable: true },
-	{ title: '微信开放平台开发者服务协议', type: 'wechat_dev', clickable: true },
 	{ title: '平台管理规范', type: 'platform_mgmt', clickable: true },
 	{ title: '平台社区规范', type: 'community_norm', clickable: true },
 	{ title: '大模型生成式人工智能服务协议', type: 'ai_service', clickable: true },
@@ -233,44 +232,6 @@ export const articleContentMap: Record<string, { title: string, content: string,
 - 收集信息类型：上传的图片和文件
 
 我们会持续更新本清单。如您对第三方信息共享有任何疑问，请通过意见反馈联系我们。`
-	},
-
-	wechat_dev: {
-		title: '微信开放平台开发者服务协议',
-		updatedAt: '2026-06-01',
-		content: `微信开放平台开发者服务协议
-
-本协议是您与腾讯之间关于使用微信开放平台服务所订立的协议。
-
-一、服务说明
-
-1.1 微信开放平台为您提供包括微信登录、微信支付、微信分享等技术服务。
-
-1.2 您可以通过接入微信开放平台，为您的用户提供便捷的微信生态服务。
-
-二、开发者义务
-
-2.1 您应遵守微信开放平台的技术规范和使用规则。
-
-2.2 您不得以任何方式篡改、破解或绕过微信开放平台的任何功能。
-
-2.3 您应妥善保管开发者账号和相关密钥信息。
-
-三、用户数据保护
-
-3.1 您在获取用户数据前应获得用户明确授权。
-
-3.2 您不得超出授权范围使用用户数据，不得未经用户同意将数据传输给第三方。
-
-四、服务变更与终止
-
-4.1 腾讯有权根据业务需要调整开放平台服务内容。
-
-4.2 如您违反本协议，腾讯有权终止向您提供开放平台服务。
-
-五、其他
-
-本协议的最终解释权归腾讯所有。`
 	},
 
 	platform_mgmt: {

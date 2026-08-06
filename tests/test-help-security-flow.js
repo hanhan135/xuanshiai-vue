@@ -4,6 +4,7 @@ const assert = require('assert')
 
 const root = path.join(__dirname, '..')
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const app = read('App.uvue')
 const profile = read('pages/profile/profile.uvue')
 const settings = read('pagesSub/profileExtra/settings.uvue')
 const help = read('pagesSub/profileExtra/help.uvue')
@@ -26,6 +27,8 @@ const checks = [
   ['security shows usage norms removed', !security.includes('用户使用规范') && !securityMock.includes('使用真实资料') && security.includes('我的安全设置')],
   ['security shows report and appeal records', security.includes('举报与申诉记录') && security.includes('getMyReports') && security.includes('getMyReportAppeals') && security.includes('toggleRecords')],
   ['security removes hero privacy badge', !security.includes('hero-shield') && !security.includes('隐私守护') && !securityMock.includes('badge')],
+  ['security removes safety row icons', !security.includes('security-item-icon') && !security.includes('class="block"') && !security.includes('class="records"')],
+  ['security uses light warm hero gradient', security.includes('linear-gradient(135deg, var(--security-hero) 0%, var(--paper) 100%)') && security.includes('border-radius: 28px') && app.includes('--security-hero: #E5F7E7;')],
   ['security places operation guide before fraud', security.indexOf('我的安全设置') < security.indexOf('需要操作指引') && security.indexOf('需要操作指引') < security.indexOf('反诈宣传')],
   ['security displays fraud articles', security.includes('fraudArticles') && securityMock.includes('识别冒充诈骗') && securityMock.includes('远离投资转账骗局') && security.includes('openArticle(article.type)')],
   ['profile routes help page', profile.includes("url: '/pagesSub/profileExtra/help'")],
@@ -33,6 +36,7 @@ const checks = [
   ['registered help route', routes.includes('"path": "help"')],
   ['registered security route', routes.includes('"path": "security"')],
   ['settings routes feedback', settings.includes("/pagesSub/profileExtra/help?open=feedback")],
+  ['settings secondary labels use larger type', settings.includes('.label {') && settings.includes('font-size: 36rpx;')],
   ['help api exports FAQ center', helpApi.includes('getHelpCenter') && helpApi.includes('HelpCategory')],
   ['help mock has five FAQ categories', ['常见问题', '完善资料', '嘉宾推荐', '功能使用', '增值服务'].every((label) => helpMock.includes(label))],
   ['help page has large quick cards', help.includes('ai-card') && help.includes('feedback-card') && help.includes('quick-card-main')],
@@ -52,6 +56,7 @@ const checks = [
   ['fraud article content exists', about.includes('fraud_identity_scam') && about.includes('fraud_investment_scam')],
   ['article error retries', article.includes('@tap="onRetry"')],
   ['governance article exists', about.includes('governance_notice')],
+  ['about removes unnecessary developer agreement', !about.includes('wechat_dev') && !about.includes('开放平台开发者服务协议')],
   ['new pages avoid browser api', !(/window\.|document\.|localStorage|sessionStorage/.test(help + security))]
 ]
 
