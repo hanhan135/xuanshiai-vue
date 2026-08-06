@@ -97,6 +97,7 @@
 		--navy: #18415D;
 		--sage: #28775B;
 		--sage-soft: #C2E0CF;
+		--security-hero: #E5F7E7;
 
 		/* 辅助色 */
 		--bg-hover: #E7ECEC;

@@ -3,7 +3,6 @@
 		<view class="top-bar" :style="{ paddingTop: (statusBarHeight + topBarOffset) + 'px', height: (statusBarHeight + 44 + topBarOffset) + 'px' }">
 			<view class="top-back" @tap="goBack"><text>←</text></view>
 			<text class="top-title">我的任务</text>
-			<view class="top-actions"><text>⋯</text><text class="top-dot"></text></view>
 		</view>
 
 		<scroll-view scroll-y class="content-scroll" show-scrollbar="false">
@@ -23,19 +22,14 @@
 
 			<view class="checkin-section">
 				<view class="section-heading">
-					<text class="section-title">签到日历</text>
+					<text class="section-title">每日抽签</text>
 					<view class="streak-badge"><text>🔥</text><text>已连续签到 {{ streakDays }} 天</text></view>
 				</view>
-				<view class="calendar-row">
-					<view v-for="day in calendarDays" :key="day.day" class="calendar-day">
-						<view class="day-circle" :class="day.checked ? 'day-checked' : (day.today ? 'day-today' : '')">
-							<text>{{ day.checked ? '✓' : day.day }}</text>
-						</view>
-						<text class="day-reward">+{{ day.reward }}</text>
-					</view>
-				</view>
-				<view class="checkin-button" :class="checkInDone ? 'checkin-button-done' : ''" @tap="checkIn">
-					<text class="checkin-icon">✋</text><text>{{ checkInDone ? '今日已签到' : '立即签到 +10' }}</text>
+				<view class="daily-draw-card" :class="checkInDone ? 'daily-draw-card-done' : ''" @tap="drawCheckIn">
+					<text class="draw-card-label">DAILY BLESSING</text>
+					<text class="draw-card-number">{{ drawResult != null ? drawResult.number : '—' }}</text>
+					<text class="draw-card-message">{{ drawResult != null ? drawResult.message : '轻触翻开今天的祝福' }}</text>
+					<text class="draw-card-action">{{ checkInDone ? '今日祝福已收下 · 积分 +10' : '轻触抽签，领取今日祝福' }}</text>
 				</view>
 			</view>
 
@@ -43,8 +37,8 @@
 				<text class="section-title">积分获取</text>
 				<view class="earn-card">
 					<view class="earn-icon"><text>📅</text></view>
-					<view class="earn-copy"><text class="earn-title">每日签到领积分</text><text class="earn-desc">每天签到可获得积分，连续签到奖励更多</text></view>
-					<view class="small-action" :class="checkInDone ? 'small-action-done' : ''" @tap="checkIn"><text>{{ checkInDone ? '已签到' : '签到领积分' }}</text></view>
+					<view class="earn-copy"><text class="earn-title">每日抽签领积分</text><text class="earn-desc">每天抽一支签，收下一句温柔祝福</text></view>
+					<view class="small-action" :class="checkInDone ? 'small-action-done' : ''" @tap="drawCheckIn"><text>{{ checkInDone ? '已抽签' : '抽签领积分' }}</text></view>
 				</view>
 				<view class="earn-card">
 					<view class="earn-icon"><text>👥</text></view>
@@ -125,9 +119,9 @@
 </template>
 
 <script setup lang="uts">
-type CalendarDay = { day: number; reward: number; checked: boolean; today: boolean }
 type PurchasePackage = { points: number; pointsText: string; price: number }
 type ExchangeItem = { key: string; name: string; cost: number }
+type DrawBlessing = { number: string; title: string; message: string }
 
 const points = ref(1280)
 const systemInfo = uni.getSystemInfoSync()
@@ -138,6 +132,7 @@ const activeSheet = ref('')
 const selectedPackage = ref(0)
 const selectedExchangeItem = ref(0)
 const exchangeQuantity = ref(1)
+const drawResult = ref(null as DrawBlessing | null)
 
 const purchasePackages: PurchasePackage[] = [
 	{ points: 100, pointsText: '100', price: 6 },
@@ -151,16 +146,15 @@ const exchangeItems: ExchangeItem[] = [
 	{ key: 'apply', name: '申请认识次数', cost: 50 },
 	{ key: 'plane', name: '纸飞机', cost: 30 }
 ]
+const drawBlessings: DrawBlessing[] = [
+	{ number: '01', title: '静候花开签', message: '愿你今天从容表达，也被认真倾听。' },
+	{ number: '02', title: '温柔相待签', message: '愿你保留真诚，也遇见尊重这份真诚的人。' },
+	{ number: '03', title: '平安顺遂签', message: '愿你把日子过稳，把喜欢留给值得的人。' }
+]
 
 const pointsText = computed(() => points.value.toLocaleString())
 const streakDays = computed(() => checkedDays.value.length)
 const checkInDone = computed(() => checkedDays.value.indexOf(4) >= 0)
-const calendarDays = computed<CalendarDay[]>(() => [1, 2, 3, 4, 5, 6, 7].map((day) => ({
-	day,
-	reward: day === 7 ? 20 : 10,
-	checked: checkedDays.value.indexOf(day) >= 0,
-	today: day === 4
-})))
 const exchangeCost = computed(() => exchangeItems[selectedExchangeItem.value].cost * exchangeQuantity.value)
 
 const goBack = () => { uni.navigateBack() }
@@ -173,11 +167,12 @@ const selectExchangeItem = (index: number) => { selectedExchangeItem.value = ind
 const increaseExchange = () => { exchangeQuantity.value += 1 }
 const decreaseExchange = () => { if (exchangeQuantity.value > 1) exchangeQuantity.value -= 1 }
 
-const checkIn = () => {
+const drawCheckIn = () => {
 	if (checkInDone.value) return
+	drawResult.value = drawBlessings[checkedDays.value.length % drawBlessings.length]
 	checkedDays.value.push(4)
 	points.value += 10
-	uni.showToast({ title: '签到成功，积分 +10', icon: 'success' })
+	uni.showToast({ title: '抽签成功，积分 +10', icon: 'success' })
 }
 
 const confirmPurchase = () => {
@@ -231,11 +226,9 @@ const goMyPosters = () => {
 	--task-gold: #C9A96E;
 	--task-gold-text: #B8944A;
 }
-.top-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding-left: 32rpx; padding-right: 32rpx; box-sizing: border-box; background-color: var(--task-paper); }
-.top-back { width: 56rpx; font-size: 36rpx; color: var(--task-text); }
+.top-bar { position: relative; flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: center; padding-left: 32rpx; padding-right: 32rpx; box-sizing: border-box; background-color: var(--task-paper); }
+.top-back { position: absolute; left: 32rpx; width: 56rpx; font-size: 36rpx; color: var(--task-text); }
 .top-title { color: var(--task-text); font-size: 34rpx; font-weight: 500; }
-.top-actions { width: 90rpx; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 24rpx; color: var(--task-text); font-size: 36rpx; }
-.top-dot { width: 26rpx; height: 26rpx; border-radius: 50%; background-color: var(--task-text); }
 .content-scroll { flex: 1; min-height: 0; box-sizing: border-box; background-color: var(--task-bg); }
 .points-section, .checkin-section { padding: 28rpx 32rpx 0; }
 .points-card { display: flex; flex-direction: column; align-items: center; gap: 20rpx; padding: 36rpx 36rpx 28rpx; border-radius: 32rpx; background: linear-gradient(135deg, #E8EDE4 0%, #DCE5D6 60%, #F0EBE0 100%); }
@@ -248,18 +241,12 @@ const goMyPosters = () => {
 .section-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 24rpx; }
 .section-title { color: var(--task-text); font-size: 32rpx; font-weight: 600; }
 .streak-badge { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 12rpx 24rpx; border-radius: 9999rpx; color: var(--task-gold-text); background-color: var(--task-gold-light); font-size: 24rpx; font-weight: 500; }
-.calendar-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-.calendar-day { display: flex; flex-direction: column; align-items: center; gap: 12rpx; }
-.day-circle { width: 76rpx; height: 76rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--task-secondary); background-color: var(--task-card); border: 1.5px solid var(--task-border); font-size: 30rpx; }
-.day-checked { color: var(--task-paper); background-color: var(--task-green); border-color: var(--task-green); font-weight: 700; }
-.day-today { color: var(--task-green-deep); background-color: var(--task-paper); border: 2px solid var(--task-green); }
-.day-reward { color: var(--task-muted); font-size: 24rpx; font-weight: 400; }
-.calendar-day:nth-child(4) .day-reward { color: var(--task-green-deep); }
-.calendar-day:nth-child(7) .day-circle { color: var(--task-gold-text); background-color: var(--task-gold-light); border: 2px solid var(--task-gold); font-weight: 700; }
-.calendar-day:nth-child(7) .day-reward { color: var(--task-gold-text); font-size: 26rpx; font-weight: 700; }
-.checkin-button { width: 244rpx; min-height: 70rpx; margin: 24rpx auto 0; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 12rpx; border-radius: 9999rpx; color: var(--task-text); background: linear-gradient(90deg, #D4E4D0 0%, #BCD4B6 100%); font-size: 26rpx; font-weight: 600; }
-.checkin-icon { font-size: 28rpx; }
-.checkin-button-done { color: var(--task-muted); background: var(--task-sage); }
+.daily-draw-card { min-height: 260rpx; padding: 36rpx 28rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10rpx; border: 1px solid var(--task-border); border-radius: 24rpx; box-sizing: border-box; text-align: center; background-color: var(--task-paper); }
+.daily-draw-card-done { background-color: var(--task-card); }
+.draw-card-label { color: var(--task-green-deep); font-size: 20rpx; font-weight: 700; }
+.draw-card-number { color: var(--task-gold-text); font-family: var(--serif); font-size: 42rpx; font-weight: 700; line-height: 1.1; }
+.draw-card-message { color: var(--task-text); font-family: var(--serif); font-size: 28rpx; font-weight: 700; line-height: 1.45; }
+.draw-card-action { margin-top: 6rpx; color: var(--task-green-deep); font-size: 22rpx; font-weight: 700; }
 .earn-section { display: flex; flex-direction: column; gap: 24rpx; padding: 24rpx 32rpx 0; }
 .earn-card { display: flex; flex-direction: row; align-items: center; padding: 32rpx; border: 1px solid var(--task-border); border-radius: 24rpx; background-color: var(--task-card); box-shadow: 0 2px 10px rgba(36, 55, 40, 0.04); }
 .earn-icon { width: 80rpx; height: 80rpx; margin-right: 24rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--task-green-deep); background-color: var(--task-sage); font-size: 40rpx; }
