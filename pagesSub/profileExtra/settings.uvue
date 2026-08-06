@@ -710,8 +710,8 @@ const handleLogout = () => {
 }
 
 .label {
-	font-size: 31rpx;
-	font-weight: 600;
+	font-size: 33rpx;
+	font-weight: 400;
 	color: #1A1A1A;
 }
 

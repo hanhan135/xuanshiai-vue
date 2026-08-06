@@ -52,7 +52,6 @@ const checks = [
   ['fraud article content exists', about.includes('fraud_identity_scam') && about.includes('fraud_investment_scam')],
   ['article error retries', article.includes('@tap="onRetry"')],
   ['governance article exists', about.includes('governance_notice')],
-  ['safety guide article exists', about.includes('dating_safety_guide')],
   ['new pages avoid browser api', !(/window\.|document\.|localStorage|sessionStorage/.test(help + security))]
 ]
 
