@@ -1,150 +1,599 @@
 <template>
 	<view class="search-page">
-		<view class="search-nav">
-			<view class="nav-back" @tap="goBack"><text>‹</text></view>
-			<text class="nav-title">搜索女生</text>
-			<view class="nav-placeholder"></view>
+		<view v-if="resultState === 'idle'" class="search-form-screen">
+		<view class="search-nav" :style="{ paddingTop: navTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+			<view class="nav-side" @tap="handleBack"><text class="nav-back">‹</text></view>
+			<text class="nav-title" :style="{ top: navTop + 'px' }">搜索</text>
+			<view class="nav-side nav-history" @tap="historyVisible = true"><text>历史</text></view>
+		</view>
+
+		<view class="search-tabs" role="tablist">
+			<view v-for="(tab, index) in tabs" :key="tab" class="search-tab" :class="{ active: activeTab === index }" @tap="activeTab = index"><text>{{ tab }}</text></view>
 		</view>
 
 		<scroll-view class="search-scroll" scroll-y enhanced show-scrollbar="false">
-			<view class="basic-grid">
-				<view class="filter-item">
-					<text class="filter-label">家乡</text>
-					<picker mode="selector" :range="hometownOptions" :value="hometownIndex" @change="onHometownChange"><view class="filter-pill"><text>{{ hometownOptions[hometownIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+			<view v-if="activeTab === 0" class="search-panel ai-panel">
+				<view class="ai-input-wrap">
+					<textarea class="ai-input" :value="aiQuery" maxlength="300" :placeholder="aiPlaceholder" @input="onAiInput"></textarea>
+					<view class="ai-input-foot"><view class="ai-template-trigger" @tap="requestAiSuggestedQuery"><text>猜你喜欢</text></view></view>
 				</view>
-				<view class="filter-item">
-					<text class="filter-label">居住地</text>
-					<picker mode="selector" :range="residenceOptions" :value="residenceIndex" @change="onResidenceChange"><view class="filter-pill"><text>{{ residenceOptions[residenceIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
-				</view>
-				<view class="filter-item">
-					<text class="filter-label">年龄(年)</text>
-					<picker mode="selector" :range="ageOptions" :value="ageIndex" @change="onAgeChange"><view class="filter-pill"><text>{{ ageOptions[ageIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
-				</view>
-				<view class="filter-item">
-					<text class="filter-label">身高(CM)</text>
-					<picker mode="selector" :range="heightOptions" :value="heightIndex" @change="onHeightChange"><view class="filter-pill"><text>{{ heightOptions[heightIndex] }}</text><text class="pill-arrow">⌄</text></view></picker>
+
+				<view class="ai-filter-groups">
+					<view class="ai-filter-row"><text class="filter-row-label">地域</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in regionOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiRegion === item }" @tap="aiRegion = item"><text>{{ item }}</text></view></scroll-view></view>
+					<view class="ai-filter-row"><text class="filter-row-label">边界</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in boundaryOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiBoundary === item }" @tap="aiBoundary = item"><text>{{ item }}</text></view></scroll-view></view>
+					<view class="ai-filter-row"><text class="filter-row-label">兴趣</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in interestOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiInterests.indexOf(item) >= 0 }" @tap="toggleInterest(item)"><text>{{ item }}</text></view></scroll-view></view>
 				</view>
 			</view>
 
-			<view class="vip-card" @tap="openVip">
-				<view class="vip-heading"><view><text class="vip-title"><text class="ic ic-home ic-star vip-icon"></text> VIP高级筛选</text><text class="vip-subtitle">更精准地找到契合对象</text></view><text class="vip-arrow">›</text></view>
-				<view v-for="(row, rowIndex) in vipRows" :key="rowIndex" class="vip-filter-line"><view class="vip-chip-row"><text v-for="item in row" :key="rowIndex + '-' + item.label + '-' + item.value" class="vip-chip-label">{{ item.label }}</text></view><view class="vip-value-row"><text v-for="item in row" :key="rowIndex + '-' + item.value + '-' + item.label" class="vip-chip-value">{{ item.value }}</text></view></view>
+			<view v-else-if="activeTab === 1" class="search-panel mbti-panel">
+				<view class="personality-card" @tap="openSelfSheet">
+					<text class="personality-label">我是</text>
+					<text class="personality-value">{{ ownMbtiSummary }}</text>
+					<text class="personality-note">{{ ownMbtiNote }}</text>
+					<text class="personality-arrow">›</text>
+				</view>
+				<view class="personality-card seeking-card" @tap="openTargetSheet">
+					<text class="personality-label">寻找</text>
+					<text class="personality-value">理想的人格类型</text>
+					<view v-if="targetMbtis.length > 0" class="selected-mbti-tags"><XsaTag v-for="item in targetMbtis" :key="item" variant="accent" size="small">{{ item }}</XsaTag></view>
+					<text v-else class="personality-note">点击选择</text>
+					<text class="personality-arrow">›</text>
+				</view>
+				<view class="mbti-tag-cloud"><text>INTJ</text><text>ENFP</text><text>INFJ</text><text>ENTP</text><text>ISFJ</text></view>
+				<text class="mbti-balance-copy">同频的人，终会相遇</text>
 			</view>
 
-			<view class="mbti-card">
-				<view class="mbti-heading"><view><text class="mbti-title">MBTI交友匹配</text><text class="mbti-subtitle">完成测试，找到性格契合的人</text></view><view class="mbti-actions"><view class="mbti-add" @tap="openMbti"><text>+</text></view><view class="mbti-arrow" @tap="openMbti"><text>›</text></view></view></view>
-				<view class="mbti-tags"><text v-for="item in mbtiOptions" :key="item" class="mbti-tag" :class="{ selected: selectedMbti === item }" @tap="selectMbti(item)">{{ item }}</text></view>
-				<view class="mbti-match-row"><text class="mbti-title">MBTI交友匹配</text><text class="mbti-subtitle">完成测试，找到性格契合的人</text><view class="mbti-tags second-tags"><text v-for="item in secondMbtiOptions" :key="item" class="mbti-tag" :class="{ selected: selectedMbti === item }" @tap="selectMbti(item)">{{ item }}</text></view></view>
+			<view v-else class="search-panel condition-panel">
+				<view class="condition-group">
+					<text class="condition-label">居住地偏好</text>
+					<view class="condition-control location-row"><picker class="condition-picker" mode="selector" :range="residenceOptions" :value="residenceIndex" @change="onResidenceChange"><view class="picker-value"><text>{{ residenceOptions[residenceIndex] }}</text><text>⌄</text></view></picker><picker class="condition-add-picker" mode="selector" :range="residenceOptions" :value="residenceIndex" @change="onResidenceChange"><view class="condition-add"><text>＋ 添加</text></view></picker></view>
+				</view>
+				<view class="condition-group">
+					<text class="condition-label">年龄偏好 {{ ageOptions[ageIndex] }}</text>
+					<picker class="condition-range-picker" mode="selector" :range="ageOptions" :value="ageIndex" @change="onAgeChange"><view class="range-control"><view class="range-track"></view><view class="range-active age-range"></view><view class="range-handle range-start"></view><view class="range-handle range-end"></view></view></picker>
+				</view>
+				<view class="condition-group condition-toggle-group">
+					<view class="condition-toggle-copy"><text class="condition-label">仅认证用户</text><text class="condition-help">优先展示已认证资料</text></view>
+					<button class="condition-toggle" :class="{ active: certificationOnly }" @tap="certificationOnly = !certificationOnly"><view class="toggle-knob"></view></button>
+				</view>
+
+				<view class="advanced-heading"><text class="condition-label">高级筛选</text><text class="vip-badge">VIP</text></view>
+				<view class="vip-line"><text class="vip-badge small">会员专享</text><text>开通会员后可使用更多筛选条件</text></view>
+				<view class="condition-group vip-condition-group">
+					<text class="condition-label">身高偏好 {{ heightOptions[heightIndex] }}</text>
+					<picker class="condition-range-picker" mode="selector" :range="heightOptions" :value="heightIndex" @change="onHeightChange"><view class="range-control"><view class="range-track"></view><view class="range-active full-range"></view><view class="range-handle full-start"></view><view class="range-handle full-end"></view></view></picker>
+				</view>
+				<view class="condition-group vip-condition-group">
+					<text class="condition-label">收入偏好（年）</text>
+					<view class="condition-choice-grid income-grid"><view v-for="item in incomeOptions" :key="item" class="choice-chip" :class="{ selected: income === item }" @tap="income = item"><text>{{ item }}</text></view></view>
+				</view>
+				<view class="condition-group vip-condition-group">
+					<text class="condition-label">家乡偏好</text>
+					<picker class="wide-condition-picker" mode="selector" :range="hometownOptions" :value="hometownIndex" @change="onHometownChange"><view class="wide-picker-value"><text>{{ hometownOptions[hometownIndex] }}</text><text>›</text></view></picker>
+				</view>
+				<view class="condition-group vip-condition-group">
+					<text class="condition-label">学历偏好</text>
+					<view class="condition-choice-grid education-grid"><view v-for="item in educationOptions" :key="item" class="choice-chip" :class="{ selected: education === item }" @tap="education = item"><text>{{ item }}</text></view></view>
+				</view>
+				<view class="condition-group vip-condition-group">
+					<text class="condition-label">婚况偏好</text>
+					<view class="condition-choice-grid marriage-grid"><view v-for="item in marriageOptions" :key="item" class="choice-chip" :class="{ selected: marriage === item }" @tap="marriage = item"><text>{{ item }}</text></view></view>
+				</view>
 			</view>
 		</scroll-view>
 
-		<view class="bottom-actions"><view class="reset-button" @tap="resetFilters"><text>重置</text></view><view class="search-button" @tap="submitSearch"><text>搜索</text></view></view>
+		<view class="bottom-actions">
+			<button v-if="activeTab === 2" class="reset-button" @tap="resetCondition"><text>重置</text></button>
+			<button class="search-button" :class="{ wide: activeTab !== 2 }" @tap="submitSearch"><text>开始搜索</text></button>
+		</view>
+		</view>
+
+		<view v-else class="search-results-screen">
+			<view class="result-nav" :style="{ paddingTop: navTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+				<view class="nav-side" @tap="handleBack"><text class="nav-back">‹</text></view>
+				<text class="nav-title" :style="{ top: navTop + 'px' }">搜索结果</text>
+				<view class="result-nav-action" @tap="openSearchEditor"><text>重搜</text></view>
+			</view>
+
+			<scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="false">
+				<view v-if="resultState === 'loading'" class="result-loading-state">
+					<view class="result-orbit"><view class="result-orbit-core"><text>{{ searchProgress }}%</text></view></view>
+					<text class="result-loading-title">正在为你寻找合适的人</text>
+					<text class="result-loading-copy">{{ searchProgressCopy }}</text>
+					<view v-if="resultCandidates.length > 0 && searchProgress >= 60" class="result-preview-avatars"><image v-for="item in resultCandidates.slice(0, 6)" :key="item.id" class="result-preview-avatar" :src="resultAvatar(item)" mode="aspectFill"></image></view>
+				</view>
+
+				<view v-else-if="resultState === 'error'" class="result-message-state">
+					<view class="result-message-mark"><text>!</text></view>
+					<text class="result-message-title">搜索暂时没有完成</text>
+					<text class="result-message-copy">{{ resultError }}</text>
+					<button class="result-secondary-button" @tap="retrySearch"><text>重新搜索</text></button>
+				</view>
+
+				<view v-else-if="resultState === 'empty'" class="result-message-state">
+					<view class="result-message-mark"><text>○</text></view>
+					<text class="result-message-title">暂时没有找到合适的人</text>
+					<text class="result-message-copy">可以放宽一点期待，再试一次。</text>
+					<button class="result-secondary-button" @tap="openSearchEditor"><text>调整搜索条件</text></button>
+				</view>
+
+				<view v-else class="result-success-state">
+					<view class="result-heading">
+						<text class="result-heading-title">已为你找到合适人选</text>
+						<text class="result-heading-copy">基于“{{ resultQuerySummary }}”整理，仅供参考</text>
+					</view>
+					<view v-for="(item, index) in resultCandidates" :key="item.id" class="result-card" :class="{ featured: index === 0 }" @tap="goToResultProfile(item)">
+						<image class="result-avatar" :class="{ featured: index === 0 }" :src="resultAvatar(item)" mode="aspectFill"></image>
+						<view class="result-card-body">
+							<view class="result-card-topline"><text class="result-match-count">匹配 {{ resultMatchCount(index) }} 项期待</text><text class="result-card-arrow">›</text></view>
+							<text class="result-name">{{ resultName(item) }}</text>
+							<text class="result-meta">{{ resultMeta(item) }}</text>
+							<view class="result-reasons"><text v-for="reason in resultReasons(index)" :key="reason" class="result-reason">{{ reason }}</text></view>
+							<text v-if="index === 0" class="result-card-hint">点击查看完整资料</text>
+						</view>
+					</view>
+					<text class="result-disclaimer">AI 推荐会受资料完整度影响，结果仅作认识参考</text>
+				</view>
+			</scroll-view>
+
+			<view class="result-bottom-actions">
+			<button class="result-primary-button" @tap="openSearchEditor"><text>开始新的搜索</text></button>
+			</view>
+		</view>
+
+		<XsaSheet :visible="historyVisible" title="搜索历史" @close="historyVisible = false"><view class="history-list"><view v-if="historyItems.length === 0" class="history-empty"><text>暂无搜索历史</text></view><view v-for="item in historyItems" :key="item.id" class="history-item" @tap="applyHistory(item)"><text>{{ item.label }}</text></view></view></XsaSheet>
+
+		<XsaSheet :visible="mbtiSheetVisible" :title="mbtiSheetMode === 'self' ? '我的 MBTI' : '寻找的人格类型'" @close="closeMbtiSheet">
+			<view v-if="mbtiSheetMode === 'self'" class="self-sheet-content"><text class="sheet-copy">可以先完成测评，也可以直接输入已知类型。</text><button class="sheet-secondary-button" @tap="showTestPending"><text>去测评</text></button><view class="manual-mbti-row"><input class="mbti-input" :value="ownMbtiDraft" maxlength="4" placeholder="输入 16 型，如 ENTP" @input="onOwnMbtiInput" /><button class="sheet-save-button" :disabled="savingOwnMbti" @tap="saveOwnMbti"><text>{{ savingOwnMbti ? '保存中' : '确定' }}</text></button></view></view>
+			<view v-else class="target-sheet-content"><view class="sheet-selection-head"><text>{{ activeTrait || '轻触人格类型，查看相处标签' }}</text><text class="sheet-limit">最多 5 个</text></view><view class="mbti-grid"><button v-for="item in mbtiTypes" :key="item.code" class="mbti-type-button" :class="{ selected: targetMbtis.indexOf(item.code) >= 0 }" @tap="toggleTargetMbti(item.code, item.trait)"><text>{{ item.code }}</text></button></view><view class="sheet-selected-tags"><XsaTag v-for="item in targetMbtis" :key="item" variant="accent" size="small">{{ item }}</XsaTag><text v-if="targetMbtis.length === 0" class="sheet-empty-text">尚未选择</text></view><button class="sheet-primary-button" @tap="closeMbtiSheet"><text>完成选择</text></button></view>
+		</XsaSheet>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { searchDiscovery } from '@/api'
+	import XsaSheet from '@/components/XsaSheet.uvue'
+	import XsaTag from '@/components/XsaTag.uvue'
+	import { getOwnProfile, updateOwnProfile, getRecommendUsers } from '@/api'
+
+	const systemInfo = uni.getSystemInfoSync()
+	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+	const menuButtonInfo = uni.getMenuButtonBoundingClientRect()
+	const navTop = menuButtonInfo != null && menuButtonInfo.top > statusBarHeight ? menuButtonInfo.top : statusBarHeight + 12
+	const menuButtonSpacing = menuButtonInfo != null ? (systemInfo.windowWidth - menuButtonInfo.left) : 8
+
+	const tabs = ['AI', 'MBTI', '条件搜索']
+	const SEARCH_HISTORY_STORAGE_KEY = 'xsa_search_history_v1'
+	const activeTab = ref(0)
+	const historyVisible = ref(false)
+	const historyItems = ref<any[]>([])
+	const resultState = ref('idle')
+	const searchProgress = ref(0)
+	const searchProgressCopy = ref('正在理解你的搜索期待')
+	const resultCandidates = ref<any[]>([])
+	const resultError = ref('请检查网络后再试一次')
+	let searchRunId = 0
+
+	const aiQuery = ref('')
+	const regionOptions = ['同城优先', '全市范围', '不限距离']
+	const boundaryOptions = ['独立私人空间', '高频互动陪伴', '适度黏连']
+	const interestOptions = ['文艺艺术', '户外运动', '游戏数码', '美食旅行', '阅读学习']
+	const aiRegion = ref('同城优先')
+	const aiBoundary = ref('')
+	const aiInterests = ref<string[]>([])
+
 	const hometownOptions = ['不限', '江苏', '浙江', '上海', '安徽']
-	const residenceOptions = ['城市可选', '南京', '杭州', '上海', '深圳']
-	const ageOptions = ['不限年龄', '18-25岁', '26-30岁', '31-35岁', '36-40岁', '41岁以上']
-	const heightOptions = ['不限身高', '150-160cm', '161-170cm', '171-180cm', '181cm以上']
+	const residenceOptions = ['不限', '南京', '杭州', '上海', '深圳']
+	const ageOptions = ['不限年龄', '18-25 岁', '26-30 岁', '31-35 岁', '36-40 岁', '41 岁以上']
+	const heightOptions = ['不限身高', '150-160cm', '161-170cm', '171-180cm', '181cm 以上']
+	const incomeOptions = ['5w-15w', '15w-30w', '30w-50w', '50w-100w', '100w-500w', '500w以上']
+	const educationOptions = ['大专', '本科', '硕士研究生', '博士研究生']
+	const marriageOptions = ['未婚', '离异']
 	const hometownIndex = ref(0)
 	const residenceIndex = ref(0)
 	const ageIndex = ref(0)
 	const heightIndex = ref(0)
-	const selectedMbti = ref('')
-	const mbtiOptions = ['ISTJ', 'ENFP', 'INFJ']
-	const vipRows = [
-		[
-			{ label: '身高', value: '不限' },
-			{ label: '大专', value: '155-165' },
-			{ label: '大专', value: '166-175' },
-			{ label: '收入', value: '166-175' },
-			{ label: '1万以上', value: '175+' }
-		],
-		[
-			{ label: '学历', value: '5万以下' },
-			{ label: '不限', value: '16万15万' },
-			{ label: '不限', value: '' },
-			{ label: '大专', value: '' },
-			{ label: '本科及以上', value: '' }
-		]
+	const income = ref('')
+	const education = ref('')
+	const marriage = ref('')
+	const certificationOnly = ref(true)
+
+	const mbtiSheetVisible = ref(false)
+	const mbtiSheetMode = ref('self')
+	const ownMbti = ref('')
+	const ownMbtiDraft = ref('')
+	const ownGender = ref<any>(null)
+	const savingOwnMbti = ref(false)
+	const targetMbtis = ref<string[]>([])
+	const activeTrait = ref('')
+	const mbtiTypes = [
+		{ code: 'INTJ', trait: 'INTJ 理性搭档' }, { code: 'INTP', trait: 'INTP 好奇探索' }, { code: 'ENTJ', trait: 'ENTJ 目标同行' }, { code: 'ENTP', trait: 'ENTP 思维碰撞' },
+		{ code: 'INFJ', trait: 'INFJ 灵魂知己' }, { code: 'INFP', trait: 'INFP 温柔治愈' }, { code: 'ENFJ', trait: 'ENFJ 共情支持' }, { code: 'ENFP', trait: 'ENFP 热情灵感' },
+		{ code: 'ISTJ', trait: 'ISTJ 稳定靠谱' }, { code: 'ISFJ', trait: 'ISFJ 细腻守护' }, { code: 'ESTJ', trait: 'ESTJ 执行默契' }, { code: 'ESFJ', trait: 'ESFJ 温暖联结' },
+		{ code: 'ISTP', trait: 'ISTP 自在相处' }, { code: 'ISFP', trait: 'ISFP 感受共鸣' }, { code: 'ESTP', trait: 'ESTP 活力同游' }, { code: 'ESFP', trait: 'ESFP 快乐分享' }
 	]
-	const secondMbtiOptions = ['ENFP', 'INFJ', 'ESTP']
+	const mbtiNames: any = { INTJ: '建筑师', INTP: '逻辑学家', ENTJ: '指挥官', ENTP: '辩论家', INFJ: '提倡者', INFP: '调停者', ENFJ: '主人公', ENFP: '竞选者', ISTJ: '物流师', ISFJ: '守卫者', ESTJ: '总经理', ESFJ: '执政官', ISTP: '鉴赏家', ISFP: '探险家', ESTP: '企业家', ESFP: '表演者' }
+	const ownMbtiSummary = computed(() => ownMbti.value == '' ? '还未设置' : ownMbti.value + ' ' + (mbtiNames[ownMbti.value] != null ? mbtiNames[ownMbti.value] : ''))
+	const ownMbtiNote = computed(() => ownMbti.value == '' ? '点击选择我的 MBTI' : '已保存，可随时调整')
+
+	const toText = (value: any): string => value == null ? '' : ('' + value)
+	const aiTargetPronoun = computed(() => {
+		const gender = toText(ownGender.value).toLowerCase()
+		return ownGender.value == 2 || gender == '2' || gender == '女' || gender == 'female' ? '他' : '她'
+	})
+	const aiPlaceholder = computed(() => '你希望遇见什么样的' + aiTargetPronoun.value + '，一起体验往后的点点滴滴？')
+	const validIndex = (value: any, length: number): number => {
+		const index = Number(value)
+		return index >= 0 && index < length ? index : 0
+	}
+	const profilePayload = (raw: any): any => raw != null && raw.profile != null ? raw.profile : (raw != null && raw.data != null && raw.data.profile != null ? raw.data.profile : (raw != null ? raw : {}))
+	const loadOwnMbti = async () => {
+		try {
+			const res = await getOwnProfile()
+			if (res.success && res.data != null) {
+				const data = profilePayload(res.data)
+				ownGender.value = data.gender
+				const value = toText(data.mbti).toUpperCase()
+				if (mbtiNames[value] != null) ownMbti.value = value
+			}
+		} catch (error) {
+			console.error('[Search] own MBTI load failed', error)
+		}
+	}
 
 	const goBack = () => uni.navigateBack({ delta: 1 })
-	const onHometownChange = (event: any) => hometownIndex.value = Number(event.detail.value)
-	const onResidenceChange = (event: any) => residenceIndex.value = Number(event.detail.value)
-	const onAgeChange = (event: any) => ageIndex.value = Number(event.detail.value)
-	const onHeightChange = (event: any) => heightIndex.value = Number(event.detail.value)
-	const selectMbti = (item: string) => selectedMbti.value = selectedMbti.value === item ? '' : item
-	const openVip = () => uni.navigateTo({ url: '/pagesSub/profileExtra/vip' })
-	const openMbti = () => uni.showToast({ title: '请先完成MBTI测试', icon: 'none' })
-	const resetFilters = () => {
-		hometownIndex.value = 0
-		residenceIndex.value = 0
-		ageIndex.value = 0
-		heightIndex.value = 0
-		selectedMbti.value = ''
+	const handleBack = () => { if (resultState.value != 'idle') openSearchEditor(); else goBack() }
+	const onAiInput = (event: any) => { aiQuery.value = toText(event.detail.value) }
+	const requestAiSuggestedQuery = () => {
+		// TODO: 接入 AI 档案分析后，将生成的搜索词回填到 aiQuery。
+		uni.showToast({ title: 'AI 推荐功能待接入', icon: 'none' })
 	}
-	const submitSearch = async () => {
-		const filters: any = { page: 1, page_size: 20 }
-		if (ageIndex.value > 0) {
-			const ageRanges = [{ min: 18, max: 25 }, { min: 26, max: 30 }, { min: 31, max: 35 }, { min: 36, max: 40 }, { min: 41, max: 60 }]
-			filters.age_min = ageRanges[ageIndex.value - 1].min
-			filters.age_max = ageRanges[ageIndex.value - 1].max
-		}
-		if (heightIndex.value > 0) {
-			const heightRanges = [{ min: 140, max: 160 }, { min: 161, max: 170 }, { min: 171, max: 180 }, { min: 181, max: 220 }]
-			filters.height_min = heightRanges[heightIndex.value - 1].min
-			filters.height_max = heightRanges[heightIndex.value - 1].max
-		}
-		const res = await searchDiscovery(filters)
-		uni.showToast({ title: res.success ? '已应用搜索条件' : (res.message || '搜索失败'), icon: res.success ? 'success' : 'none' })
+	const toggleInterest = (item: string) => {
+		const next = aiInterests.value.slice()
+		const index = next.indexOf(item)
+		if (index >= 0) next.splice(index, 1)
+		else next.push(item)
+		aiInterests.value = next
 	}
+	const onHometownChange = (event: any) => { hometownIndex.value = Number(event.detail.value) }
+	const onResidenceChange = (event: any) => { residenceIndex.value = Number(event.detail.value) }
+	const onAgeChange = (event: any) => { ageIndex.value = Number(event.detail.value) }
+	const onHeightChange = (event: any) => { heightIndex.value = Number(event.detail.value) }
+	const resetCondition = () => { hometownIndex.value = 0; residenceIndex.value = 0; ageIndex.value = 0; heightIndex.value = 0; income.value = ''; education.value = ''; marriage.value = ''; certificationOnly.value = false }
+	const loadHistory = () => {
+		try {
+			const stored = uni.getStorageSync(SEARCH_HISTORY_STORAGE_KEY)
+			if (Array.isArray(stored)) historyItems.value = stored as any[]
+		} catch (error) {
+			console.error('[Search] history load failed', error)
+		}
+	}
+	const buildHistoryRecord = (): any => {
+		const record: any = {
+			id: '' + Date.now(),
+			tab: activeTab.value,
+			label: '',
+			aiQuery: aiQuery.value,
+			aiRegion: aiRegion.value,
+			aiBoundary: aiBoundary.value,
+			aiInterests: aiInterests.value.slice(),
+			targetMbtis: targetMbtis.value.slice(),
+			hometownIndex: hometownIndex.value,
+			residenceIndex: residenceIndex.value,
+			ageIndex: ageIndex.value,
+			heightIndex: heightIndex.value,
+			income: income.value,
+			education: education.value,
+			marriage: marriage.value,
+			certificationOnly: certificationOnly.value
+		}
+		if (record.tab == 0) record.label = `AI：${aiQuery.value.trim()}`
+		else if (record.tab == 1) record.label = `MBTI：${targetMbtis.value.join(' / ')}`
+		else record.label = `条件：${residenceOptions[residenceIndex.value]}，${ageOptions[ageIndex.value]}`
+		return record
+	}
+	const saveHistory = (record: any) => {
+		const next: any[] = []
+		for (let index = 0; index < historyItems.value.length; index++) {
+			const item = historyItems.value[index]
+			if (item != null && item.label != record.label) next.push(item)
+		}
+		next.unshift(record)
+		if (next.length > 10) next.splice(10)
+		historyItems.value = next
+		try {
+			uni.setStorageSync(SEARCH_HISTORY_STORAGE_KEY, next)
+		} catch (error) {
+			console.error('[Search] history save failed', error)
+		}
+	}
+	const resultQuerySummary = computed(() => {
+		if (activeTab.value == 0) return aiQuery.value.trim()
+		if (activeTab.value == 1) return 'MBTI ' + targetMbtis.value.join(' / ')
+		return residenceOptions[residenceIndex.value] + '，' + ageOptions[ageIndex.value]
+	})
+	const resultProfile = (item: any): any => item != null && item.profile != null ? item.profile : (item != null ? item : {})
+	const resultAvatar = (item: any): string => {
+		const profile = resultProfile(item)
+		return toText(profile.avatar) || '/static/portraits/profile-woman-main.jpg'
+	}
+	const resultName = (item: any): string => {
+		const profile = resultProfile(item)
+		return toText(profile.name) || '认真生活的人'
+	}
+	const resultMeta = (item: any): string => {
+		const profile = resultProfile(item)
+		const age = toText(profile.age)
+		const education = toText(profile.education) || toText(profile.edu)
+		const job = toText(profile.job)
+		const city = toText(profile.city) || toText(profile.location)
+		const parts: string[] = []
+		if (age != '') parts.push(age + '岁')
+		if (education != '') parts.push(education)
+		if (job != '') parts.push(job)
+		if (city != '') parts.push(city)
+		return parts.join(' | ')
+	}
+	const resultMatchCount = (index: number): number => {
+		const base = activeTab.value == 0 ? 1 + (aiBoundary.value != '' ? 1 : 0) + aiInterests.value.length : activeTab.value == 1 ? targetMbtis.value.length : 1 + (education.value != '' ? 1 : 0) + (income.value != '' ? 1 : 0)
+		return Math.max(1, Math.min(5, base - (index % 2)))
+	}
+	const resultReasons = (index: number): string[] => {
+		if (activeTab.value == 1) return index % 2 == 0 ? ['人格类型接近', '相处节奏合拍'] : ['思维方式互补', '关系期待相近']
+		if (activeTab.value == 2) return index % 2 == 0 ? ['基础条件符合', '资料完整'] : ['生活范围接近', '认证资料']
+		return index % 2 == 0 ? ['相处期待接近', '兴趣有交集'] : ['生活方式相近', '认真对待关系']
+	}
+	const normalizeResultList = (response: any): any[] => {
+		if (response == null) return []
+		const payload = response.data != null ? response.data : response
+		if (Array.isArray(payload)) return payload as any[]
+		if (payload.items != null && Array.isArray(payload.items)) return payload.items as any[]
+		return []
+	}
+	const beginSearch = async () => {
+		const runId = searchRunId + 1
+		searchRunId = runId
+		resultState.value = 'loading'
+		searchProgress.value = 16
+		searchProgressCopy.value = '正在理解你的搜索期待'
+		resultCandidates.value = []
+		resultError.value = '请检查网络后再试一次'
+		try {
+			const response = await getRecommendUsers()
+			if (runId != searchRunId) return
+			resultCandidates.value = normalizeResultList(response)
+			setTimeout(() => {
+				if (runId != searchRunId) return
+				searchProgress.value = 62
+				searchProgressCopy.value = '正在筛选与你期待相近的人'
+				setTimeout(() => {
+					if (runId != searchRunId) return
+					searchProgress.value = 100
+					if (resultCandidates.value.length > 0) {
+						searchProgressCopy.value = '已整理出值得你了解的人'
+						resultState.value = 'success'
+					} else {
+						resultState.value = 'empty'
+					}
+				}, 560)
+			}, 520)
+		} catch (error) {
+			if (runId != searchRunId) return
+			console.error('[Search] result loading failed', error)
+			resultState.value = 'error'
+			resultError.value = '搜索服务暂时不可用，请稍后再试'
+		}
+	}
+	const submitSearch = () => {
+		if (activeTab.value == 0 && aiQuery.value.trim() == '') { uni.showToast({ title: '先写一句你的理想型', icon: 'none' }); return }
+		if (activeTab.value == 1 && targetMbtis.value.length == 0) { uni.showToast({ title: '请先选择对方类型', icon: 'none' }); return }
+		saveHistory(buildHistoryRecord())
+		beginSearch()
+	}
+	const retrySearch = () => beginSearch()
+	const openSearchEditor = () => { searchRunId += 1; resultState.value = 'idle'; searchProgress.value = 0 }
+	const goToResultProfile = (item: any) => {
+		const profile = resultProfile(item)
+		const userId = Number(profile.id || 0)
+		if (userId <= 0) return
+		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + userId })
+	}
+	const applyHistory = (item: any) => {
+		const tab = Number(item != null ? item.tab : 0)
+		if (tab == 1) {
+			if (Array.isArray(item.targetMbtis)) targetMbtis.value = item.targetMbtis as string[]
+			else targetMbtis.value = []
+		} else if (tab == 2) {
+			hometownIndex.value = validIndex(item.hometownIndex, hometownOptions.length)
+			residenceIndex.value = validIndex(item.residenceIndex, residenceOptions.length)
+			ageIndex.value = validIndex(item.ageIndex, ageOptions.length)
+			heightIndex.value = validIndex(item.heightIndex, heightOptions.length)
+			income.value = toText(item.income)
+			education.value = toText(item.education)
+			marriage.value = toText(item.marriage)
+			certificationOnly.value = item.certificationOnly == true
+		} else {
+			aiQuery.value = toText(item.aiQuery)
+			aiRegion.value = toText(item.aiRegion) || regionOptions[0]
+			aiBoundary.value = toText(item.aiBoundary)
+			if (Array.isArray(item.aiInterests)) aiInterests.value = item.aiInterests as string[]
+			else aiInterests.value = []
+		}
+		activeTab.value = tab >= 0 && tab <= 2 ? tab : 0
+		resultState.value = 'idle'
+		historyVisible.value = false
+	}
+
+	const openSelfSheet = () => { ownMbtiDraft.value = ownMbti.value; mbtiSheetMode.value = 'self'; mbtiSheetVisible.value = true }
+	const openTargetSheet = () => { activeTrait.value = ''; mbtiSheetMode.value = 'target'; mbtiSheetVisible.value = true }
+	const closeMbtiSheet = () => { mbtiSheetVisible.value = false }
+	const onOwnMbtiInput = (event: any) => { ownMbtiDraft.value = toText(event.detail.value).toUpperCase() }
+	const showTestPending = () => uni.showToast({ title: 'MBTI 测评页面待接入', icon: 'none' })
+	const saveOwnMbti = async () => {
+		const value = ownMbtiDraft.value.trim().toUpperCase()
+		if (mbtiNames[value] == null) { uni.showToast({ title: '请输入 16 型 MBTI，例如 ENTP', icon: 'none' }); return }
+		savingOwnMbti.value = true
+		try {
+			const res = await updateOwnProfile({ mbti: value })
+			if (!res.success) { uni.showToast({ title: res.message != null ? toText(res.message) : '保存失败，请重试', icon: 'none' }); return }
+			ownMbti.value = value
+			closeMbtiSheet()
+			uni.showToast({ title: '已保存我的 MBTI', icon: 'success' })
+		} catch (error) {
+			console.error('[Search] own MBTI save failed', error)
+			uni.showToast({ title: '网络不可用，请重试', icon: 'none' })
+		} finally {
+			savingOwnMbti.value = false
+		}
+	}
+	const toggleTargetMbti = (code: string, trait: string) => {
+		const next = targetMbtis.value.slice()
+		const index = next.indexOf(code)
+		if (index >= 0) next.splice(index, 1)
+		else {
+			if (next.length >= 5) { uni.showToast({ title: '最多选择 5 个', icon: 'none' }); return }
+			next.push(code)
+		}
+		targetMbtis.value = next
+		activeTrait.value = trait
+	}
+
+	onMounted(() => { loadOwnMbti(); loadHistory() })
 </script>
 
 <style scoped>
-.search-page { min-height: 100vh; background: var(--paper); color: var(--ink); }
-.search-nav { height: 100px; padding: 44px 20px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: var(--paper); }
-.nav-back, .nav-placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
-.nav-back text { font-size: 38px; line-height: 36px; color: var(--ink); }
-.nav-title { font-size: 22px; font-weight: 800; font-family: var(--serif); }
-.search-scroll { height: calc(100vh - 100px); padding: 0 28px 150px; box-sizing: border-box; }
-.basic-grid { display: grid; grid-template-columns: 38% 38%; justify-content: space-between; column-gap: 0; row-gap: 48px; padding-top: 28px; }
-.filter-item { display: flex; flex-direction: column; gap: 12px; }
-.filter-label { font-size: 17px; color: var(--ink); }
-.filter-pill { height: 46px; padding: 0 12px; border-radius: 24px; background: var(--canvas); display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; font-size: 16px; color: var(--ink2); white-space: nowrap; }
-.pill-arrow { font-size: 18px; color: var(--muted); }
-.vip-card { margin-top: 34px; padding: 20px 18px 18px; border-radius: 18px; background: #FFFEF2; box-shadow: 0 4px 18px rgba(196, 184, 127, .08); }
-.vip-heading, .mbti-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-.vip-title { font-size: 19px; font-weight: 800; color: var(--ink); }
-.vip-icon { margin-right: 4px; color: #C9A96E; font-size: 17px; }
-.vip-subtitle, .mbti-subtitle { display: block; margin-top: 8px; font-size: 13px; color: var(--muted); }
-.vip-arrow { font-size: 30px; color: var(--ink2); }
-.vip-filter-line { margin-top: 18px; }
-.vip-filter-line + .vip-filter-line { margin-top: 12px; }
-.vip-chip-row, .vip-value-row { display: flex; flex-direction: row; gap: 6px; }
-.vip-value-row { margin-top: 10px; }
-.vip-chip-label, .vip-chip-value { flex: 1; min-width: 0; text-align: center; font-size: 13px; color: var(--ink2); white-space: nowrap; }
-.vip-chip-value { font-size: 12px; color: var(--muted); }
-.mbti-card { margin-top: 20px; padding: 20px 18px 22px; border-radius: 16px; background: linear-gradient(135deg, #F1EEFF, #F7F3FF); }
-.mbti-title { font-size: 21px; font-weight: 800; color: var(--ink); }
-.mbti-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-.mbti-add, .mbti-arrow { width: 34px; height: 34px; border-radius: 17px; background: var(--paper); display: flex; align-items: center; justify-content: center; color: var(--accent2); }
-.mbti-add text { font-size: 26px; line-height: 24px; }
-.mbti-arrow text { font-size: 26px; }
-.mbti-tags { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.mbti-match-row { position: relative; margin-top: 18px; padding-top: 4px; }
-.mbti-match-row .mbti-subtitle { margin-top: 6px; }
-.second-tags { position: absolute; right: 0; top: 20px; max-width: 62%; margin-top: 0; }
-.mbti-tag { padding: 7px 14px; border: 1px solid #8275B9; border-radius: 18px; color: #655798; font-size: 12px; background: rgba(255,255,255,.55); }
-.mbti-tag.selected { background: #7564D9; color: var(--text-invert); }
-.bottom-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; flex-direction: row; gap: 12px; padding: 18px 28px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(255,255,255,0), var(--paper) 22%); }
-.reset-button, .search-button { height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; }
-.reset-button { width: 116px; border: 1px solid #E8DDB9; background: var(--paper); color: var(--ink2); }
-.search-button { flex: 1; background: #6A5BE7; color: var(--text-invert); }
-@media (max-width: 350px) { .search-scroll { padding-left: 20px; padding-right: 20px; } .basic-grid { column-gap: 20px; } .filter-pill { padding: 0 10px; font-size: 13px; } .bottom-actions { padding-left: 20px; padding-right: 20px; } }
-.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
-.nav-back text { font-size: 16px; line-height: 1; color: #2C2C2C; }
+.search-page { height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); }
+.search-form-screen, .search-results-screen { height: 100%; min-height: 0; display: flex; flex: 1; flex-direction: column; }
+.search-nav { position: relative; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; padding: 0 40rpx 18rpx; }
+.nav-side { z-index: 1; width: 68rpx; height: 68rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--ink2); font-size: 23rpx; }
+.nav-history { margin-left: auto; color: var(--accent2); }
+.nav-back { font-size: 52rpx; line-height: 1; font-weight: 300; }
+.nav-title { position: absolute; right: 0; left: 0; height: 68rpx; font-family: var(--serif); font-size: 42rpx; font-weight: 700; line-height: 68rpx; text-align: center; }
+.search-tabs { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 60rpx; padding: 8rpx 40rpx 20rpx; }
+.search-tab { padding: 12rpx 0; color: var(--muted); font-size: 30rpx; }
+.search-tab.active { color: var(--ink); font-weight: 700; }
+.search-scroll { flex: 1; min-height: 0; touch-action: pan-y; }
+.search-panel { min-height: 100%; padding: 24rpx 40rpx 40rpx; box-sizing: border-box; }
+.ai-panel { display: flex; flex-direction: column; }
+.ai-input-wrap { padding: 24rpx; border: 1rpx solid var(--line); border-radius: 32rpx; background: var(--canvas); }
+.ai-input { width: 100%; height: 300rpx; padding: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--sans); font-size: 28rpx; line-height: 1.75; }
+.ai-input-foot { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; min-height: 44rpx; }
+.ai-template-trigger { padding: 10rpx 18rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); font-size: 22rpx; }
+.ai-filter-groups { display: flex; flex-direction: column; gap: 18rpx; margin-top: 32rpx; }
+.ai-filter-row { display: flex; flex-direction: row; align-items: center; min-width: 0; }
+.filter-row-label { width: 64rpx; flex: 0 0 auto; color: var(--muted); font-size: 22rpx; }
+.chip-scroll, .condition-choice-scroll { width: 0; min-width: 0; flex: 1; display: block; white-space: nowrap; touch-action: pan-x; }
+.ai-choice-chip { display: inline-flex; flex-direction: row; align-items: center; margin: 2rpx 14rpx 2rpx 0; vertical-align: middle; }
+.choice-chip { flex: 0 0 auto; padding: 14rpx 22rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--ink2); font-size: 24rpx; line-height: 1; }
+.choice-chip.selected { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); }
+.mbti-panel { display: flex; flex-direction: column; }
+.personality-card { position: relative; min-height: 230rpx; padding: 34rpx; border: 1rpx solid var(--line); border-radius: 32rpx; background: var(--surface); }
+.seeking-card { margin-top: 24rpx; background: var(--warm); }
+.personality-label { display: block; color: var(--muted); font-size: 24rpx; }
+.personality-value { display: block; margin-top: 26rpx; color: var(--ink); font-size: 42rpx; font-weight: 600; }
+.personality-note { display: block; margin-top: 12rpx; color: var(--ink2); font-size: 22rpx; }
+.personality-arrow { position: absolute; right: 34rpx; bottom: 32rpx; color: var(--accent2); font-size: 42rpx; font-weight: 300; }
+.selected-mbti-tags { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10rpx; margin-top: 16rpx; padding-right: 48rpx; }
+.mbti-tag-cloud { position: relative; height: 150rpx; margin: 16rpx 24rpx 0; color: var(--muted); opacity: .3; font-size: 24rpx; letter-spacing: .08em; }
+.mbti-tag-cloud text { position: absolute; font-weight: 500; }
+.mbti-tag-cloud text:nth-child(1) { top: 16rpx; left: 4%; font-size: 22rpx; }
+.mbti-tag-cloud text:nth-child(2) { top: 4rpx; right: 6%; font-size: 28rpx; }
+.mbti-tag-cloud text:nth-child(3) { top: 62rpx; left: 38%; font-size: 34rpx; }
+.mbti-tag-cloud text:nth-child(4) { right: 20%; bottom: 6rpx; font-size: 24rpx; }
+.mbti-tag-cloud text:nth-child(5) { bottom: 18rpx; left: 16%; font-size: 20rpx; }
+.mbti-balance-copy { margin: auto 0 24rpx; color: var(--muted); opacity: .78; font-family: var(--serif); font-size: 26rpx; font-weight: 400; letter-spacing: .18em; line-height: 1.8; text-align: center; }
+.condition-panel { display: flex; flex-direction: column; gap: 0; padding-top: 4rpx; }
+.condition-group { min-height: 112rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 24rpx; border-bottom: 1rpx solid var(--line); }
+.condition-label { width: 176rpx; flex-shrink: 0; color: var(--ink); font-size: 24rpx; font-weight: 600; line-height: 1.45; }
+.condition-control { min-width: 0; flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 14rpx; }
+.location-row .condition-picker, .location-row .condition-add-picker { min-width: 0; flex: 1; }
+.picker-value, .condition-add { width: 100%; min-height: 78rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 12rpx; padding: 0 18rpx; border: 1rpx solid transparent; border-radius: 20rpx; background: var(--canvas); color: var(--ink2); font-size: 22rpx; }
+.condition-range-picker { min-width: 0; flex: 1; }
+.range-control { position: relative; height: 68rpx; margin: 0 18rpx; }
+.range-track, .range-active { position: absolute; top: 31rpx; right: 0; left: 0; height: 6rpx; border-radius: 999rpx; }
+.range-track { background: var(--line); }
+.range-active { background: var(--accent); }
+.age-range { right: 14%; left: 18%; }
+.full-range { right: 0; left: 0; }
+.range-handle { position: absolute; top: 19rpx; width: 30rpx; height: 30rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.range-start { left: calc(18% - 15rpx); }
+.range-end { right: calc(14% - 15rpx); }
+.full-start { left: -15rpx; }
+.full-end { right: -15rpx; }
+.condition-toggle-group { min-height: 124rpx; }
+.condition-toggle-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6rpx; }
+.condition-toggle-copy .condition-label { width: auto; }
+.condition-help { color: var(--muted); font-size: 21rpx; }
+.condition-toggle { width: 88rpx; height: 50rpx; flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: flex-start; padding: 5rpx; border-radius: 999rpx; background: var(--line); }
+.condition-toggle.active { justify-content: flex-end; background: var(--accent); }
+.toggle-knob { width: 40rpx; height: 40rpx; border-radius: 999rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.advanced-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 34rpx 0 16rpx; }
+.advanced-heading .condition-label { width: auto; font-size: 29rpx; }
+.vip-badge { flex-shrink: 0; padding: 5rpx 12rpx; border-radius: 10rpx; background: var(--accent-bg); color: var(--accent2); font-size: 19rpx; font-weight: 600; }
+.vip-badge.small { background: var(--warm); color: var(--ink2); }
+.vip-line { display: flex; flex-direction: row; align-items: center; gap: 12rpx; margin-bottom: 8rpx; padding: 20rpx 22rpx; border-radius: 18rpx; background: var(--canvas); color: var(--ink2); font-size: 22rpx; }
+.vip-condition-group { min-height: 120rpx; }
+.condition-choice-grid { min-width: 0; flex: 1; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 12rpx; }
+.condition-choice-grid .choice-chip { min-height: 66rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 0 8rpx; border-color: transparent; border-radius: 18rpx; background: var(--canvas); font-size: 20rpx; text-align: center; }
+.condition-choice-grid .choice-chip.selected { border-color: transparent; background: var(--accent-bg); }
+.income-grid .choice-chip { width: 30%; }
+.education-grid .choice-chip, .marriage-grid .choice-chip { width: 46%; }
+.wide-condition-picker { min-width: 0; flex: 1; }
+.wide-picker-value { width: 100%; min-height: 78rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 22rpx; border-radius: 20rpx; background: var(--canvas); color: var(--muted); font-size: 22rpx; }
+.bottom-actions { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 20rpx; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
+.reset-button, .search-button { height: 96rpx; border-radius: 999rpx; font-size: 29rpx; font-weight: 700; }
+.reset-button { width: 176rpx; border: 1rpx solid var(--line); background: var(--surface); color: var(--ink2); }
+.search-button { flex: 1; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); }
+.search-button.wide { width: 100%; }
+.result-nav { position: relative; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; padding: 0 40rpx 18rpx; }
+.result-nav-action { z-index: 1; min-width: 68rpx; color: var(--accent2); font-size: 25rpx; font-weight: 700; line-height: 68rpx; text-align: right; }
+.result-scroll { min-height: 0; flex: 1; background: var(--canvas); }
+.result-loading-state, .result-message-state { min-height: 980rpx; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 150rpx 48rpx 80rpx; text-align: center; }
+.result-orbit { width: 246rpx; height: 246rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--accent-bg); border-radius: 999rpx; background: var(--accent-bg); box-shadow: var(--shadow-md); }
+.result-orbit-core { width: 170rpx; height: 170rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; font-weight: 700; }
+.result-loading-title { display: block; margin-top: 54rpx; color: var(--ink); font-family: var(--serif); font-size: 38rpx; font-weight: 700; }
+.result-loading-copy, .result-message-copy { display: block; margin-top: 18rpx; color: var(--muted); font-size: 25rpx; line-height: 1.7; }
+.result-preview-avatars { display: flex; flex-direction: row; justify-content: center; margin-top: 58rpx; padding-left: 18rpx; }
+.result-preview-avatar { width: 72rpx; height: 72rpx; margin-left: -18rpx; border: 4rpx solid var(--canvas); border-radius: 999rpx; opacity: .55; }
+.result-message-state { justify-content: center; padding-top: 40rpx; }
+.result-message-mark { width: 104rpx; height: 104rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; }
+.result-message-title { display: block; margin-top: 32rpx; color: var(--ink); font-family: var(--serif); font-size: 36rpx; font-weight: 700; }
+.result-secondary-button { width: 320rpx; height: 88rpx; margin-top: 46rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-size: 27rpx; font-weight: 700; }
+.result-success-state { min-height: 100%; padding: 34rpx 40rpx 56rpx; box-sizing: border-box; }
+.result-heading { padding: 18rpx 0 36rpx; }
+.result-heading-title { display: block; color: var(--ink); font-family: var(--serif); font-size: 42rpx; font-weight: 700; }
+.result-heading-copy { display: block; margin-top: 14rpx; color: var(--muted); font-size: 23rpx; line-height: 1.6; }
+.result-card { min-height: 180rpx; display: flex; flex-direction: row; align-items: stretch; padding: 24rpx; border: 1rpx solid var(--line); border-radius: 24rpx; background: var(--surface); box-sizing: border-box; }
+.result-card + .result-card { margin-top: 18rpx; }
+.result-card.featured { min-height: 218rpx; border-color: var(--accent-bg); background: var(--paper); box-shadow: var(--shadow-sm); }
+.result-avatar { width: 132rpx; height: 132rpx; flex-shrink: 0; align-self: center; border-radius: 18rpx; background: var(--warm); }
+.result-avatar.featured { width: 164rpx; height: 164rpx; border-radius: 22rpx; }
+.result-card-body { min-width: 0; flex: 1; display: flex; flex-direction: column; margin-left: 22rpx; }
+.result-card-topline { min-height: 32rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.result-match-count { color: var(--accent2); font-size: 21rpx; font-weight: 700; }
+.result-card-arrow { color: var(--muted); font-size: 38rpx; line-height: .8; }
+.result-name { display: block; margin-top: 9rpx; color: var(--ink); font-family: var(--serif); font-size: 33rpx; font-weight: 700; }
+.result-meta { display: block; margin-top: 8rpx; overflow: hidden; color: var(--ink2); font-size: 21rpx; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.result-reasons { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8rpx; margin-top: 14rpx; }
+.result-reason { padding: 7rpx 12rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); font-size: 19rpx; }
+.result-card-hint { display: block; margin-top: auto; padding-top: 13rpx; color: var(--muted); font-size: 20rpx; }
+.result-disclaimer { display: block; padding: 34rpx 12rpx 0; color: var(--muted); font-size: 21rpx; line-height: 1.65; text-align: center; }
+.result-bottom-actions { flex: 0 0 auto; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
+.result-primary-button { width: 100%; height: 96rpx; border-radius: 999rpx; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); font-size: 29rpx; font-weight: 700; }
+.history-list { display: flex; flex-direction: column; gap: 16rpx; }
+.history-empty { padding: 36rpx 24rpx; color: var(--muted); font-size: 26rpx; text-align: center; }
+.history-item { padding: 24rpx; border-radius: 16rpx; background: var(--canvas); color: var(--ink2); font-size: 26rpx; }
+.sheet-copy { display: block; color: var(--muted); font-size: 25rpx; line-height: 1.65; }
+.sheet-secondary-button, .sheet-primary-button { width: 100%; height: 90rpx; margin-top: 28rpx; border-radius: 20rpx; font-size: 27rpx; font-weight: 700; }
+.sheet-secondary-button { background: var(--accent-bg); color: var(--accent2); }
+.sheet-primary-button { background: var(--accent); color: var(--text-invert); }
+.manual-mbti-row { display: flex; flex-direction: row; align-items: center; gap: 16rpx; margin-top: 18rpx; }
+.mbti-input { flex: 1; min-width: 0; height: 90rpx; padding: 0 22rpx; border: 1rpx solid var(--line); border-radius: 20rpx; background: var(--surface); color: var(--ink); font-size: 27rpx; text-transform: uppercase; }
+.sheet-save-button { width: 124rpx; height: 90rpx; border-radius: 20rpx; background: var(--ink); color: var(--paper); font-size: 25rpx; }
+.sheet-selection-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44rpx; margin-bottom: 20rpx; color: var(--accent2); font-size: 24rpx; }
+.sheet-limit { color: var(--muted); }
+.mbti-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14rpx; }
+.mbti-type-button { height: 86rpx; border: 1rpx solid var(--line); border-radius: 18rpx; background: var(--surface); color: var(--ink2); font-size: 26rpx; }
+.mbti-type-button.selected { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); }
+.sheet-selected-tags { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10rpx; min-height: 54rpx; margin-top: 22rpx; }
+.sheet-empty-text { color: var(--muted); font-size: 23rpx; }
 </style>

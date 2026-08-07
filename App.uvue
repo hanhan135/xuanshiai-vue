@@ -3,6 +3,7 @@
 		FASTAPI_AUTO_ENTER_COMMUNITY,
 		FASTAPI_DEV_ACCESS_TOKEN,
 		FASTAPI_DEV_USER_ID,
+		USE_MOCK,
 		getAccessToken,
 		setAuthTokens
 	} from './api/config.uts'
@@ -26,6 +27,24 @@
 		return true
 	}
 
+	const tryAutoEnterMock = (): boolean => {
+		if (USE_MOCK != true) return false
+
+		setAuthTokens('mock_debug_access_token_xsa', 'mock_debug_refresh_token_xsa')
+		if (getAccessToken() != 'mock_debug_access_token_xsa') return false
+
+		try {
+			uni.setStorageSync('xsa_user_id', 1)
+			uni.setStorageSync('xsa_login_agreed', true)
+			uni.setStorageSync('xsa_skip_welcome_once', true)
+		} catch (e) {
+			return false
+		}
+
+		uni.switchTab({ url: '/pages/index/index' })
+		return true
+	}
+
 	// #ifdef APP-ANDROID || APP-HARMONY
 	let firstBackTime = 0
 	// #endif
@@ -33,7 +52,7 @@
 	onLaunch(() => {
 		console.log('App Launch')
 		uni.setStorageSync('xsa_new_app_launch', true)
-		tryAutoEnterFastApiCommunity()
+		if (!tryAutoEnterFastApiCommunity()) tryAutoEnterMock()
 	})
 
 	onShow(() => {
