@@ -1,7 +1,8 @@
 <template>
 	<view class="search-page">
+		<view v-if="resultState === 'idle'" class="search-form-screen">
 		<view class="search-nav" :style="{ paddingTop: navTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
-			<view class="nav-side" @tap="goBack"><text class="nav-back">‹</text></view>
+			<view class="nav-side" @tap="handleBack"><text class="nav-back">‹</text></view>
 			<text class="nav-title" :style="{ top: navTop + 'px' }">搜索</text>
 			<view class="nav-side nav-history" @tap="historyVisible = true"><text>历史</text></view>
 		</view>
@@ -85,6 +86,60 @@
 			<button v-if="activeTab === 2" class="reset-button" @tap="resetCondition"><text>重置</text></button>
 			<button class="search-button" :class="{ wide: activeTab !== 2 }" @tap="submitSearch"><text>开始搜索</text></button>
 		</view>
+		</view>
+
+		<view v-else class="search-results-screen">
+			<view class="result-nav" :style="{ paddingTop: navTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+				<view class="nav-side" @tap="handleBack"><text class="nav-back">‹</text></view>
+				<text class="nav-title" :style="{ top: navTop + 'px' }">搜索结果</text>
+				<view class="result-nav-action" @tap="openSearchEditor"><text>重搜</text></view>
+			</view>
+
+			<scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="false">
+				<view v-if="resultState === 'loading'" class="result-loading-state">
+					<view class="result-orbit"><view class="result-orbit-core"><text>{{ searchProgress }}%</text></view></view>
+					<text class="result-loading-title">正在为你寻找合适的人</text>
+					<text class="result-loading-copy">{{ searchProgressCopy }}</text>
+					<view v-if="resultCandidates.length > 0 && searchProgress >= 60" class="result-preview-avatars"><image v-for="item in resultCandidates.slice(0, 6)" :key="item.id" class="result-preview-avatar" :src="resultAvatar(item)" mode="aspectFill"></image></view>
+				</view>
+
+				<view v-else-if="resultState === 'error'" class="result-message-state">
+					<view class="result-message-mark"><text>!</text></view>
+					<text class="result-message-title">搜索暂时没有完成</text>
+					<text class="result-message-copy">{{ resultError }}</text>
+					<button class="result-secondary-button" @tap="retrySearch"><text>重新搜索</text></button>
+				</view>
+
+				<view v-else-if="resultState === 'empty'" class="result-message-state">
+					<view class="result-message-mark"><text>○</text></view>
+					<text class="result-message-title">暂时没有找到合适的人</text>
+					<text class="result-message-copy">可以放宽一点期待，再试一次。</text>
+					<button class="result-secondary-button" @tap="openSearchEditor"><text>调整搜索条件</text></button>
+				</view>
+
+				<view v-else class="result-success-state">
+					<view class="result-heading">
+						<text class="result-heading-title">已为你找到合适人选</text>
+						<text class="result-heading-copy">基于“{{ resultQuerySummary }}”整理，仅供参考</text>
+					</view>
+					<view v-for="(item, index) in resultCandidates" :key="item.id" class="result-card" :class="{ featured: index === 0 }" @tap="goToResultProfile(item)">
+						<image class="result-avatar" :class="{ featured: index === 0 }" :src="resultAvatar(item)" mode="aspectFill"></image>
+						<view class="result-card-body">
+							<view class="result-card-topline"><text class="result-match-count">匹配 {{ resultMatchCount(index) }} 项期待</text><text class="result-card-arrow">›</text></view>
+							<text class="result-name">{{ resultName(item) }}</text>
+							<text class="result-meta">{{ resultMeta(item) }}</text>
+							<view class="result-reasons"><text v-for="reason in resultReasons(index)" :key="reason" class="result-reason">{{ reason }}</text></view>
+							<text v-if="index === 0" class="result-card-hint">点击查看完整资料</text>
+						</view>
+					</view>
+					<text class="result-disclaimer">AI 推荐会受资料完整度影响，结果仅作认识参考</text>
+				</view>
+			</scroll-view>
+
+			<view class="result-bottom-actions">
+			<button class="result-primary-button" @tap="openSearchEditor"><text>开始新的搜索</text></button>
+			</view>
+		</view>
 
 		<XsaSheet :visible="historyVisible" title="搜索历史" @close="historyVisible = false"><view class="history-list"><view v-if="historyItems.length === 0" class="history-empty"><text>暂无搜索历史</text></view><view v-for="item in historyItems" :key="item.id" class="history-item" @tap="applyHistory(item)"><text>{{ item.label }}</text></view></view></XsaSheet>
 
@@ -98,7 +153,7 @@
 <script setup lang="uts">
 	import XsaSheet from '@/components/XsaSheet.uvue'
 	import XsaTag from '@/components/XsaTag.uvue'
-	import { getOwnProfile, updateOwnProfile } from '@/api'
+	import { getOwnProfile, updateOwnProfile, getRecommendUsers } from '@/api'
 
 	const systemInfo = uni.getSystemInfoSync()
 	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
@@ -111,6 +166,12 @@
 	const activeTab = ref(0)
 	const historyVisible = ref(false)
 	const historyItems = ref<any[]>([])
+	const resultState = ref('idle')
+	const searchProgress = ref(0)
+	const searchProgressCopy = ref('正在理解你的搜索期待')
+	const resultCandidates = ref<any[]>([])
+	const resultError = ref('请检查网络后再试一次')
+	let searchRunId = 0
 
 	const aiQuery = ref('')
 	const regionOptions = ['同城优先', '全市范围', '不限距离']
@@ -180,6 +241,7 @@
 	}
 
 	const goBack = () => uni.navigateBack({ delta: 1 })
+	const handleBack = () => { if (resultState.value != 'idle') openSearchEditor(); else goBack() }
 	const onAiInput = (event: any) => { aiQuery.value = toText(event.detail.value) }
 	const requestAiSuggestedQuery = () => {
 		// TODO: 接入 AI 档案分析后，将生成的搜索词回填到 aiQuery。
@@ -244,11 +306,96 @@
 			console.error('[Search] history save failed', error)
 		}
 	}
+	const resultQuerySummary = computed(() => {
+		if (activeTab.value == 0) return aiQuery.value.trim()
+		if (activeTab.value == 1) return 'MBTI ' + targetMbtis.value.join(' / ')
+		return residenceOptions[residenceIndex.value] + '，' + ageOptions[ageIndex.value]
+	})
+	const resultProfile = (item: any): any => item != null && item.profile != null ? item.profile : (item != null ? item : {})
+	const resultAvatar = (item: any): string => {
+		const profile = resultProfile(item)
+		return toText(profile.avatar) || '/static/portraits/profile-woman-main.jpg'
+	}
+	const resultName = (item: any): string => {
+		const profile = resultProfile(item)
+		return toText(profile.name) || '认真生活的人'
+	}
+	const resultMeta = (item: any): string => {
+		const profile = resultProfile(item)
+		const age = toText(profile.age)
+		const education = toText(profile.education) || toText(profile.edu)
+		const job = toText(profile.job)
+		const city = toText(profile.city) || toText(profile.location)
+		const parts: string[] = []
+		if (age != '') parts.push(age + '岁')
+		if (education != '') parts.push(education)
+		if (job != '') parts.push(job)
+		if (city != '') parts.push(city)
+		return parts.join(' | ')
+	}
+	const resultMatchCount = (index: number): number => {
+		const base = activeTab.value == 0 ? 1 + (aiBoundary.value != '' ? 1 : 0) + aiInterests.value.length : activeTab.value == 1 ? targetMbtis.value.length : 1 + (education.value != '' ? 1 : 0) + (income.value != '' ? 1 : 0)
+		return Math.max(1, Math.min(5, base - (index % 2)))
+	}
+	const resultReasons = (index: number): string[] => {
+		if (activeTab.value == 1) return index % 2 == 0 ? ['人格类型接近', '相处节奏合拍'] : ['思维方式互补', '关系期待相近']
+		if (activeTab.value == 2) return index % 2 == 0 ? ['基础条件符合', '资料完整'] : ['生活范围接近', '认证资料']
+		return index % 2 == 0 ? ['相处期待接近', '兴趣有交集'] : ['生活方式相近', '认真对待关系']
+	}
+	const normalizeResultList = (response: any): any[] => {
+		if (response == null) return []
+		const payload = response.data != null ? response.data : response
+		if (Array.isArray(payload)) return payload as any[]
+		if (payload.items != null && Array.isArray(payload.items)) return payload.items as any[]
+		return []
+	}
+	const beginSearch = async () => {
+		const runId = searchRunId + 1
+		searchRunId = runId
+		resultState.value = 'loading'
+		searchProgress.value = 16
+		searchProgressCopy.value = '正在理解你的搜索期待'
+		resultCandidates.value = []
+		resultError.value = '请检查网络后再试一次'
+		try {
+			const response = await getRecommendUsers()
+			if (runId != searchRunId) return
+			resultCandidates.value = normalizeResultList(response)
+			setTimeout(() => {
+				if (runId != searchRunId) return
+				searchProgress.value = 62
+				searchProgressCopy.value = '正在筛选与你期待相近的人'
+				setTimeout(() => {
+					if (runId != searchRunId) return
+					searchProgress.value = 100
+					if (resultCandidates.value.length > 0) {
+						searchProgressCopy.value = '已整理出值得你了解的人'
+						resultState.value = 'success'
+					} else {
+						resultState.value = 'empty'
+					}
+				}, 560)
+			}, 520)
+		} catch (error) {
+			if (runId != searchRunId) return
+			console.error('[Search] result loading failed', error)
+			resultState.value = 'error'
+			resultError.value = '搜索服务暂时不可用，请稍后再试'
+		}
+	}
 	const submitSearch = () => {
 		if (activeTab.value == 0 && aiQuery.value.trim() == '') { uni.showToast({ title: '先写一句你的理想型', icon: 'none' }); return }
 		if (activeTab.value == 1 && targetMbtis.value.length == 0) { uni.showToast({ title: '请先选择对方类型', icon: 'none' }); return }
 		saveHistory(buildHistoryRecord())
-		uni.showToast({ title: '搜索结果页待接入', icon: 'none' })
+		beginSearch()
+	}
+	const retrySearch = () => beginSearch()
+	const openSearchEditor = () => { searchRunId += 1; resultState.value = 'idle'; searchProgress.value = 0 }
+	const goToResultProfile = (item: any) => {
+		const profile = resultProfile(item)
+		const userId = Number(profile.id || 0)
+		if (userId <= 0) return
+		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + userId })
 	}
 	const applyHistory = (item: any) => {
 		const tab = Number(item != null ? item.tab : 0)
@@ -272,6 +419,7 @@
 			else aiInterests.value = []
 		}
 		activeTab.value = tab >= 0 && tab <= 2 ? tab : 0
+		resultState.value = 'idle'
 		historyVisible.value = false
 	}
 
@@ -313,7 +461,8 @@
 </script>
 
 <style scoped>
-.search-page { height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); --accent: var(--action-warm-green); --accent2: var(--action-warm-green-ink); --accent-bg: var(--action-warm-green-soft); --soft: var(--action-warm-green); }
+.search-page { height: 100vh; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); }
+.search-form-screen, .search-results-screen { height: 100%; min-height: 0; display: flex; flex: 1; flex-direction: column; }
 .search-nav { position: relative; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; padding: 0 40rpx 18rpx; }
 .nav-side { z-index: 1; width: 68rpx; height: 68rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--ink2); font-size: 23rpx; }
 .nav-history { margin-left: auto; color: var(--accent2); }
@@ -393,15 +542,50 @@
 .bottom-actions { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 20rpx; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
 .reset-button, .search-button { height: 96rpx; border-radius: 999rpx; font-size: 29rpx; font-weight: 700; }
 .reset-button { width: 176rpx; border: 1rpx solid var(--line); background: var(--surface); color: var(--ink2); }
-.search-button { flex: 1; background: var(--accent); color: var(--action-warm-green-ink); box-shadow: var(--shadow-md); }
+.search-button { flex: 1; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); }
 .search-button.wide { width: 100%; }
+.result-nav { position: relative; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; padding: 0 40rpx 18rpx; }
+.result-nav-action { z-index: 1; min-width: 68rpx; color: var(--accent2); font-size: 25rpx; font-weight: 700; line-height: 68rpx; text-align: right; }
+.result-scroll { min-height: 0; flex: 1; background: var(--canvas); }
+.result-loading-state, .result-message-state { min-height: 980rpx; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 150rpx 48rpx 80rpx; text-align: center; }
+.result-orbit { width: 246rpx; height: 246rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--accent-bg); border-radius: 999rpx; background: var(--accent-bg); box-shadow: var(--shadow-md); }
+.result-orbit-core { width: 170rpx; height: 170rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; font-weight: 700; }
+.result-loading-title { display: block; margin-top: 54rpx; color: var(--ink); font-family: var(--serif); font-size: 38rpx; font-weight: 700; }
+.result-loading-copy, .result-message-copy { display: block; margin-top: 18rpx; color: var(--muted); font-size: 25rpx; line-height: 1.7; }
+.result-preview-avatars { display: flex; flex-direction: row; justify-content: center; margin-top: 58rpx; padding-left: 18rpx; }
+.result-preview-avatar { width: 72rpx; height: 72rpx; margin-left: -18rpx; border: 4rpx solid var(--canvas); border-radius: 999rpx; opacity: .55; }
+.result-message-state { justify-content: center; padding-top: 40rpx; }
+.result-message-mark { width: 104rpx; height: 104rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; }
+.result-message-title { display: block; margin-top: 32rpx; color: var(--ink); font-family: var(--serif); font-size: 36rpx; font-weight: 700; }
+.result-secondary-button { width: 320rpx; height: 88rpx; margin-top: 46rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-size: 27rpx; font-weight: 700; }
+.result-success-state { min-height: 100%; padding: 34rpx 40rpx 56rpx; box-sizing: border-box; }
+.result-heading { padding: 18rpx 0 36rpx; }
+.result-heading-title { display: block; color: var(--ink); font-family: var(--serif); font-size: 42rpx; font-weight: 700; }
+.result-heading-copy { display: block; margin-top: 14rpx; color: var(--muted); font-size: 23rpx; line-height: 1.6; }
+.result-card { min-height: 180rpx; display: flex; flex-direction: row; align-items: stretch; padding: 24rpx; border: 1rpx solid var(--line); border-radius: 24rpx; background: var(--surface); box-sizing: border-box; }
+.result-card + .result-card { margin-top: 18rpx; }
+.result-card.featured { min-height: 218rpx; border-color: var(--accent-bg); background: var(--paper); box-shadow: var(--shadow-sm); }
+.result-avatar { width: 132rpx; height: 132rpx; flex-shrink: 0; align-self: center; border-radius: 18rpx; background: var(--warm); }
+.result-avatar.featured { width: 164rpx; height: 164rpx; border-radius: 22rpx; }
+.result-card-body { min-width: 0; flex: 1; display: flex; flex-direction: column; margin-left: 22rpx; }
+.result-card-topline { min-height: 32rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.result-match-count { color: var(--accent2); font-size: 21rpx; font-weight: 700; }
+.result-card-arrow { color: var(--muted); font-size: 38rpx; line-height: .8; }
+.result-name { display: block; margin-top: 9rpx; color: var(--ink); font-family: var(--serif); font-size: 33rpx; font-weight: 700; }
+.result-meta { display: block; margin-top: 8rpx; overflow: hidden; color: var(--ink2); font-size: 21rpx; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.result-reasons { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8rpx; margin-top: 14rpx; }
+.result-reason { padding: 7rpx 12rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); font-size: 19rpx; }
+.result-card-hint { display: block; margin-top: auto; padding-top: 13rpx; color: var(--muted); font-size: 20rpx; }
+.result-disclaimer { display: block; padding: 34rpx 12rpx 0; color: var(--muted); font-size: 21rpx; line-height: 1.65; text-align: center; }
+.result-bottom-actions { flex: 0 0 auto; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
+.result-primary-button { width: 100%; height: 96rpx; border-radius: 999rpx; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); font-size: 29rpx; font-weight: 700; }
 .history-list { display: flex; flex-direction: column; gap: 16rpx; }
 .history-empty { padding: 36rpx 24rpx; color: var(--muted); font-size: 26rpx; text-align: center; }
 .history-item { padding: 24rpx; border-radius: 16rpx; background: var(--canvas); color: var(--ink2); font-size: 26rpx; }
 .sheet-copy { display: block; color: var(--muted); font-size: 25rpx; line-height: 1.65; }
 .sheet-secondary-button, .sheet-primary-button { width: 100%; height: 90rpx; margin-top: 28rpx; border-radius: 20rpx; font-size: 27rpx; font-weight: 700; }
 .sheet-secondary-button { background: var(--accent-bg); color: var(--accent2); }
-.sheet-primary-button { background: var(--accent); color: var(--action-warm-green-ink); }
+.sheet-primary-button { background: var(--accent); color: var(--text-invert); }
 .manual-mbti-row { display: flex; flex-direction: row; align-items: center; gap: 16rpx; margin-top: 18rpx; }
 .mbti-input { flex: 1; min-width: 0; height: 90rpx; padding: 0 22rpx; border: 1rpx solid var(--line); border-radius: 20rpx; background: var(--surface); color: var(--ink); font-size: 27rpx; text-transform: uppercase; }
 .sheet-save-button { width: 124rpx; height: 90rpx; border-radius: 20rpx; background: var(--ink); color: var(--paper); font-size: 25rpx; }
