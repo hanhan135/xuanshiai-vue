@@ -46,7 +46,8 @@ try {
     'mock/security.uts',
     'mock/matchmaker.uts',
     'mock/help.uts',
-    'mock/spotlight.uts'
+    'mock/spotlight.uts',
+    'mock/ai-avatar.uts'
   ]
 
   mockFiles.forEach(file => {
@@ -77,7 +78,8 @@ try {
     'api/security.uts',
     'api/matchmaker.uts',
     'api/help.uts',
-    'api/spotlight.uts'
+    'api/spotlight.uts',
+    'api/ai-avatar.uts'
   ]
 
   apiFiles.forEach(file => {
@@ -127,7 +129,39 @@ try {
   console.log(`   ❌ 页面文件检查失败: ${error.message}\n`)
 }
 
-// 5. 总结
+// 5. AI 分身隔离与持久化检查
+console.log('5. 测试 AI 分身前端隔离...')
+try {
+  const fs = require('fs')
+  const path = require('path')
+  const apiContent = fs.readFileSync(path.join(__dirname, '../api/ai-avatar.uts'), 'utf-8')
+  const mockContent = fs.readFileSync(path.join(__dirname, '../mock/ai-avatar.uts'), 'utf-8')
+  const chatContent = fs.readFileSync(path.join(__dirname, '../pagesSub/chat/detail.uvue'), 'utf-8')
+  const profileContent = fs.readFileSync(path.join(__dirname, '../pagesSub/userExtra/user/detail.uvue'), 'utf-8')
+  const checks = [
+    ['独立本地存储键', apiContent.includes('xsa-ai-avatar-conversations-v1-')],
+    ['本地历史读取', apiContent.includes('getAiAvatarConversation')],
+    ['模拟转交恢复', apiContent.includes('resolveAiAvatarHandoffs')],
+    ['真实资料字段兼容', apiContent.includes('education_level') && apiContent.includes('relationship_expectation')],
+    ['公开资料快照', apiContent.includes('saveAiAvatarProfileSnapshot') && profileContent.includes('city: user.value.city')],
+    ['地区表不重复打包', !apiContent.includes("@/static/location.json")],
+    ['兴趣问题分类边界', mockContent.includes("'电影'") && mockContent.includes("'喜欢什么样的人'") && !mockContent.includes("'喜欢什么样',")],
+    ['个人主页入口', profileContent.includes('mode=ai-avatar')],
+    ['自己主页按钮宽度隔离', profileContent.includes('flex: 0 0 480rpx')],
+    ['聊天页 AI 模式', chatContent.includes("options.mode === 'ai-avatar'")],
+    ['真人预览隔离', chatContent.includes('if (isAiAvatarMode.value)')]
+  ]
+  checks.forEach(([name, passed]) => {
+    console.log(`   ${passed ? '✅' : '❌'} ${name}`)
+    if (!passed) process.exitCode = 1
+  })
+  console.log('')
+} catch (error) {
+  process.exitCode = 1
+  console.log(`   ❌ AI 分身检查失败: ${error.message}\n`)
+}
+
+// 6. 总结
 console.log('====================================')
 console.log('测试完成！')
 console.log('====================================\n')

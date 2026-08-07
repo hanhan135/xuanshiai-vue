@@ -219,6 +219,7 @@
 				<view class="primary-action edit-only-btn" @tap="goEdit"><text class="primary-action-text">编辑资料</text></view>
 			</view>
 		<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar">
+			<view class="ai-avatar-action" @tap="openAiAvatar"><text class="ai-avatar-icon">✦</text><text class="ai-avatar-text">AI 分身</text></view>
 			<view class="primary-action" @tap="onMatch"><text class="primary-action-text">♥　申请认识</text></view>
 			<view class="like-action" @tap="onLike"><text class="like-action-text">♥</text></view>
 		</view>
@@ -234,8 +235,8 @@ import { ref } from 'vue'
 import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
-import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus } from '@/api'
-import { resolveMediaUrl } from '@/api/config.uts'
+import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, saveAiAvatarProfileSnapshot } from '@/api'
+import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
 import locationJson from '@/static/location.json'
 import { SPOTLIGHT_AMOUNT, paySpotlight } from '@/api/spotlight.uts'
 import { guardRealName } from '@/utils/realNameGate.uts'
@@ -538,6 +539,35 @@ onShow(async () => {
 const onBack = () => { uni.navigateBack({ delta: 1 }) }
 const onShare = () => { uni.showToast({ title: '分享给朋友', icon: 'none' }) }
 const goEdit = () => { uni.navigateTo({ url: '/pagesSub/userExtra/user/edit' }) }
+const openAiAvatar = () => {
+	if (isOwnProfile.value) return
+	if (getAccessToken() == '') {
+		uni.showToast({ title: '请先登录后使用 AI 分身', icon: 'none' })
+		setTimeout(() => { uni.navigateTo({ url: '/pages/auth/login' }) }, 350)
+		return
+	}
+	const snapshotRes = saveAiAvatarProfileSnapshot(user.value.id, {
+		id: user.value.id,
+		name: user.value.name,
+		avatar: user.value.avatar,
+		age: user.value.age,
+		city: user.value.city,
+		job: user.value.job,
+		education: user.value.edu,
+		tags: user.value.tags,
+		intro: user.value.bio,
+		expectations: isLockedView.value ? [] : user.value.expect,
+		dynamicSummary: isLockedView.value ? [] : dynamics.value.map((item: any) => item.content)
+	}, isLockedView.value)
+	if (!snapshotRes.success) {
+		uni.showToast({ title: snapshotRes.message != null ? String(snapshotRes.message) : '公开资料读取失败', icon: 'none' })
+		return
+	}
+	const url = '/pagesSub/chat/detail?mode=ai-avatar&userId=' + String(user.value.id)
+		+ '&userName=' + encodeURIComponent(String(user.value.name))
+		+ '&locked=' + (isLockedView.value ? 'true' : 'false')
+	uni.navigateTo({ url: url, fail: () => { uni.showToast({ title: 'AI 分身打开失败，请重试', icon: 'none' }) } })
+}
 const onSpotlight = () => {
 	if (isOwnProfile.value) {
 		uni.showToast({ title: '不能向自己爆灯', icon: 'none' })
@@ -731,14 +761,17 @@ const onLike = async () => {
 .spotlight-button { display: flex; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--plane-yellow); }
 .spotlight-button-text { color: var(--ink); font-size: 28rpx; font-weight: 700; }
 .scroll-bottom-spacer { height: 180rpx; }
-.bottom-bar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background-color: var(--surface); box-shadow: var(--shadow-md); }
+.bottom-bar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: flex; flex-direction: row; align-items: center; gap: 12rpx; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background-color: var(--surface); box-shadow: var(--shadow-md); }
 .bottom-bar-own { justify-content: center; }
 .bottom-back { display: flex; flex-direction: column; align-items: center; gap: 2rpx; }
 .bottom-back-icon { color: var(--ink2); font-size: 36rpx; font-weight: 700; }
 .bottom-back-text { color: var(--muted); font-size: 19rpx; }
-.primary-action { display: flex; align-items: center; justify-content: center; width: 400rpx; height: 88rpx; border-radius: 44rpx; background-color: var(--accent); box-shadow: var(--shadow-sm); }
-.edit-only-btn { width: 480rpx; }
+.primary-action { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--accent); box-shadow: var(--shadow-sm); }
+.edit-only-btn { flex: 0 0 480rpx; width: 480rpx; }
 .primary-action-text { color: var(--text-invert); font-size: 28rpx; font-weight: 700; }
+.ai-avatar-action { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6rpx; width: 154rpx; height: 88rpx; border: 1px solid var(--accent2); border-radius: 44rpx; background-color: var(--paper); box-sizing: border-box; }
+.ai-avatar-icon { color: var(--accent2); font-size: 28rpx; font-weight: 700; }
+.ai-avatar-text { color: var(--accent2); font-size: 24rpx; font-weight: 700; }
 .like-action { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; border-radius: 50%; background-color: var(--accent-bg); }
 .like-action-text { color: var(--accent2); font-size: 40rpx; }
 </style>

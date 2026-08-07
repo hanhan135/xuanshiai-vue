@@ -1,41 +1,54 @@
 import { request } from './request.uts'
 import { resolveMediaUrl } from './config.uts'
+import { mockRecommendUsers, mockSquareUsers } from '@/mock/user.uts'
 
 function mapCard(row: any): any {
   const source = row != null && row.target != null ? row.target : row
   const card = source != null ? source : {}
-  const tags = card.interest_tags != null && Array.isArray(card.interest_tags) ? card.interest_tags : []
-  const certifications = card.certification_tags != null && Array.isArray(card.certification_tags) ? card.certification_tags : []
+  const tags = card.interest_tags != null && Array.isArray(card.interest_tags)
+    ? card.interest_tags
+    : (card.tags != null && Array.isArray(card.tags) ? card.tags : [])
+  const certifications = card.certification_tags != null && Array.isArray(card.certification_tags)
+    ? card.certification_tags
+    : (card.qualificationTags != null && Array.isArray(card.qualificationTags) ? card.qualificationTags : [])
   const photo = card.avatar != null ? resolveMediaUrl(card.avatar) : ''
+  const photos: string[] = []
+  const rawPhotos = card.photos != null && Array.isArray(card.photos) ? card.photos as any[] : []
+  for (let i = 0; i < rawPhotos.length; i++) {
+    const item = resolveMediaUrl(rawPhotos[i])
+    if (item != '' && photos.indexOf(item) < 0) photos.push(item)
+  }
+  if (photos.length == 0 && photo != '') photos.push(photo)
+  const onlineText = card.online != null ? '' + card.online : ''
   return {
     id: Number(card.user_id != null ? card.user_id : (card.id != null ? card.id : 0)),
     userId: Number(card.user_id != null ? card.user_id : 0),
-    name: card.nickname != null ? '' + card.nickname : '用户',
-    nickname: card.nickname != null ? '' + card.nickname : '用户',
+    name: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : '用户'),
+    nickname: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : '用户'),
     avatar: photo,
-    photos: photo != '' ? [photo] : [],
+    photos,
     age: card.age != null ? Number(card.age) : 0,
     height: card.height_cm != null ? Number(card.height_cm) : (card.height != null ? Number(card.height) : 0),
     weight: card.weight_kg != null ? Number(card.weight_kg) : (card.weight != null ? Number(card.weight) : 0),
     gender: card.gender != null ? '' + card.gender : '',
-    zodiac: card.zodiac != null ? '' + card.zodiac : '',
+    zodiac: card.zodiac != null ? '' + card.zodiac : (card.constellation != null ? '' + card.constellation : ''),
     hometown: card.hometown != null ? '' + card.hometown : '',
     income: card.income != null ? '' + card.income : '',
-    bio: card.bio != null ? '' + card.bio : (card.introduction != null ? '' + card.introduction : ''),
-    education: card.education_level != null ? '' + card.education_level : '未填写',
+    bio: card.bio != null ? '' + card.bio : (card.introduction != null ? '' + card.introduction : (card.intro != null ? '' + card.intro : '')),
+    education: card.education_level != null ? '' + card.education_level : (card.education != null ? '' + card.education : '未填写'),
     educationLevel: card.education_level,
-    job: card.occupation != null ? '' + card.occupation : '未填写',
-    occupation: card.occupation != null ? '' + card.occupation : '',
-    city: card.city_code != null ? '' + card.city_code : '未填写',
+    job: card.occupation != null ? '' + card.occupation : (card.job != null ? '' + card.job : '未填写'),
+    occupation: card.occupation != null ? '' + card.occupation : (card.job != null ? '' + card.job : ''),
+    city: card.city_code != null ? '' + card.city_code : (card.city != null ? '' + card.city : '未填写'),
     cityCode: card.city_code != null ? '' + card.city_code : '',
     distance: card.distance_km != null ? Number(card.distance_km) : 0,
-    online: card.online_status == 1,
+    online: card.online_status != null ? card.online_status == 1 : (card.online === true || onlineText.indexOf('在线') >= 0),
     mbti: card.mbti != null ? '' + card.mbti : '',
     interestTags: tags,
     certificationTags: certifications,
-    isVip: certifications.indexOf('VIP') >= 0 || certifications.indexOf('会员') >= 0,
+    isVip: card.isVip === true || card.is_vip === true || certifications.indexOf('VIP') >= 0 || certifications.indexOf('会员') >= 0,
     isFavorite: card.is_favorite == true,
-    matchScore: card.match_score != null ? Number(card.match_score) : 0,
+    matchScore: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : 0),
     viewCount: card.view_count != null ? Number(card.view_count) : 0,
     matchReason: card.match_reason != null ? '' + card.match_reason : '',
     raw: card
@@ -57,13 +70,23 @@ function mapPage(raw: any): any {
 }
 
 export async function getDiscoveryRecommendations(filters: any = null) {
-  const res = await request({ url: '/discovery/recommendations', method: 'GET', data: filters != null ? filters : {} })
+  const res = await request({
+    url: '/discovery/recommendations',
+    method: 'GET',
+    data: filters != null ? filters : {},
+    mockData: { items: mockRecommendUsers, page: 1, page_size: 20, total: mockRecommendUsers.length, has_more: false }
+  })
   if (!res.success) return res
   return { success: true, data: mapPage(res.data), code: res.code, message: res.message }
 }
 
 export async function getDiscoveryPlaza(filters: any = null) {
-  const res = await request({ url: '/discovery/plaza', method: 'GET', data: filters != null ? filters : {} })
+  const res = await request({
+    url: '/discovery/plaza',
+    method: 'GET',
+    data: filters != null ? filters : {},
+    mockData: { items: mockSquareUsers, page: 1, page_size: 20, total: mockSquareUsers.length, has_more: false }
+  })
   if (!res.success) return res
   return { success: true, data: mapPage(res.data), code: res.code, message: res.message }
 }
