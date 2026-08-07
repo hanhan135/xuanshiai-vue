@@ -401,6 +401,7 @@ let contactExchangeRecords = ref([] as any[])
 		if (dueAt == 0) return
 		const delay = Math.max(350, dueAt - Date.now())
 		aiHandoffTimer = setTimeout(async () => {
+			aiHandoffTimer = null
 			const res = resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
 			if (res.success && res.data != null) {
 				messages.value = mapAiAvatarMessages(res.data as any[])
@@ -464,6 +465,10 @@ let contactExchangeRecords = ref([] as any[])
 			confirmText: '清空',
 			success: (result: any) => {
 				if (result.confirm !== true) return
+				if (aiHandoffTimer != null) {
+					clearTimeout(aiHandoffTimer)
+					aiHandoffTimer = null
+				}
 				const clearRes = clearAiAvatarConversation(userId.value)
 				if (!clearRes.success) {
 					uni.showToast({ title: clearRes.message != null ? String(clearRes.message) : '清空失败', icon: 'none' })

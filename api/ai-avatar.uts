@@ -202,7 +202,10 @@ export function getAiAvatarQuickQuestions(): any {
 export function getAiAvatarConversation(userId: number, profile: any): any {
   if (userId <= 0) return failure('用户资料不存在', 'USER_NOT_FOUND')
   let messages = readMessages(userId)
-  if (messages.length == 0) messages = [initialMessage(profile)]
+  if (messages.length == 0) {
+    messages = [initialMessage(profile)]
+    writeMessages(userId, messages)
+  }
   const resolved = resolvePendingMessages(messages, profile)
   if (resolved.length != messages.length || JSON.stringify(resolved) != JSON.stringify(messages)) writeMessages(userId, resolved)
   return success(resolved)

@@ -141,6 +141,7 @@ try {
   const checks = [
     ['独立本地存储键', apiContent.includes('xsa-ai-avatar-conversations-v1-')],
     ['本地历史读取', apiContent.includes('getAiAvatarConversation')],
+    ['首次欢迎消息持久化', apiContent.includes('messages = [initialMessage(profile)]') && apiContent.includes('writeMessages(userId, messages)')],
     ['模拟转交恢复', apiContent.includes('resolveAiAvatarHandoffs')],
     ['真实资料字段兼容', apiContent.includes('education_level') && apiContent.includes('relationship_expectation')],
     ['公开资料快照', apiContent.includes('saveAiAvatarProfileSnapshot') && profileContent.includes('city: user.value.city')],
@@ -149,6 +150,7 @@ try {
     ['个人主页入口', profileContent.includes('mode=ai-avatar')],
     ['自己主页按钮宽度隔离', profileContent.includes('flex: 0 0 480rpx')],
     ['聊天页 AI 模式', chatContent.includes("options.mode === 'ai-avatar'")],
+    ['清空记录取消待回复定时器', chatContent.includes('clearTimeout(aiHandoffTimer)') && chatContent.includes('aiHandoffTimer = null')],
     ['真人预览隔离', chatContent.includes('if (isAiAvatarMode.value)')]
   ]
   checks.forEach(([name, passed]) => {
