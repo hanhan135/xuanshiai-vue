@@ -97,10 +97,18 @@
 
 			<scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="false">
 				<view v-if="resultState === 'loading'" class="result-loading-state">
-					<view class="result-orbit"><view class="result-orbit-core"><text>{{ searchProgress }}%</text></view></view>
+					<view class="result-orbit">
+						<view class="result-orbit-ring result-orbit-ring-outer"></view>
+						<view class="result-orbit-ring result-orbit-ring-inner"></view>
+						<view class="result-orbit-spark spark-one"></view>
+						<view class="result-orbit-spark spark-two"></view>
+						<view class="result-orbit-spark spark-three"></view>
+						<view class="result-orbit-core"><text>{{ searchProgress }}%</text><text class="result-orbit-caption">匹配中</text></view>
+					</view>
+					<view class="result-progress-rail"><view class="result-progress-fill" :style="{ width: searchProgress + '%' }"></view></view>
 					<text class="result-loading-title">正在为你寻找合适的人</text>
 					<text class="result-loading-copy">{{ searchProgressCopy }}</text>
-					<view v-if="resultCandidates.length > 0 && searchProgress >= 60" class="result-preview-avatars"><image v-for="item in resultCandidates.slice(0, 6)" :key="item.id" class="result-preview-avatar" :src="resultAvatar(item)" mode="aspectFill"></image></view>
+					<view v-if="resultCandidates.length > 0 && searchProgress >= 64" class="result-preview-avatars"><image v-for="(item, index) in resultCandidates.slice(0, 6)" :key="item.id" class="result-preview-avatar" :style="{ animationDelay: index * 90 + 'ms' }" :src="resultAvatar(item)" mode="aspectFill"></image></view>
 				</view>
 
 				<view v-else-if="resultState === 'error'" class="result-message-state">
@@ -172,6 +180,31 @@
 	const resultCandidates = ref<any[]>([])
 	const resultError = ref('请检查网络后再试一次')
 	let searchRunId = 0
+	const updateSearchProgress = (value: number) => {
+		searchProgress.value = Math.round(value)
+		if (value < 35) searchProgressCopy.value = '正在理解你的搜索期待'
+		else if (value < 72) searchProgressCopy.value = '正在梳理相处偏好与期待'
+		else searchProgressCopy.value = '正在筛选可能与你合拍的人'
+	}
+	const animateSearchProgress = (runId: number, from: number, to: number, duration: number): Promise<boolean> => {
+		return new Promise((resolve) => {
+			const startedAt = Date.now()
+			const timer = setInterval(() => {
+				if (runId != searchRunId) {
+					clearInterval(timer)
+					resolve(false)
+					return
+				}
+				const ratio = Math.min(1, (Date.now() - startedAt) / duration)
+				const easedRatio = 1 - Math.pow(1 - ratio, 3)
+				updateSearchProgress(from + (to - from) * easedRatio)
+				if (ratio >= 1) {
+					clearInterval(timer)
+					resolve(true)
+				}
+			}, 32)
+		})
+	}
 
 	const aiQuery = ref('')
 	const regionOptions = ['同城优先', '全市范围', '不限距离']
@@ -212,8 +245,18 @@
 		{ code: 'ISTP', trait: 'ISTP 自在相处' }, { code: 'ISFP', trait: 'ISFP 感受共鸣' }, { code: 'ESTP', trait: 'ESTP 活力同游' }, { code: 'ESFP', trait: 'ESFP 快乐分享' }
 	]
 	const mbtiNames: any = { INTJ: '建筑师', INTP: '逻辑学家', ENTJ: '指挥官', ENTP: '辩论家', INFJ: '提倡者', INFP: '调停者', ENFJ: '主人公', ENFP: '竞选者', ISTJ: '物流师', ISFJ: '守卫者', ESTJ: '总经理', ESFJ: '执政官', ISTP: '鉴赏家', ISFP: '探险家', ESTP: '企业家', ESFP: '表演者' }
+	const mbtiCompatibility: any = {
+		INTJ: 'ENFP / ENTP', INTP: 'ENTJ / ENFJ', ENTJ: 'INTP / INFP', ENTP: 'INFJ / INTJ',
+		INFJ: 'ENFP / ENTP', INFP: 'ENFJ / ENTJ', ENFJ: 'INFP / ISFP', ENFP: 'INFJ / INTJ',
+		ISTJ: 'ESFP / ESTP', ISFJ: 'ESFP / ESTP', ESTJ: 'ISFP / ISTP', ESFJ: 'ISFP / ISTP',
+		ISTP: 'ESFJ / ESTJ', ISFP: 'ENFJ / ESFJ', ESTP: 'ISFJ / ISTJ', ESFP: 'ISFJ / ISTJ'
+	}
 	const ownMbtiSummary = computed(() => ownMbti.value == '' ? '还未设置' : ownMbti.value + ' ' + (mbtiNames[ownMbti.value] != null ? mbtiNames[ownMbti.value] : ''))
-	const ownMbtiNote = computed(() => ownMbti.value == '' ? '点击选择我的 MBTI' : '已保存，可随时调整')
+	const ownMbtiNote = computed(() => {
+		if (ownMbti.value == '') return '点击选择我的 MBTI'
+		const matches = mbtiCompatibility[ownMbti.value]
+		return matches != null ? '适配参考 ' + matches : '适配参考待完善'
+	})
 
 	const toText = (value: any): string => value == null ? '' : ('' + value)
 	const aiTargetPronoun = computed(() => {
@@ -353,31 +396,28 @@
 		const runId = searchRunId + 1
 		searchRunId = runId
 		resultState.value = 'loading'
-		searchProgress.value = 16
+		updateSearchProgress(6)
 		searchProgressCopy.value = '正在理解你的搜索期待'
 		resultCandidates.value = []
 		resultError.value = '请检查网络后再试一次'
 		try {
-			const response = await getRecommendUsers()
+			const responsePromise = getRecommendUsers()
+			const firstPass = animateSearchProgress(runId, 6, 64, 920)
+			const response = await responsePromise
 			if (runId != searchRunId) return
 			resultCandidates.value = normalizeResultList(response)
-			setTimeout(() => {
-				if (runId != searchRunId) return
-				searchProgress.value = 62
-				searchProgressCopy.value = '正在筛选与你期待相近的人'
-				setTimeout(() => {
-					if (runId != searchRunId) return
-					searchProgress.value = 100
-					if (resultCandidates.value.length > 0) {
-						searchProgressCopy.value = '已整理出值得你了解的人'
-						resultState.value = 'success'
-					} else {
-						resultState.value = 'empty'
-					}
-				}, 560)
-			}, 520)
+			if (!await firstPass || runId != searchRunId) return
+			if (!await animateSearchProgress(runId, 64, 94, 760) || runId != searchRunId) return
+			if (!await animateSearchProgress(runId, 94, 100, 280) || runId != searchRunId) return
+			if (resultCandidates.value.length > 0) {
+				searchProgressCopy.value = '已整理出值得你了解的人'
+				resultState.value = 'success'
+			} else {
+				resultState.value = 'empty'
+			}
 		} catch (error) {
 			if (runId != searchRunId) return
+			searchRunId += 1
 			console.error('[Search] result loading failed', error)
 			resultState.value = 'error'
 			resultError.value = '搜索服务暂时不可用，请稍后再试'
@@ -548,12 +588,29 @@
 .result-nav-action { z-index: 1; min-width: 68rpx; color: var(--accent2); font-size: 25rpx; font-weight: 700; line-height: 68rpx; text-align: right; }
 .result-scroll { min-height: 0; flex: 1; background: var(--canvas); }
 .result-loading-state, .result-message-state { min-height: 980rpx; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; padding: 150rpx 48rpx 80rpx; text-align: center; }
-.result-orbit { width: 246rpx; height: 246rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--accent-bg); border-radius: 999rpx; background: var(--accent-bg); box-shadow: var(--shadow-md); }
-.result-orbit-core { width: 170rpx; height: 170rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; font-weight: 700; }
+.result-orbit { position: relative; width: 246rpx; height: 246rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border-radius: 999rpx; background: var(--accent-bg); box-shadow: var(--shadow-md); overflow: visible; }
+.result-orbit-ring { position: absolute; border: 1rpx solid var(--accent); border-radius: 999rpx; opacity: .4; }
+.result-orbit-ring-outer { width: 246rpx; height: 246rpx; animation: result-orbit-pulse 2s ease-out infinite; }
+.result-orbit-ring-inner { width: 206rpx; height: 206rpx; border-color: var(--line); border-right-color: var(--accent); animation: result-orbit-spin 3.6s linear infinite; }
+.result-orbit-spark { position: absolute; width: 14rpx; height: 14rpx; border-radius: 999rpx; background: var(--accent); box-shadow: var(--shadow-sm); }
+.spark-one { top: 3rpx; left: 50%; margin-left: -7rpx; animation: result-spark-one 2.4s linear infinite; }
+.spark-two { right: 20rpx; bottom: 28rpx; opacity: .68; animation: result-spark-two 2.4s linear infinite; }
+.spark-three { bottom: 8rpx; left: 34rpx; opacity: .45; animation: result-spark-three 2.4s linear infinite; }
+.result-orbit-core { z-index: 1; width: 170rpx; height: 170rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; font-weight: 700; animation: result-core-breathe 2s ease-in-out infinite; }
+.result-orbit-caption { margin-top: 4rpx; color: var(--muted); font-family: var(--sans); font-size: 20rpx; font-weight: 500; letter-spacing: .12em; }
+.result-progress-rail { width: 350rpx; height: 8rpx; margin-top: 52rpx; border-radius: 999rpx; background: var(--line); overflow: hidden; }
+.result-progress-fill { height: 100%; border-radius: inherit; background: var(--accent); transition: width 32ms linear; }
 .result-loading-title { display: block; margin-top: 54rpx; color: var(--ink); font-family: var(--serif); font-size: 38rpx; font-weight: 700; }
 .result-loading-copy, .result-message-copy { display: block; margin-top: 18rpx; color: var(--muted); font-size: 25rpx; line-height: 1.7; }
 .result-preview-avatars { display: flex; flex-direction: row; justify-content: center; margin-top: 58rpx; padding-left: 18rpx; }
-.result-preview-avatar { width: 72rpx; height: 72rpx; margin-left: -18rpx; border: 4rpx solid var(--canvas); border-radius: 999rpx; opacity: .55; }
+.result-preview-avatar { width: 72rpx; height: 72rpx; margin-left: -18rpx; border: 4rpx solid var(--canvas); border-radius: 999rpx; opacity: 0; animation: result-avatar-enter .45s ease-out forwards; }
+@keyframes result-orbit-pulse { 0% { transform: scale(.9); opacity: .46; } 70% { transform: scale(1.16); opacity: 0; } 100% { transform: scale(1.16); opacity: 0; } }
+@keyframes result-orbit-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes result-core-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes result-spark-one { from { transform: rotate(0deg) translateY(-2rpx); } to { transform: rotate(360deg) translateY(-2rpx); } }
+@keyframes result-spark-two { from { transform: rotate(120deg) translateY(-12rpx); } to { transform: rotate(480deg) translateY(-12rpx); } }
+@keyframes result-spark-three { from { transform: rotate(240deg) translateY(-8rpx); } to { transform: rotate(600deg) translateY(-8rpx); } }
+@keyframes result-avatar-enter { from { transform: translateY(16rpx) scale(.86); opacity: 0; } to { transform: translateY(0) scale(1); opacity: .66; } }
 .result-message-state { justify-content: center; padding-top: 40rpx; }
 .result-message-mark { width: 104rpx; height: 104rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; }
 .result-message-title { display: block; margin-top: 32rpx; color: var(--ink); font-family: var(--serif); font-size: 36rpx; font-weight: 700; }

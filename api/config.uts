@@ -1,6 +1,6 @@
 /** API configuration for the deployed FastAPI service. */
 
-export const USE_MOCK = false
+export const USE_MOCK = true
 export const API_BASE_URL = 'https://xhztest.xyz'
 export const ROLE_APPLICATION_USE_MOCK = false
 export const PAPER_PLANE_CHANCE_USE_MOCK = true
