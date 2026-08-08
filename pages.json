@@ -342,6 +342,10 @@
         {
           "path": "support",
           "style": { "navigationBarTitleText": "帮助与客服", "navigationStyle": "custom" }
+        },
+        {
+          "path": "my-ai-avatar",
+          "style": { "navigationBarTitleText": "我的AI分身", "navigationStyle": "custom" }
         }
       ]
     },
