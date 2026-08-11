@@ -5,7 +5,7 @@
  */
 
 import { request } from './request.uts'
-import { USE_MOCK, getAccessToken, clearAuthTokens, buildApiUrl } from './config.uts'
+import { USE_MOCK, getAccessToken, clearAuthTokens, buildApiUrl, resolveMediaUrl } from './config.uts'
 import {
   mockRecommendUsers,
   mockSquareUsers,
@@ -52,6 +52,22 @@ function extractHttpMessage(res: any, fallback: string): string {
     if (typeof raw.detail === 'string') return '' + raw.detail
   }
   return fallback
+}
+
+function normalizeProfileMedia(raw: any): any {
+	if (raw == null || typeof raw !== 'object') return raw
+	const data: any = { ...raw }
+	if (data.avatar != null) data.avatar = resolveMediaUrl(data.avatar)
+	if (data.background_wall != null) data.background_wall = resolveMediaUrl(data.background_wall)
+	if (data.photos != null && Array.isArray(data.photos)) {
+		data.photos = (data.photos as any[]).map((photo: any) => {
+			if (photo == null || typeof photo !== 'object') return resolveMediaUrl(photo)
+			return { ...photo, file_url: photo.file_url != null ? resolveMediaUrl(photo.file_url) : photo.file_url, url: photo.url != null ? resolveMediaUrl(photo.url) : photo.url }
+		})
+	}
+	if (data.profile != null && typeof data.profile === 'object') data.profile = normalizeProfileMedia(data.profile)
+	if (data.card != null && typeof data.card === 'object') data.card = normalizeProfileMedia(data.card)
+	return data
 }
 
 const CHAT_FEATURE_UNLOCK_STORAGE_KEY = 'xsa_chat_feature_unlocks_v1'
@@ -280,10 +296,12 @@ export async function getUserDetail(userId: number) {
     })
   }
 
-  return request({
+	const res = await request({
     url: '/users/' + userId + '/profile',
     method: 'GET'
   })
+	if (res.success && res.data != null) res.data = normalizeProfileMedia(res.data)
+	return res
 }
 
 export async function getOwnProfile() {
@@ -296,7 +314,15 @@ export async function getOwnProfile() {
       mockData: mockMeProfile
     })
   }
-  return request({ url: '/users/me/profile', method: 'GET' })
+	const res = await request({ url: '/users/me/profile', method: 'GET' })
+	if (res.success && res.data != null) {
+		try {
+			res.data = normalizeProfileMedia(res.data)
+		} catch (error) {
+			console.error('[UserAPI] profile media normalization failed', error)
+		}
+	}
+	return res
 }
 
 export async function updateOwnProfile(data: any) {
@@ -315,6 +341,12 @@ export async function updateOwnProfile(data: any) {
     })
   }
   return request({ url: '/users/me/profile', method: 'PATCH', data })
+}
+
+export async function updateOwnNickname(nickname: string) {
+	const value = nickname != null ? nickname.trim() : ''
+	if (value == '') return { success: false, data: null, code: 422, message: '昵称不能为空' }
+	return request({ url: '/users/me/nickname', method: 'PATCH', data: { nickname: value } })
 }
 
 export async function getOwnPreferences() {
@@ -365,13 +397,15 @@ export async function uploadUserProfileMedia(filePath: string, kind: string) {
   }
 
   return new Promise<any>((resolve) => {
-    uni.uploadFile({
-      url: buildApiUrl(profileMediaPath(normalizedKind)),
-      filePath,
-      name: 'file',
-      header: getAccessToken() != '' ? { Authorization: 'Bearer ' + getAccessToken() } : {},
-      success: (res: any) => {
-        if (res.statusCode == 401) clearAuthTokens()
+	uni.uploadFile({
+		url: buildApiUrl(profileMediaPath(normalizedKind)),
+		filePath,
+		name: 'file',
+		header: getAccessToken() != '' ? { Authorization: 'Bearer ' + getAccessToken(), Accept: 'application/json' } : { Accept: 'application/json' },
+		timeout: 60000,
+		success: (res: any) => {
+			console.log('[UserAPI] media upload response', normalizedKind, res.statusCode, res.data)
+			if (res.statusCode == 401) clearAuthTokens()
         let data: any = null
         try {
           data = JSON.parse('' + res.data)
@@ -386,7 +420,8 @@ export async function uploadUserProfileMedia(filePath: string, kind: string) {
           resolve({ success: false, data, code: res.statusCode, message: '' + detail })
         }
       },
-      fail: (err: any) => {
+		fail: (err: any) => {
+			console.error('[UserAPI] media upload failed', normalizedKind, err)
         const message = err != null && err.errMsg != null ? '' + err.errMsg : '上传失败，请检查网络'
         resolve({ success: false, data: null, code: -1, message })
       }

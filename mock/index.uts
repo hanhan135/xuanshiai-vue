@@ -67,3 +67,10 @@ export {
   mockCustomPackages,
   mockAiChatSeed
 } from './matchmaker.uts'
+
+// AI 分身
+export {
+  AI_AVATAR_QUICK_QUESTIONS,
+  buildMockAiAvatarReply,
+  buildMockAiAvatarPersonReply
+} from './ai-avatar.uts'

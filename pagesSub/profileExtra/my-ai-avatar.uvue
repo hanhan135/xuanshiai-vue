@@ -1,0 +1,826 @@
+<template>
+	<view class="aia-page">
+		<!-- 导航栏 -->
+		<view class="aia-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="aia-nav-side" @tap="back">
+				<text class="ic ic-sys ic-fanhui aia-back-icon"></text>
+			</view>
+			<text class="aia-nav-title">我的AI分身</text>
+			<view class="aia-nav-side"></view>
+		</view>
+
+		<!-- Tab 切换 -->
+		<view class="aia-tabs">
+			<view class="aia-tab" :class="{ 'aia-tab-active': activeTab == 0 }" @tap="switchTab(0)">
+				<text class="aia-tab-text" :class="{ 'aia-tab-text-active': activeTab == 0 }">对话记录</text>
+			</view>
+			<view class="aia-tab" :class="{ 'aia-tab-active': activeTab == 1 }" @tap="switchTab(1)">
+				<text class="aia-tab-text" :class="{ 'aia-tab-text-active': activeTab == 1 }">待回答</text>
+				<view v-if="pendingQuestions.length > 0" class="aia-tab-count">
+					<text class="aia-tab-count-text">{{ pendingQuestions.length }}</text>
+				</view>
+			</view>
+			<view class="aia-tab" :class="{ 'aia-tab-active': activeTab == 2 }" @tap="switchTab(2)">
+				<text class="aia-tab-text" :class="{ 'aia-tab-text-active': activeTab == 2 }">我的回答</text>
+			</view>
+		</view>
+
+		<!-- 列表区 -->
+		<scroll-view scroll-y class="aia-body" enhanced show-scrollbar="false">
+			<view v-if="loading" class="aia-state">
+				<text class="aia-state-title">正在读取 AI 分身数据</text>
+			</view>
+			<view v-else-if="errorMessage != ''" class="aia-state">
+				<text class="aia-state-title">AI 分身暂时无法打开</text>
+				<text class="aia-state-copy">{{ errorMessage }}</text>
+				<view class="aia-retry" @tap="loadDashboard"><text>重新加载</text></view>
+			</view>
+			<view v-else>
+			<!-- Tab 1：对话记录 -->
+			<view v-if="activeTab == 0">
+				<text class="aia-tip">为保护双方隐私，访客身份与具体聊天内容对你不可见，仅展示匿名话题摘要。当前数据保存在本设备，仅用于前端演示。</text>
+				<view v-if="chatRecords.length > 0">
+					<view class="aia-chat-item" v-for="item in chatRecords" :key="item.id">
+						<view class="aia-chat-avatar">
+							<text class="ic ic-social ic-touxiang aia-chat-avatar-icon"></text>
+						</view>
+						<view class="aia-chat-main">
+							<text class="aia-chat-name">匿名访客</text>
+							<text class="aia-chat-topic">{{ item.topic }}</text>
+							<text class="aia-chat-meta">{{ item.count }} 条对话 · {{ item.time }}</text>
+						</view>
+					</view>
+				</view>
+				<view v-else class="aia-empty">
+					<view class="aia-empty-icon">
+						<text class="ic ic-social ic-pinglun aia-empty-icon-text"></text>
+					</view>
+					<text class="aia-empty-title">还没有访客与你的分身对话</text>
+					<text class="aia-empty-sub">完善个人资料，分身会更好地替你回答访客的提问</text>
+				</view>
+			</view>
+
+			<!-- Tab 2：待回答 -->
+			<view v-if="activeTab == 1">
+				<text class="aia-tip">这些问题来自本设备上的 AI 分身演示。你提交回答后，会用于本设备后续相同问题的回复，不会通知真人用户。</text>
+				<view v-if="pendingQuestions.length > 0">
+					<view class="aia-qa-item" v-for="item in pendingQuestions" :key="item.id" @tap="openPending(item)">
+						<view class="aia-qa-head">
+							<text class="aia-qa-quote">“</text>
+							<text class="aia-qa-q">{{ item.question }}</text>
+						</view>
+						<view class="aia-qa-foot">
+							<text class="aia-qa-asked">被问 {{ item.askedCount }} 次</text>
+							<view class="aia-del" @tap.stop="deletePending(item.id)">
+								<text class="aia-del-text">×</text>
+							</view>
+						</view>
+					</view>
+				</view>
+				<view v-else class="aia-empty">
+					<view class="aia-empty-icon">
+						<text class="ic ic-sys ic-shiming aia-empty-icon-text"></text>
+					</view>
+					<text class="aia-empty-title">太棒了，没有待回答的问题</text>
+					<text class="aia-empty-sub">分身目前能独立应对访客的提问</text>
+				</view>
+			</view>
+
+			<!-- Tab 3：我的回答 -->
+			<view v-if="activeTab == 2">
+				<text class="aia-tip">这些是你为 AI 分身补充的演示答案，可编辑或删除。正式接入后端前，不会同步到其他设备。</text>
+				<view v-if="myAnswers.length > 0">
+					<view class="aia-ans-item" v-for="item in myAnswers" :key="item.id" @tap="openEdit(item)">
+						<view class="aia-ans-top">
+							<view class="aia-ans-q">
+								<view class="aia-q-badge"><text class="aia-q-badge-text">Q</text></view>
+								<text class="aia-ans-q-text">{{ item.question }}</text>
+							</view>
+							<view class="aia-del" @tap.stop="deleteAnswer(item.id)">
+								<text class="aia-del-text">×</text>
+							</view>
+						</view>
+						<view class="aia-ans-a">
+							<text class="aia-ans-a-text">{{ item.answer }}</text>
+						</view>
+						<view class="aia-ans-foot">
+							<text class="aia-ans-time">{{ item.time }}</text>
+							<text class="aia-ans-edit">再次编辑 ›</text>
+						</view>
+					</view>
+				</view>
+				<view v-else class="aia-empty">
+					<view class="aia-empty-icon">
+						<text class="ic ic-sys ic-tianjia aia-empty-icon-text"></text>
+					</view>
+					<text class="aia-empty-title">还没有回答过问题</text>
+					<text class="aia-empty-sub">你的每一条回答都会让分身更懂你</text>
+				</view>
+			</view>
+			<view class="aia-bottom-spacer"></view>
+			</view>
+		</scroll-view>
+
+		<!-- 回答弹窗 -->
+		<view v-if="answerVisible" class="aia-mask" @tap="closeAnswer">
+			<view class="aia-sheet" @tap.stop>
+				<view class="aia-sheet-head">
+					<view class="aia-sheet-q">
+						<view class="aia-q-badge"><text class="aia-q-badge-text">Q</text></view>
+						<text class="aia-sheet-q-text">{{ answerQuestion }}</text>
+					</view>
+					<view class="aia-sheet-close" @tap.stop="closeAnswer">
+						<text class="aia-sheet-close-text">×</text>
+					</view>
+				</view>
+				<view class="aia-sheet-input">
+					<textarea
+						class="aia-textarea"
+						:value="answerText"
+						@input="onAnswerInput"
+						maxlength="500"
+						placeholder="输入你的回答"
+						placeholder-class="aia-ph"
+						:show-confirm-bar="false"
+						:disable-default-padding="true"
+						:cursor-spacing="16"
+					/>
+				</view>
+				<view class="aia-sheet-foot">
+					<text class="aia-count">{{ answerText.length }}/500</text>
+					<view class="aia-submit" :class="{ 'aia-submit-ready': answerText.length > 0 }" @tap="submitAnswer">
+						<text class="ic ic-sys ic-jiantou-you aia-submit-icon"></text>
+					</view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import {
+	getAiAvatarOwnerId,
+	getAiAvatarOwnerDashboard,
+	submitAiAvatarOwnerAnswer,
+	deleteAiAvatarOwnerQuestion,
+	deleteAiAvatarOwnerAnswer
+} from '@/api'
+
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+
+const activeTab = ref(0)
+const ownerId = ref(0)
+const loading = ref(true)
+const errorMessage = ref('')
+const chatRecords = ref<any[]>([])
+const pendingQuestions = ref<any[]>([])
+const myAnswers = ref<any[]>([])
+
+const answerVisible = ref(false)
+const answerMode = ref('pending') // pending=回答新问题 / edit=编辑已有回答
+const answerQuestion = ref('')
+const answerText = ref('')
+const editingId = ref('')
+
+const applyDashboard = (data: any) => {
+	const value = data != null && typeof data == 'object' ? data : {}
+	chatRecords.value = Array.isArray(value.chatRecords) ? value.chatRecords : []
+	pendingQuestions.value = Array.isArray(value.pendingQuestions) ? value.pendingQuestions : []
+	myAnswers.value = Array.isArray(value.myAnswers) ? value.myAnswers : []
+}
+
+const loadDashboard = async () => {
+	loading.value = true
+	errorMessage.value = ''
+	ownerId.value = getAiAvatarOwnerId()
+	try {
+		const res = getAiAvatarOwnerDashboard(ownerId.value)
+		if (!res.success || res.data == null) {
+			errorMessage.value = res.message != null ? String(res.message) : '请先登录后管理 AI 分身'
+			return
+		}
+		applyDashboard(res.data)
+	} catch (error) {
+		console.error('AI 分身管理数据加载失败', error)
+		errorMessage.value = '网络或本地数据异常，请稍后重试'
+	} finally {
+		loading.value = false
+	}
+}
+
+const back = () => { uni.navigateBack({ delta: 1 }) }
+const switchTab = (idx: number) => { activeTab.value = idx }
+
+const openPending = (item: any) => {
+	answerMode.value = 'pending'
+	editingId.value = String(item.id)
+	answerQuestion.value = '' + item.question
+	answerText.value = ''
+	answerVisible.value = true
+}
+
+const openEdit = (item: any) => {
+	answerMode.value = 'edit'
+	editingId.value = String(item.id)
+	answerQuestion.value = '' + item.question
+	answerText.value = '' + item.answer
+	answerVisible.value = true
+}
+
+const closeAnswer = () => {
+	answerText.value = ''
+	answerVisible.value = false
+}
+
+const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
+
+const submitAnswer = () => {
+	const value = answerText.value != null ? String(answerText.value).trim() : ''
+	if (value == '') {
+		uni.showToast({ title: '先写点内容再提交', icon: 'none' })
+		return
+	}
+	if (answerMode.value == 'pending') {
+		const res = submitAiAvatarOwnerAnswer(ownerId.value, editingId.value, value)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? String(res.message) : '提交失败', icon: 'none' })
+			return
+		}
+		if (res.data != null) applyDashboard(res.data)
+		uni.showToast({ title: '已保存到本设备的 AI 演示数据', icon: 'none' })
+	} else {
+		const res = submitAiAvatarOwnerAnswer(ownerId.value, editingId.value, value)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? String(res.message) : '保存失败', icon: 'none' })
+			return
+		}
+		if (res.data != null) applyDashboard(res.data)
+		uni.showToast({ title: '已保存修改', icon: 'none' })
+	}
+	answerText.value = ''
+	answerVisible.value = false
+}
+
+const deletePending = (id: any) => {
+	uni.showModal({
+		title: '删除待回答问题',
+		content: '删除后不会再显示这个问题，确定继续吗？',
+		confirmText: '删除',
+		success: (result: any) => {
+			if (result.confirm !== true) return
+			const res = deleteAiAvatarOwnerQuestion(ownerId.value, String(id))
+			if (res.success && res.data != null) applyDashboard(res.data)
+			uni.showToast({ title: res.success ? '已删除' : '删除失败', icon: 'none' })
+		}
+	})
+}
+
+const deleteAnswer = (id: any) => {
+	uni.showModal({
+		title: '删除本人回答',
+		content: '删除后 AI 分身将不再使用这条演示答案，确定继续吗？',
+		confirmText: '删除',
+		success: (result: any) => {
+			if (result.confirm !== true) return
+			const res = deleteAiAvatarOwnerAnswer(ownerId.value, String(id))
+			if (res.success && res.data != null) applyDashboard(res.data)
+			uni.showToast({ title: res.success ? '已删除' : '删除失败', icon: 'none' })
+		}
+	})
+}
+
+onMounted(() => { loadDashboard() })
+onShow(() => { if (!answerVisible.value) loadDashboard() })
+</script>
+
+<style>
+/* ==================== 页面级变量（与「我的」页一致的暖调色系） ==================== */
+page {
+	--aia-bg: #F7F4F0;
+	--aia-card: #FFFFFF;
+	--aia-dark: #3A3A3A;
+	--aia-accent: #8FA88A;
+	--aia-accent-deep: #6E8A6A;
+	--aia-accent-tint: #EDF2EA;
+	--aia-rose: #D4A89E;
+	--aia-rose-deep: #B98A7E;
+	--aia-rose-tint: #F9EFE9;
+	--aia-text: #2C2C2C;
+	--aia-text-2: #8E8E8A;
+	--aia-text-muted: #C5C3BE;
+	background-color: var(--aia-bg);
+}
+
+.aia-page {
+	height: 100vh;
+	min-height: 100vh;
+	background-color: var(--aia-bg);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* ==================== 导航栏 ==================== */
+.aia-nav {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px 10px;
+}
+
+.aia-nav-side {
+	width: 40px;
+	height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.aia-back-icon {
+	font-size: 18px;
+	color: var(--aia-text);
+}
+
+.aia-nav-title {
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--aia-text);
+}
+
+/* ==================== Tab 切换 ==================== */
+.aia-tabs {
+	margin: 6px 16px 0;
+	background-color: #ECE8E1;
+	border-radius: 14px;
+	padding: 4px;
+	display: flex;
+	flex-direction: row;
+	flex-shrink: 0;
+}
+
+.aia-tab {
+	flex: 1;
+	height: 36px;
+	border-radius: 11px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+}
+
+.aia-tab-active {
+	background-color: #FFFFFF;
+}
+
+.aia-tab-text {
+	font-size: 13px;
+	color: var(--aia-text-2);
+}
+
+.aia-tab-text-active {
+	color: var(--aia-text);
+	font-weight: 600;
+}
+
+.aia-tab-count {
+	background-color: var(--aia-rose);
+	border-radius: 9px;
+	min-width: 17px;
+	height: 17px;
+	padding: 0 5px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.aia-tab-count-text {
+	font-size: 10px;
+	font-weight: 700;
+	color: #FFFFFF;
+}
+
+/* ==================== 列表区 ==================== */
+.aia-body {
+	flex: 1;
+	min-height: 0;
+	padding: 14px 16px 0;
+}
+
+.aia-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 300px;
+	padding: 24px;
+	text-align: center;
+}
+
+.aia-state-title {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--aia-text);
+}
+
+.aia-state-copy {
+	margin-top: 8px;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--aia-text-2);
+}
+
+.aia-retry {
+	margin-top: 16px;
+	padding: 9px 18px;
+	border-radius: 8px;
+	background-color: var(--aia-accent-deep);
+	color: #FFFFFF;
+	font-size: 12px;
+}
+
+.aia-tip {
+	display: flex;
+	font-size: 11px;
+	line-height: 1.6;
+	color: var(--aia-text-2);
+	padding: 0 2px 12px;
+}
+
+.aia-bottom-spacer {
+	height: 40px;
+	flex-shrink: 0;
+}
+
+/* ---------- 对话记录 ---------- */
+.aia-chat-item {
+	background-color: var(--aia-card);
+	border-radius: 16px;
+	padding: 14px 16px;
+	margin-bottom: 12px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 12px;
+}
+
+.aia-chat-avatar {
+	width: 44px;
+	height: 44px;
+	border-radius: 22px;
+	background-color: #F0EDE7;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.aia-chat-avatar-icon {
+	font-size: 22px;
+	color: var(--aia-text-muted);
+}
+
+.aia-chat-main {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.aia-chat-name {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--aia-text);
+}
+
+.aia-chat-topic {
+	font-size: 12px;
+	color: var(--aia-text-2);
+}
+
+.aia-chat-meta {
+	font-size: 11px;
+	color: var(--aia-text-muted);
+}
+
+/* ---------- 待回答 ---------- */
+.aia-qa-item {
+	background-color: var(--aia-card);
+	border-radius: 18px;
+	padding: 18px;
+	margin-bottom: 12px;
+	display: flex;
+	flex-direction: column;
+}
+
+.aia-qa-head {
+	display: flex;
+	flex-direction: row;
+	gap: 4px;
+}
+
+.aia-qa-quote {
+	font-size: 34px;
+	line-height: 1;
+	color: var(--aia-rose);
+	font-weight: 700;
+	margin-top: 4px;
+}
+
+.aia-qa-q {
+	flex: 1;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1.6;
+	color: var(--aia-text);
+	padding-top: 4px;
+}
+
+.aia-qa-foot {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 14px;
+	padding-left: 26px;
+}
+
+.aia-qa-asked {
+	font-size: 11px;
+	color: var(--aia-text-muted);
+}
+
+/* ---------- 通用删除按钮 ---------- */
+.aia-del {
+	width: 26px;
+	height: 26px;
+	border-radius: 13px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.aia-del-text {
+	font-size: 17px;
+	line-height: 1;
+	color: var(--aia-text-muted);
+}
+
+/* ---------- 我的回答 ---------- */
+.aia-ans-item {
+	background-color: var(--aia-card);
+	border-radius: 18px;
+	padding: 18px;
+	margin-bottom: 12px;
+	display: flex;
+	flex-direction: column;
+}
+
+.aia-ans-top {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.aia-ans-q {
+	flex: 1;
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+}
+
+.aia-q-badge {
+	width: 22px;
+	height: 22px;
+	border-radius: 8px;
+	background-color: var(--aia-rose-tint);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+
+.aia-q-badge-text {
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--aia-rose-deep);
+}
+
+.aia-ans-q-text {
+	flex: 1;
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--aia-text-2);
+}
+
+.aia-ans-a {
+	margin-top: 12px;
+	border-radius: 14px;
+	padding: 14px 16px;
+	background-image: linear-gradient(135deg, #F5F8F3 0%, #FBF6F1 100%);
+}
+
+.aia-ans-a-text {
+	font-size: 14px;
+	line-height: 1.7;
+	color: var(--aia-text);
+}
+
+.aia-ans-foot {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 12px;
+}
+
+.aia-ans-time {
+	font-size: 11px;
+	color: var(--aia-text-muted);
+}
+
+.aia-ans-edit {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--aia-accent-deep);
+}
+
+/* ==================== 空状态 ==================== */
+.aia-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 56px 24px;
+}
+
+.aia-empty-icon {
+	width: 96px;
+	height: 96px;
+	border-radius: 48px;
+	background-color: #F0EDE7;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 18px;
+}
+
+.aia-empty-icon-text {
+	font-size: 40px;
+	color: var(--aia-text-muted);
+}
+
+.aia-empty-title {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--aia-text);
+}
+
+.aia-empty-sub {
+	font-size: 12px;
+	line-height: 1.7;
+	color: var(--aia-text-2);
+	margin-top: 8px;
+	text-align: center;
+}
+
+/* ==================== 回答弹窗 ==================== */
+.aia-mask {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 30;
+	background-color: rgba(44, 44, 44, 0.45);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+
+.aia-sheet {
+	width: 100%;
+	background-color: #FFFFFF;
+	border-radius: 22px;
+	padding: 20px 18px 18px;
+	display: flex;
+	flex-direction: column;
+	position: relative;
+}
+
+.aia-sheet-head {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.aia-sheet-close {
+	width: 36px;
+	height: 36px;
+	border-radius: 18px;
+	background-color: #F5F3EF;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.aia-sheet-close-text {
+	font-size: 18px;
+	line-height: 1;
+	color: var(--aia-text-2);
+}
+
+.aia-sheet-q {
+	flex: 1;
+	display: flex;
+	flex-direction: row;
+	gap: 9px;
+	align-items: flex-start;
+}
+
+.aia-sheet-q-text {
+	flex: 1;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1.6;
+	color: var(--aia-text);
+}
+
+.aia-sheet-input {
+	margin-top: 14px;
+	background-color: #F5F6F4;
+	border-radius: 14px;
+	padding: 13px 14px;
+}
+
+.aia-textarea {
+	width: 100%;
+	height: 120px;
+	font-size: 14px;
+	line-height: 1.7;
+	color: var(--aia-text);
+}
+
+.aia-ph {
+	color: #B9B7B1;
+}
+
+.aia-sheet-foot {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 12px;
+}
+
+.aia-count {
+	font-size: 12px;
+	color: var(--aia-text-muted);
+}
+
+.aia-submit {
+	width: 44px;
+	height: 44px;
+	border-radius: 22px;
+	background-color: #ECEAE4;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.aia-submit-ready {
+	background-color: var(--aia-dark);
+}
+
+.aia-submit-icon {
+	font-size: 16px;
+	color: var(--aia-text);
+}
+
+.aia-submit-ready .aia-submit-icon {
+	color: #FFFFFF;
+}
+
+/* ==================== 图标字体 ==================== */
+@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/系统通用/iconfont.woff') format('woff'); }
+@font-face { font-family: "iconfont-social"; src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff'); }
+
+.ic { font-style: normal; -webkit-font-smoothing: antialiased; }
+.ic-sys { font-family: "iconfont-sys" !important; }
+.ic-social { font-family: "iconfont-social" !important; }
+
+.ic-fanhui:before { content: "\e606"; }
+.ic-guanbi:before { content: "\e604"; }
+.ic-jiantou-you:before { content: "\e928"; }
+.ic-touxiang:before { content: "\e632"; }
+.ic-pinglun:before { content: "\e679"; }
+.ic-shiming:before { content: "\e605"; }
+.ic-tianjia:before { content: "\e62b"; }
+</style>

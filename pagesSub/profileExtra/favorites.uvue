@@ -1,12 +1,13 @@
 <template>
-	<view class="empty-page"><view class="empty-nav"><text class="ic ic-sys ic-fanhui back" @tap="back"></text><text>宣誓爱</text><view class="placeholder"></view></view><view class="tabs"><view class="tab" :class="{ active: activeTab === 0 }" @tap="activeTab = 0"><text>我的收藏({{ favorites.length }})</text><view></view></view><view class="tab" :class="{ active: activeTab === 1 }" @tap="activeTab = 1"><text>谁收藏我(0)</text><view></view></view></view><scroll-view v-if="activeTab === 0 && favorites.length > 0" class="favorite-list" scroll-y><view v-for="item in favorites" :key="item.id" class="favorite-row" @tap="openUser(item.id)"><image :src="item.avatar" class="favorite-avatar" mode="aspectFill"></image><view class="favorite-info"><text class="favorite-name">{{ item.name }}</text><text class="favorite-meta">{{ item.age }}岁 · {{ item.city }}</text></view></view></scroll-view><view v-else class="empty-content"><text class="ic ic-home ic-search empty-icon"></text><text class="empty-copy">什么都还没有哦</text></view></view>
+	<view class="empty-page"><view class="empty-nav"><text class="ic ic-sys ic-fanhui back" @tap="back"></text><text>宣誓爱</text><view class="placeholder"></view></view><view class="tabs"><view class="tab" :class="{ active: activeTab === 0 }" @tap="activeTab = 0"><text>我的收藏({{ favorites.length }})</text><view></view></view><view class="tab" :class="{ active: activeTab === 1 }" @tap="activeTab = 1"><text>谁收藏我({{ receivedFavorites.length }})</text><view></view></view></view><scroll-view v-if="activeTab === 0 && favorites.length > 0" class="favorite-list" scroll-y><view v-for="item in favorites" :key="item.id" class="favorite-row" @tap="openUser(item.userId)"><image :src="item.avatar" class="favorite-avatar" mode="aspectFill"></image><view class="favorite-info"><text class="favorite-name">{{ item.name }}</text><text class="favorite-meta">{{ item.age }}岁 · {{ item.city }}</text></view></view></scroll-view><scroll-view v-else-if="activeTab === 1 && receivedFavorites.length > 0" class="favorite-list" scroll-y><view v-for="item in receivedFavorites" :key="item.id" class="favorite-row" @tap="openUser(item.userId)"><image :src="item.avatar" class="favorite-avatar" mode="aspectFill"></image><view class="favorite-info"><text class="favorite-name">{{ item.name }}</text><text class="favorite-meta">{{ item.age }}岁 · {{ item.city }}</text></view></view></scroll-view><view v-else class="empty-content"><text class="ic ic-home ic-search empty-icon"></text><text class="empty-copy">什么都还没有哦</text></view></view>
 </template>
 <script setup lang="uts">
-import { getDiscoveryFavorites } from '@/api'
+import { getDiscoveryFavorites, getReceivedFavorites } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 const back = () => uni.navigateBack({ delta: 1 })
 const activeTab = ref(0)
 const favorites = ref<any[]>([])
+const receivedFavorites = ref<any[]>([])
 const openUser = (id: number) => { if (id > 0) uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id }) }
 const loadFavorites = async () => {
 	const res = await getDiscoveryFavorites(1, 20)
@@ -15,11 +16,16 @@ const loadFavorites = async () => {
 	const result: any[] = []
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i]
-		result.push({ id: Number(row.user_id), name: row.nickname != null ? row.nickname : '用户', age: row.age != null ? row.age : '', city: row.city_code != null ? row.city_code : '未填写', avatar: resolveMediaUrl(row.avatar) })
+		result.push({ id: Number(row.user_id), userId: Number(row.user_id), name: row.nickname != null ? row.nickname : '用户', age: row.age != null ? row.age : '', city: row.city_code != null ? row.city_code : '未填写', avatar: resolveMediaUrl(row.avatar) })
 	}
 	favorites.value = result
 }
-onMounted(() => { loadFavorites() })
+const loadReceivedFavorites = async () => {
+	const res = await getReceivedFavorites(1, 20)
+	if (!res.success || res.data == null) return
+	receivedFavorites.value = (res.data as any).items as any[]
+}
+onMounted(() => { loadFavorites(); loadReceivedFavorites() })
 </script>
 <style scoped>
 .empty-page { min-height: 100vh; background: #F5F7FC; color: #20232A; }.empty-nav { height: 100px; padding: 44px 18px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: #FFF; font-size: 20px; font-weight: 800; }.back,.placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }.back { font-size: 38px; font-weight: 300; }.tabs { height: 56px; display: flex; flex-direction: row; background: #FFF; }.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; color: #999DA7; font-size: 16px; }.tab view { width: 28px; height: 5px; border-radius: 3px; background: transparent; }.tab.active { color: #24242A; font-weight: 700; }.tab.active view { background: #D55CEA; }.empty-content { display: flex; flex-direction: column; align-items: center; padding-top: 45px; color: #D9DFEC; }.empty-icon { width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; background: #FFF; font-size: 64px; color: #DDE5F4; }.empty-copy { margin-top: 10px; font-size: 14px; color: #D1D4DC; }

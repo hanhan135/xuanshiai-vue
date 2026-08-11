@@ -16,3 +16,9 @@ graphify-out/
 .serena/
 docs/superpowers/
 .claude
+/static/xuanshiai/
+mock-local/
+.agents/
+test-local-mock-login.js
+skills-lock.json
+demo/

@@ -12,7 +12,7 @@
 		</view>
 		<scroll-view class="record-scroll" scroll-y>
 			<view class="vip-hint" @tap="goVip"><text class="ic ic-vip ic-huiyuan hint-icon"></text><text class="hint-copy">开通会员可查看 3 天内的浏览记录</text><text class="hint-link">去开通 ›</text></view>
-			<view class="sub-tabs"><view class="sub-tab active"><text>每日推荐</text></view><view class="sub-tab"><text>广场</text></view></view>
+			<view class="sub-tabs"><view class="sub-tab" :class="{ active: historyMode == 'recommend' }" @tap="selectHistoryMode('recommend')"><text>每日推荐</text></view><view class="sub-tab" :class="{ active: historyMode == 'plaza' }" @tap="selectHistoryMode('plaza')"><text>广场</text></view></view>
 			<view class="filter-row"><text class="result-count">共 {{ historyUsers.length }} 条浏览记录</text><view class="filter-button" @tap="toggleFilter"><text class="ic ic-sys ic-xiala filter-icon"></text><text>筛选</text></view></view>
 			<view class="record-card" v-for="user in historyUsers" :key="user.id" @tap="openUser(user.id)">
 				<image class="record-avatar" :src="user.avatar" mode="aspectFill"></image>
@@ -43,6 +43,7 @@ import { getBrowseHistory, getVisitors } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 const historyUsers = ref<any[]>([])
 const visitors = ref<any[]>([])
+const historyMode = ref('recommend')
 
 const loadHistory = async () => {
 	const res = await getBrowseHistory(1, 20)
@@ -74,6 +75,7 @@ const toggleFilter = () => { filterVisible.value = true }
 const selectFilter = (name: string) => { draftFilter.value = name }
 const applyFilter = () => { filterName.value = draftFilter.value; filterVisible.value = false }
 const closeFilter = () => { filterVisible.value = false; draftFilter.value = filterName.value }
+const selectHistoryMode = (mode: string) => { historyMode.value = mode }
 const openUser = (id: number) => { if (id > 0) uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id }) }
 const noop = () => {}
 onMounted(() => { loadHistory(); loadVisitors() })

@@ -11,7 +11,7 @@
 			<text class="state-description">读取最新信息，请稍候</text>
 			<view class="loading-dots"><view></view><view></view><view></view></view>
 		</view>
-		<view v-else-if="loadError != ''" class="error-state">
+		<view v-else-if="loadError != '' && !profileLoaded" class="error-state">
 			<view class="error-mark"><text>!</text></view>
 			<text class="error-title">资料暂时无法打开</text>
 			<text class="error-description">{{ loadError }}</text>
@@ -22,16 +22,17 @@
 			</view>
 		</view>
 
-		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false">
+		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false" refresher-enabled="true" :refresher-triggered="refreshing" @refresherrefresh="onPullRefresh" @refresherrestore="refreshing = false">
 			<view class="progress-section">
 				<view class="progress-header"><text class="progress-label">资料完整度</text><text class="progress-value">{{ completeness }}%</text></view>
 				<view class="progress-track"><view class="progress-fill" :style="{ width: completeness + '%' }"></view></view>
 				<text class="progress-hint">资料越完整，推荐权重越高，更容易遇见对的人</text>
+				<text v-if="missingCompletionSummary != ''" class="progress-missing">待完善：{{ missingCompletionSummary }}</text>
 			</view>
 
 			<view class="section-card avatar-section">
 				<view class="section-heading">
-					<text class="section-title">头像</text>
+					<text class="section-title">头像{{ completionSuffix('avatar', 15) }}</text>
 					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
 				</view>
 				<view class="avatar-row">
@@ -45,7 +46,7 @@
 			</view>
 
 			<view class="section-card album-card">
-				<view class="section-heading"><text class="section-title">我的相册</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
+				<view class="section-heading"><text class="section-title">我的相册{{ completionSuffix('album', 8) }}</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
 				<view class="album-grid">
 					<view class="album-cell" v-for="(photo, index) in formData.photos" :key="photo.id != null ? photo.id : index">
 						<image class="album-photo" :src="photo.url" mode="aspectFill"></image>
@@ -56,18 +57,33 @@
 				<text class="media-note" v-if="uploadingMedia">正在上传媒体，请稍候</text>
 			</view>
 
+			<view class="section-card nickname-card">
+				<view class="section-heading">
+					<text class="section-title">昵称</text>
+				</view>
+				<view class="nickname-edit-row">
+					<input class="nickname-edit-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" />
+					<view class="nickname-edit-save" @tap="saveNickname"><text>保存</text></view>
+				</view>
+			</view>
+
 			<view class="section-card preview-card">
 				<view class="section-heading">
 					<text class="section-title">基础信息</text>
-					<view class="pill-action" @tap="detailSheetVisible = true"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
+					<view class="pill-action" @tap="openBasicEditor"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
 				</view>
 				<view class="preview-list">
-					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ formData.residenceCityCode || '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ formData.hometown || '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ occupationPreview }}</text></view>
-					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ incomePreview }}</text></view>
-					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ maritalText == '未选择' ? '未填写' : maritalText }}</text></view>
-					<view class="preview-row"><text class="preview-label">脱单目标</text><text class="preview-value">{{ formData.tagSelections?.relationshipGoal || '未填写' }}</text></view>
+					<view class="preview-row"><text class="preview-label">性别</text><text class="preview-value">{{ completionText('gender', genderText == '未选择' ? '' : genderText, '未填写', 7) }}</text></view>
+					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ completionText('birthday', agePreview == '未填写' ? '' : agePreview, '未填写', 7) }}</text></view>
+					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ completionText('height', formData.height != '' ? formData.height + ' cm' : '', '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ completionText('weight', formData.weight != '' ? formData.weight + ' kg' : '', '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ completionText('education', educationText == '未选择' ? '' : educationText, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ completionText('location', formData.residenceCityCode, '未填写', 5) }}</text></view>
+					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ completionText('hometown', formData.hometown, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ completionText('occupation', occupationPreview == '未填写' ? '' : occupationPreview, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ completionText('income', incomePreview == '未填写' ? '' : incomePreview, '未填写', 4) }}</text></view>
+					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ completionText('marriage', maritalText == '未选择' ? '' : maritalText, '未填写', 5) }}</text></view>
+					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ completionText('mbti', formData.mbti, '未填写', 2) }}</text></view>
 					<view class="preview-row"><text class="preview-label">微信号</text><text class="preview-value">{{ formData.wechat || '仅作为紧急联系' }}</text></view>
 				</view>
 			</view>
@@ -75,7 +91,7 @@
 			<view class="section-card certification-card">
 				<view class="section-heading">
 					<text class="section-title">四重认证</text>
-					<text class="section-caption">已完成 {{ completedCertCount }}/4</text>
+					<text class="section-caption">已完成 {{ completedCertCount }}/4{{ completionSuffix('realname', 5, ' · 实名') }}{{ completionSuffix('single_pledge', 1, ' · 单身承诺') }}</text>
 				</view>
 				<view class="cert-row" v-for="cert in certifications" :key="cert.key">
 					<view class="cert-icon-wrap" :class="{ 'cert-icon-done': cert.passed }"><text class="cert-icon">{{ cert.icon }}</text></view>
@@ -86,18 +102,37 @@
 			</view>
 
 			<view class="section-card intro-card">
-				<text class="section-title">自我介绍</text>
-				<textarea class="intro-main-input" :value="formData.introduction" maxlength="1000" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
+				<view class="section-heading"><text class="section-title">自我介绍{{ completionSuffix('intro', 10) }}</text><view class="pill-action" @tap="saveIntroduction"><text class="pill-action-text">保存</text></view></view>
+				<textarea class="intro-main-input" :class="{ 'has-content': introHasContent }" :value="formData.introduction" maxlength="500" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
 				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
+				<text v-if="!completionPassed('intro')" class="completion-warning">自我介绍：少于后台要求的 20 字</text>
 			</view>
 
-			<view class="section-card tags-card" @tap="goTagsEdit">
-				<view class="section-heading"><text class="section-title">我的标签</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
-				<text class="section-caption">选择最能代表你的个性标签（最多20个）</text>
+			<view class="section-card tags-card" @tap="goTagsEdit('interest')">
+				<view class="section-heading"><text class="section-title">兴趣标签{{ completionSuffix('interest', 5) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">选择能代表你的兴趣爱好</text>
 				<view class="tag-list">
-					<view class="tag-chip" v-for="tag in displayTags" :key="tag"><text>{{ tag }}</text></view>
-					<view class="tag-chip tag-add"><text>+ 添加</text></view>
+					<view class="tag-chip" v-for="tag in interestDisplayTags" :key="'interest-' + tag"><text>{{ tag }}</text></view>
+					<view v-if="interestDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
 				</view>
+				<text v-if="!completionPassed('interest')" class="completion-warning">兴趣标签：少于 3 个</text>
+			</view>
+
+			<view class="section-card tags-card" @tap="goTagsEdit('personality')">
+				<view class="section-heading"><text class="section-title">性格标签{{ completionSuffix('personality', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">选择能代表你的性格特征</text>
+				<view class="tag-list">
+					<view class="tag-chip tag-accent" v-for="tag in personalityDisplayTags" :key="'personality-' + tag"><text>{{ tag }}</text></view>
+					<view v-if="personalityDisplayTags.length == 0" class="tag-empty"><text>暂未填写</text></view>
+				</view>
+				<text v-if="!completionPassed('personality')" class="completion-warning">性格标签：少于 3 个</text>
+			</view>
+
+			<view class="section-card preference-card" @tap="openPreferenceEditor">
+				<view class="section-heading"><text class="section-title">择偶标准{{ completionSuffix('preference', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<text class="section-caption">设置你期待的年龄、身高、学历和距离范围</text>
+				<view class="preference-summary"><text>{{ preferencePreview }}</text></view>
+				<text v-if="!completionPassed('preference')" class="completion-warning">择偶要求：未看到有效年龄范围</text>
 			</view>
 
 			<view class="section-card qa-card">
@@ -120,19 +155,26 @@
 			<view class="scroll-bottom-spacer"></view>
 		</scroll-view>
 
-		<view v-if="!loading && loadError == ''" class="bottom-bar">
-			<view class="cancel-button" @tap="onCancel"><text>取消</text></view>
-			<view class="save-button" :class="{ disabled: saving || uploadingMedia }" @tap="handleSave"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
+		<view v-if="singlePledgeVisible" class="pledge-overlay" @tap="closeSinglePledge">
+			<view class="pledge-dialog" @tap.stop>
+				<text class="pledge-title">单身承诺</text>
+				<text class="pledge-copy">我确认当前为单身状态，并承诺填写的信息真实有效。如状态发生变化，我会及时更新资料。</text>
+				<view class="pledge-actions">
+					<view class="pledge-cancel" @tap="closeSinglePledge"><text>暂不承诺</text></view>
+					<view class="pledge-confirm" :class="{ disabled: singlePledgeSubmitting }" @tap="confirmSinglePledge"><text>{{ singlePledgeSubmitting ? '提交中...' : '同意并承诺' }}</text></view>
+				</view>
+			</view>
 		</view>
 
 		<view class="sheet-overlay" v-if="detailSheetVisible" @click="detailSheetVisible = false">
 			<view class="sheet-panel" @click.stop>
 				<view class="sheet-handle"></view>
 				<view class="sheet-nav">
-					<text class="sheet-title">编辑资料</text>
+					<text class="sheet-title">{{ editSheetMode == 'preference' ? '择偶标准' : '编辑资料' }}</text>
 					<text class="sheet-close" @tap="detailSheetVisible = false">✕</text>
 				</view>
 				<scroll-view class="sheet-body" scroll-y enhanced show-scrollbar="false">
+					<view v-if="editSheetMode == 'basic'">
 					<view class="sheet-row">
 						<text class="sheet-row-label">昵称</text>
 						<input class="sheet-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" /><text class="sheet-row-arrow">›</text>
@@ -204,7 +246,8 @@
 						<text class="sheet-row-label">微信号</text>
 						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" /><text class="sheet-row-arrow">›</text>
 					</view>
-					<view class="sheet-divider"></view>
+					</view>
+					<view v-if="editSheetMode == 'preference'">
 					<view class="sheet-section-label">择偶要求</view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">年龄下限</text>
@@ -245,23 +288,62 @@
 						<text class="sheet-row-label">其他要求</text>
 						<textarea class="sheet-textarea" :value="formData.extraRequirement" maxlength="255" placeholder="填写希望对方了解的边界" @input="onInput('extraRequirement', $event)"></textarea>
 					</view>
+					</view>
 					<view class="sheet-bottom-spacer"></view>
 				</scroll-view>
+				<view class="sheet-footer">
+					<view class="cancel-button" @tap="cancelDetailEdit"><text>取消</text></view>
+					<view class="save-button" :class="{ disabled: saving || uploadingMedia }" @tap="handleSave"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
+				</view>
 			</view>
+		</view>
+
+		<view v-if="cropVisible" class="crop-overlay">
+			<view class="crop-panel" @tap.stop>
+				<text class="crop-title">{{ cropKind == 'avatar' ? '预览并裁剪头像' : '预览并裁剪背景' }}</text>
+				<view class="crop-stage" :class="{ 'crop-stage-background': cropKind == 'background' }" @touchstart="startCropDrag" @touchmove.stop.prevent="moveCropDrag" @touchend="endCropDrag">
+					<image class="crop-preview-image" :style="{ transform: 'translate(' + cropOffsetX + 'px, ' + cropOffsetY + 'px)' }" :src="cropPath" mode="aspectFill"></image>
+					<view class="crop-frame" :class="{ 'crop-frame-background': cropKind == 'background' }"></view>
+				</view>
+				<text class="crop-hint">已按{{ cropKind == 'avatar' ? '正方形头像' : '横向背景' }}比例预览，确认后裁剪上传</text>
+				<view class="crop-actions">
+					<view class="crop-cancel" @tap="cancelCrop"><text>取消</text></view>
+					<button class="crop-confirm" :disabled="uploadingMedia || cropConfirming" @tap="onCropConfirmTap" @click="onCropConfirmTap">{{ uploadingMedia || cropConfirming ? '处理中...' : '裁剪并上传' }}</button>
+				</view>
+			</view>
+			<canvas canvas-id="profileCropCanvas" class="crop-canvas" width="800" height="800"></canvas>
 		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
-	import { getOwnProfile, updateOwnProfile, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile } from '@/api'
+	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile, getProfileCompletion, getAgreementVersions, acceptAgreement } from '@/api'
 	import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
+	import locationJson from '@/static/location.json'
 
 	const loading = ref(true)
+	const refreshing = ref(false)
 	const loadError = ref('')
+	const profileLoaded = ref(false)
 	const saving = ref(false)
 	const uploadingMedia = ref(false)
+	const cropConfirming = ref(false)
+	const cropVisible = ref(false)
+	const cropPath = ref('')
+	const cropKind = ref('avatar')
+	const cropOffsetX = ref(0)
+	const cropOffsetY = ref(0)
+	const cropDragStartX = ref(0)
+	const cropDragStartY = ref(0)
+	const cropDragOriginX = ref(0)
+	const cropDragOriginY = ref(0)
+	const cropDragging = ref(false)
 	const detailSheetVisible = ref(false)
+	const editSheetMode = ref('basic')
+	const singlePledgeVisible = ref(false)
+	const singlePledgeSubmitting = ref(false)
+	const singlePledgePassed = ref(false)
 	const realNameStatus = ref('missing')
 	const educationStatus = ref('missing')
 	const genderOptions = ['未选择', '男', '女']
@@ -287,7 +369,13 @@
 		weight: '' as any,
 		educationLevel: null as any,
 		residenceCityCode: '',
+		residenceApiCityCode: '',
+		residenceProvinceCode: '',
+		residenceDistrictCode: '',
 		hometown: '',
+		hometownProvinceCode: '',
+		hometownCityCode: '',
+		hometownDistrictCode: '',
 		occupation: '',
 		industry: '',
 		company: '',
@@ -312,6 +400,7 @@
 		extraRequirement: ''
 	})
 	const completionScore = ref(0)
+	const completionItems = ref({} as any)
 	const usingLocalDraft = ref(false)
 
 	const textValue = (value: any): string => value == null ? '' : '' + value
@@ -322,7 +411,59 @@
 	}
 	const profileMedia = (raw: any): any[] => {
 		const list = raw != null && Array.isArray(raw) ? raw as any[] : []
-		return list.map((item: any) => ({ id: item.id, url: resolveMediaUrl(item.file_url), sortOrder: item.sort_order }))
+		return list.filter((item: any) => item != null).map((item: any) => {
+			if (typeof item == 'string') return { id: 0, url: resolveMediaUrl(item), sortOrder: 0 }
+			return { id: item.id, url: resolveMediaUrl(item.file_url != null ? item.file_url : item.url), sortOrder: item.sort_order }
+		})
+	}
+	const incomeValue = (value: any): any => {
+		const text = textValue(value)
+		if (text == '') return null
+		if (text == '小于10w') return 50000
+		if (text == '10-20w') return 150000
+		if (text == '30-50w') return 400000
+		if (text == '50-100w') return 750000
+		if (text == '100w以上') return 1000000
+		if (text == '保密') return null
+		const numeric = Number(value)
+		return isNaN(numeric) ? null : numeric
+	}
+	const incomeDisplay = (value: any): string => {
+		const numeric = Number(value)
+		if (isNaN(numeric) || numeric <= 0) return ''
+		const wan = numeric / 10000
+		return (wan % 1 == 0 ? '' + wan : wan.toFixed(1)) + 'w'
+	}
+	const locationCodesByNames = (values: string[]): any => {
+		const raw = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const province of raw) {
+			if (province.name != values[0]) continue
+			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			for (const city of cities) {
+				if (city.name != values[1]) continue
+				const areas = Array.isArray(city.area) ? city.area as any[] : []
+				for (const area of areas) {
+					if (area.name == values[2]) return { province: '' + province.code, city: '' + city.code, district: '' + area.code }
+				}
+			}
+		}
+		return { province: '', city: '', district: '' }
+	}
+	const locationTextByCodes = (provinceCode: any, cityCode: any, districtCode: any): string => {
+		const p = textValue(provinceCode)
+		const c = textValue(cityCode)
+		const d = textValue(districtCode)
+		const raw = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const province of raw) {
+			if ('' + province.code != p) continue
+			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			for (const city of cities) {
+				if ('' + city.code != c) continue
+				const areas = Array.isArray(city.area) ? city.area as any[] : []
+				for (const area of areas) if ('' + area.code == d) return province.name + ' ' + city.name + ' ' + area.name
+			}
+		}
+		return ''
 	}
 
 	const applyProfile = (raw: any) => {
@@ -334,12 +475,18 @@
 		formData.value.height = data.height != null ? data.height : ''
 		formData.value.weight = data.weight != null ? data.weight : ''
 		formData.value.educationLevel = data.education_level
-		formData.value.residenceCityCode = textValue(data.residence_city_code)
-		formData.value.hometown = textValue(data.hometown)
+		formData.value.residenceProvinceCode = textValue(data.residence_province_code)
+		formData.value.residenceApiCityCode = textValue(data.residence_city_code)
+		formData.value.residenceDistrictCode = textValue(data.residence_district_code)
+		formData.value.residenceCityCode = locationTextByCodes(data.residence_province_code, data.residence_city_code, data.residence_district_code) || formData.value.residenceApiCityCode
+		formData.value.hometownProvinceCode = textValue(data.hometown_province_code)
+		formData.value.hometownCityCode = textValue(data.hometown_city_code)
+		formData.value.hometownDistrictCode = textValue(data.hometown_district_code)
+		formData.value.hometown = locationTextByCodes(data.hometown_province_code, data.hometown_city_code, data.hometown_district_code) || textValue(data.hometown)
 		formData.value.occupation = textValue(data.occupation)
 		formData.value.industry = textValue(data.industry)
 		formData.value.company = textValue(data.company)
-		formData.value.income = textValue(data.income_range != null ? data.income_range : data.income)
+		formData.value.income = incomeDisplay(data.income) || textValue(data.income_range)
 		formData.value.isMarried = data.is_married
 		formData.value.mbti = textValue(data.mbti)
 		formData.value.introduction = textValue(data.self_intro)
@@ -365,27 +512,65 @@
 		formData.value.extraRequirement = textValue(data.extra_requirement)
 	}
 
+	const profilePayload = (raw: any): any => {
+		if (raw != null && typeof raw == 'object' && raw.profile != null && typeof raw.profile == 'object') return raw.profile
+		if (raw != null && typeof raw == 'object' && raw.data != null && typeof raw.data == 'object' && raw.data.profile != null) return raw.data.profile
+		return raw
+	}
+
+	const refreshCompletion = async () => {
+		try {
+			const completion = await getProfileCompletion()
+			if (!completion.success || completion.data == null) return
+			const data = completion.data as any
+			const returnedScore = data.score != null ? data.score : data.completion_score
+			if (returnedScore != null) completionScore.value = Math.round(Number(returnedScore))
+			const items = Array.isArray(data.items) ? data.items as any[] : []
+			const nextItems = {} as any
+			for (const item of items) {
+				if (item.key == null) continue
+				nextItems['' + item.key] = { completed: item.completed == true, weight: Number(item.weight) }
+				if (item.key == 'single_pledge') singlePledgePassed.value = item.completed == true
+			}
+			completionItems.value = nextItems
+		} catch (e) {
+			console.error('[EditProfile] completion refresh failed', e)
+		}
+	}
+
 	const load = async () => {
 		loading.value = true
 		loadError.value = ''
+		profileLoaded.value = false
 		try {
 			const profileRes = await getOwnProfile()
 			if (!profileRes.success || profileRes.data == null) {
 				loadError.value = profileRes.message != null ? '' + profileRes.message : '个人资料接口暂不可用'
 				return
 			}
-			applyProfile(profileRes.data)
-			const preferenceRes = await getOwnPreferences()
-			if (!preferenceRes.success || preferenceRes.data == null) {
-				loadError.value = preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求接口暂不可用'
-				return
+			profileLoaded.value = true
+			try {
+				applyProfile(profilePayload(profileRes.data))
+			} catch (profileError) {
+				console.error('[EditProfile] profile response mapping failed', profileError)
 			}
-			applyPreferences(preferenceRes.data)
-			const meRes = await getMeProfile()
-			if (meRes.success && meRes.data != null) {
-				realNameStatus.value = meRes.data.realNameStatus != null ? '' + meRes.data.realNameStatus : 'missing'
-				educationStatus.value = meRes.data.educationStatus != null ? '' + meRes.data.educationStatus : 'missing'
+			try {
+				const preferenceRes = await getOwnPreferences()
+				if (preferenceRes.success && preferenceRes.data != null) applyPreferences(preferenceRes.data)
+			} catch (preferenceError) {
+				console.error('[EditProfile] preferences unavailable', preferenceError)
 			}
+			try {
+				const meRes = await getMeProfile()
+				if (meRes.success && meRes.data != null) {
+					realNameStatus.value = meRes.data.realNameStatus != null ? '' + meRes.data.realNameStatus : 'missing'
+					educationStatus.value = meRes.data.educationStatus != null ? '' + meRes.data.educationStatus : 'missing'
+				}
+			} catch (meError) {
+				console.error('[EditProfile] auth profile unavailable', meError)
+			}
+			syncLocalTagDraft()
+			await refreshCompletion()
 		} catch (e) {
 			loadError.value = '网络不可用，请重试'
 		} finally {
@@ -393,7 +578,50 @@
 		}
 	}
 
-	const completeness = computed(() => completionScore.value > 0 ? completionScore.value : Math.min(100, [formData.value.avatar, formData.value.occupation, formData.value.introduction].filter((item: any) => item != null && ('' + item).trim() != '').length * 25))
+	const hasPreferenceValues = (): boolean => formData.value.ageMin != '' || formData.value.ageMax != '' || formData.value.heightMin != '' || formData.value.heightMax != '' || formData.value.educationMin != '' || formData.value.acceptLongDistance || formData.value.acceptCrossProvince || textValue(formData.value.extraRequirement).trim() != ''
+	const completeness = computed(() => completionScore.value)
+	const fallbackCompletion = (key: string): boolean => {
+		if (key == 'avatar') return formData.value.avatar != ''
+		if (key == 'album') return formData.value.photos.length > 0
+		if (key == 'intro') return textValue(formData.value.introduction).trim() != ''
+		if (key == 'weight') return formData.value.weight != ''
+		if (key == 'hometown') return textValue(formData.value.hometown).trim() != ''
+		if (key == 'interest') return formData.value.interestTags.length >= 3
+		if (key == 'personality') return formData.value.personalityTags.length >= 3
+		if (key == 'preference') return formData.value.ageMin != '' || formData.value.ageMax != ''
+		return false
+	}
+	const completionPassed = (key: string): boolean => {
+		const item = completionItems.value[key]
+		return item != null ? item.completed == true : fallbackCompletion(key)
+	}
+	const completionWeight = (key: string, fallback: number): number => {
+		const weights: any = {
+			gender: 7, birthday: 7, location: 5, marriage: 5, occupation: 4, education: 4, income: 4,
+			height: 4, weight: 4, hometown: 4, avatar: 15, intro: 10, album: 8, interest: 5,
+			personality: 3, mbti: 2, preference: 3, realname: 5, single_pledge: 1
+		}
+		return weights[key] != null ? weights[key] : fallback
+	}
+	const completionSuffix = (key: string, fallback: number, prefix: string = ' ·'): string => completionPassed(key) ? '' : prefix + ' +' + completionWeight(key, fallback) + '%'
+	const completionText = (key: string, value: any, emptyText: string, fallback: number): string => {
+		const text = textValue(value).trim()
+		return completionPassed(key) && text != '' ? text : emptyText + completionSuffix(key, fallback)
+	}
+	const missingCompletionSummary = computed(() => {
+		const keys = Object.keys(completionItems.value)
+		if (keys.length == 0) return ''
+		const missing = keys.filter((key: string) => completionItems.value[key].completed != true)
+		if (missing.length == 0) return ''
+		const labels: any = {
+			gender: '性别', birthday: '出生日期', location: '所在地区', marriage: '婚姻状况', occupation: '职业',
+			education: '学历', income: '收入', height: '身高', weight: '体重', hometown: '家乡', avatar: '头像',
+			intro: '自我介绍', album: '相册', interest: '兴趣标签', personality: '性格标签', mbti: 'MBTI',
+			preference: '择偶要求', realname: '实名认证', single_pledge: '单身承诺'
+		}
+		const names = missing.map((key: string) => labels[key] || key)
+		return names.length > 4 ? names.slice(0, 4).join('、') + '等' + names.length + '项' : names.join('、')
+	})
 	const isIdentityLocked = computed(() => realNameStatus.value == 'passed')
 	const heightPickerIndex = computed(() => {
 		const value = Number(formData.value.height)
@@ -415,42 +643,51 @@
 		const index = mbtiOptions.indexOf(textValue(formData.value.mbti))
 		return index >= 0 ? index : 0
 	})
+	const agePreview = computed(() => {
+		const birthday = textValue(formData.value.birthday)
+		if (birthday.length < 4) return '未填写'
+		const year = Number(birthday.substring(0, 4))
+		const month = birthday.length >= 7 ? Number(birthday.substring(5, 7)) : 1
+		const day = birthday.length >= 10 ? Number(birthday.substring(8, 10)) : 1
+		const now = new Date()
+		let age = now.getFullYear() - year
+		if (now.getMonth() + 1 < month || (now.getMonth() + 1 == month && now.getDate() < day)) age--
+		return age >= 0 ? '' + age + '岁' : '未填写'
+	})
 	const occupationPreview = computed(() => {
 		const parts = [formData.value.occupation, formData.value.industry].filter((v: any) => v != null && ('' + v).trim() != '')
 		return parts.length > 0 ? parts.join(' · ') : '未填写'
 	})
 	const incomePreview = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '未填写')
 	const incomePreviewText = computed(() => formData.value.income != null && ('' + formData.value.income).trim() != '' ? ('' + formData.value.income) : '请选择')
+	const introHasContent = computed(() => textValue(formData.value.introduction).trim() != '')
 	const completedCertCount = computed(() => certifications.value.filter((c: any) => c.passed).length)
-	const displayTags = computed(() => {
-		const result: string[] = []
-		const selections = formData.value.tagSelections
-		let hasGroupedTags = false
-		if (selections != null && typeof selections === 'object') {
-			for (const category of TAG_CATEGORIES) {
-				const values = selections[category.id]
-				if (Array.isArray(values)) {
-					hasGroupedTags = true
-					for (const value of values as string[]) result.push(value)
-				}
-			}
-		}
-		if (!hasGroupedTags) {
-			for (const tag of formData.value.interestTags) result.push(tag)
-			for (const tag of formData.value.personalityTags) result.push(tag)
-		}
-		return result.slice(0, 20)
+	const interestDisplayTags = computed(() => {
+		return formData.value.interestTags.slice(0, 5)
 	})
+	const personalityDisplayTags = computed(() => {
+		return formData.value.personalityTags.slice(0, 5)
+	})
+	const preferencePreview = computed(() => {
+		const age = formData.value.ageMin != '' || formData.value.ageMax != '' ? (formData.value.ageMin || '不限') + '-' + (formData.value.ageMax || '不限') + '岁' : '年龄不限'
+		const height = formData.value.heightMin != '' || formData.value.heightMax != '' ? (formData.value.heightMin || '不限') + '-' + (formData.value.heightMax || '不限') + 'cm' : '身高不限'
+		const education = formData.value.educationMin != '' ? educationOptions[Number(formData.value.educationMin)] || '学历不限' : '学历不限'
+		return age + ' · ' + height + ' · ' + education
+	})
+	const preferenceHasContent = computed(() => hasPreferenceValues())
 	const certifications = computed(() => [
 		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
 		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
 		{ key: 'avatar', label: '头像认证', icon: '像', passed: false, desc: '上传真实本人照片' },
-		{ key: 'marriage', label: '婚况认证', icon: '♥', passed: false, desc: '提交婚况证明材料' }
+		{ key: 'single_pledge', label: '单身承诺', icon: '誓', passed: singlePledgePassed.value, desc: singlePledgePassed.value ? '已签署单身承诺' : '确认当前为单身状态' }
 	])
 
 	onMounted(() => load())
 	onShow(() => {
-		if (!loading.value) syncLocalTagDraft()
+		if (!loading.value) {
+			syncLocalTagDraft()
+			refreshCompletion()
+		}
 	})
 
 	const onInput = (field: string, event: any) => {
@@ -469,8 +706,31 @@
 		const values = event.detail.value as string[]
 		return values.join(' ')
 	}
-	const onResidenceChange = (event: any) => formData.value.residenceCityCode = regionText(event)
-	const onHometownChange = (event: any) => formData.value.hometown = regionText(event)
+	const onResidenceChange = (event: any) => {
+		const values = event.detail.value as string[]
+		const codes = locationCodesByNames(values)
+		formData.value.residenceProvinceCode = codes.province
+		formData.value.residenceApiCityCode = codes.city
+		formData.value.residenceCityCode = regionText(event)
+		formData.value.residenceDistrictCode = codes.district
+	}
+	const onPullRefresh = async () => {
+		if (refreshing.value || loading.value) return
+		refreshing.value = true
+		try {
+			await load()
+		} finally {
+			refreshing.value = false
+		}
+	}
+	const onHometownChange = (event: any) => {
+		const values = event.detail.value as string[]
+		const codes = locationCodesByNames(values)
+		formData.value.hometownProvinceCode = codes.province
+		formData.value.hometownCityCode = codes.city
+		formData.value.hometownDistrictCode = codes.district
+		formData.value.hometown = regionText(event)
+	}
 	const onIncomeChange = (event: any) => {
 		const index = Number(event.detail.value)
 		formData.value.income = index > 0 ? incomeOptions[index] : ''
@@ -488,6 +748,14 @@
 		formData.value.company = company
 		companySuggestions.value = []
 	}
+	const prepareUploadPath = (path: string): Promise<string> => new Promise((resolve) => {
+		uni.compressImage({
+			src: path,
+			quality: 80,
+			success: (res: any) => resolve(res != null && res.tempFilePath != null ? '' + res.tempFilePath : path),
+			fail: () => resolve(path)
+		})
+	})
 
 	const uploadMedia = async (path: string, kind: string) => {
 		if (path == '') return null
@@ -498,6 +766,7 @@
 				uni.showToast({ title: res.message != null ? '' + res.message : '上传失败，请重试', icon: 'none' })
 				return null
 			}
+			await refreshCompletion()
 			return res.data
 		} catch (e) {
 			uni.showToast({ title: '上传失败，请检查网络', icon: 'none' })
@@ -507,20 +776,132 @@
 		}
 	}
 
-	const chooseAvatar = () => {
+	const selectCropImage = (kind: string) => {
 		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
-			const media = await uploadMedia(path, 'avatar')
-			if (media != null) formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : path
+			if (path == '') return
+			const uploadPath = await prepareUploadPath(path)
+			const media = await uploadMedia(uploadPath, kind)
+			applyUploadedMedia(media, kind, uploadPath)
 		} })
 	}
-
-	const changeBackground = () => {
-		uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
-			const path = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? '' + res.tempFilePaths[0] : ''
-			const media = await uploadMedia(path, 'background')
-			if (media != null) formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : path
-		} })
+	const chooseAvatar = () => selectCropImage('avatar')
+	const changeBackground = () => selectCropImage('background')
+	const cancelCrop = () => {
+		if (uploadingMedia.value || cropConfirming.value) return
+		cropVisible.value = false
+		cropPath.value = ''
+		cropOffsetX.value = 0
+		cropOffsetY.value = 0
+	}
+	const onCropConfirmTap = () => {
+		if (uploadingMedia.value || cropConfirming.value || cropPath.value == '') return
+		cropConfirming.value = true
+		confirmCrop()
+	}
+	const cropTouchPoint = (event: any): any => {
+		if (event == null || event.touches == null || event.touches.length == 0) return null
+		const touch = event.touches[0]
+		return { x: Number(touch.clientX != null ? touch.clientX : touch.pageX), y: Number(touch.clientY != null ? touch.clientY : touch.pageY) }
+	}
+	const cropOffsetLimit = (): any => {
+		const stageWidth = Math.max(240, uni.getSystemInfoSync().windowWidth - 80)
+		const stageHeight = cropKind.value == 'avatar' ? 280 : 210
+		const frameWidth = cropKind.value == 'avatar' ? 220 : stageWidth - 24
+		const frameHeight = cropKind.value == 'avatar' ? 220 : 164
+		return { x: Math.max(0, (stageWidth - frameWidth) / 2), y: Math.max(0, (stageHeight - frameHeight) / 2) }
+	}
+	const startCropDrag = (event: any) => {
+		if (uploadingMedia.value) return
+		const point = cropTouchPoint(event)
+		if (point == null) return
+		cropDragStartX.value = point.x
+		cropDragStartY.value = point.y
+		cropDragOriginX.value = cropOffsetX.value
+		cropDragOriginY.value = cropOffsetY.value
+		cropDragging.value = true
+	}
+	const moveCropDrag = (event: any) => {
+		if (!cropDragging.value) return
+		const point = cropTouchPoint(event)
+		if (point == null) return
+		const limit = cropOffsetLimit()
+		cropOffsetX.value = Math.max(-limit.x, Math.min(limit.x, cropDragOriginX.value + point.x - cropDragStartX.value))
+		cropOffsetY.value = Math.max(-limit.y, Math.min(limit.y, cropDragOriginY.value + point.y - cropDragStartY.value))
+	}
+	const endCropDrag = () => { cropDragging.value = false }
+	const applyUploadedMedia = (media: any, kind: string, fallbackPath: string) => {
+		if (media == null) return
+		if (kind == 'avatar') formData.value.avatar = media.file_url != null ? resolveMediaUrl(media.file_url) : fallbackPath
+		else formData.value.coverBg = media.file_url != null ? resolveMediaUrl(media.file_url) : fallbackPath
+		cancelCrop()
+	}
+	const confirmCrop = () => {
+		if (uploadingMedia.value || cropPath.value == '') {
+			cropConfirming.value = false
+			return
+		}
+		const sourcePath = cropPath.value
+		const kind = cropKind.value
+		uni.getImageInfo({
+			src: sourcePath,
+			success: (info: any) => {
+				const sourceWidth = Number(info.width)
+				const sourceHeight = Number(info.height)
+				const ratio = kind == 'avatar' ? 1 : 16 / 9
+				let cropWidth = sourceWidth
+				let cropHeight = cropWidth / ratio
+				if (cropHeight > sourceHeight) {
+					cropHeight = sourceHeight
+					cropWidth = cropHeight * ratio
+				}
+				const stageWidth = Math.max(240, uni.getSystemInfoSync().windowWidth - 80)
+				const stageHeight = kind == 'avatar' ? 280 : 210
+				const renderScale = Math.max(stageWidth / sourceWidth, stageHeight / sourceHeight)
+				const cropX = Math.max(0, Math.min(sourceWidth - cropWidth, (sourceWidth - cropWidth) / 2 - cropOffsetX.value / renderScale))
+				const cropY = Math.max(0, Math.min(sourceHeight - cropHeight, (sourceHeight - cropHeight) / 2 - cropOffsetY.value / renderScale))
+				const outputWidth = kind == 'avatar' ? 600 : 800
+				const outputHeight = Math.round(outputWidth / ratio)
+				const context = uni.createCanvasContext('profileCropCanvas')
+				context.clearRect(0, 0, outputWidth, outputHeight)
+				context.drawImage(sourcePath, cropX, cropY, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight)
+				let exportStarted = false
+				const exportCanvas = () => {
+					if (exportStarted) return
+					exportStarted = true
+					uni.canvasToTempFilePath({ canvasId: 'profileCropCanvas', x: 0, y: 0, width: outputWidth, height: outputHeight, destWidth: outputWidth, destHeight: outputHeight, fileType: 'jpg', quality: 0.9, success: async (file: any) => {
+						const media = await uploadMedia('' + file.tempFilePath, kind)
+						cropConfirming.value = false
+						applyUploadedMedia(media, kind, '' + file.tempFilePath)
+					}, fail: (error: any) => {
+						cropConfirming.value = false
+						console.error('[EditProfile] crop export failed', error)
+						uni.showToast({ title: '裁剪组件不可用，正在上传原图', icon: 'none' })
+						setTimeout(async () => {
+							const media = await uploadMedia(sourcePath, kind)
+							applyUploadedMedia(media, kind, sourcePath)
+						}, 250)
+					} })
+				}
+				context.draw(false, exportCanvas)
+				setTimeout(() => {
+					if (!exportStarted) {
+						exportCanvas()
+					}
+					if (!exportStarted) {
+						cropConfirming.value = false
+						uni.showToast({ title: '裁剪处理超时，请重试', icon: 'none' })
+					}
+				}, 8000)
+			}, fail: () => {
+				cropConfirming.value = false
+				uni.showToast({ title: '图片裁剪不可用，正在上传原图', icon: 'none' })
+				setTimeout(async () => {
+					const media = await uploadMedia(sourcePath, kind)
+					applyUploadedMedia(media, kind, sourcePath)
+				}, 250)
+			}
+		})
 	}
 
 	const addPhoto = () => {
@@ -529,8 +910,9 @@
 		uni.chooseImage({ count, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: async (res: any) => {
 			const paths = res != null && res.tempFilePaths != null ? res.tempFilePaths as string[] : []
 			for (let i = 0; i < paths.length; i++) {
-				const media = await uploadMedia('' + paths[i], 'photo')
-				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + paths[i] })
+				const uploadPath = await prepareUploadPath('' + paths[i])
+				const media = await uploadMedia(uploadPath, 'photo')
+				if (media != null) formData.value.photos.push({ id: media.id, url: media.file_url != null ? resolveMediaUrl(media.file_url) : '' + uploadPath })
 			}
 		} })
 	}
@@ -541,12 +923,58 @@
 		const item = list[index]
 		if (item.id == null || Number(item.id) <= 0) return
 		const res = await deleteUserProfilePhoto(Number(item.id))
-		if (res.success) list.splice(index, 1)
+		if (res.success) {
+			list.splice(index, 1)
+			await refreshCompletion()
+		}
 		else uni.showToast({ title: res.message != null ? '' + res.message : '删除失败，请重试', icon: 'none' })
 	}
 
-	const goCertification = (key: string) => uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
-	const goTagsEdit = () => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit' })
+	const goCertification = (key: string) => {
+		if (key == 'single_pledge') {
+			singlePledgeVisible.value = true
+			return
+		}
+		uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	}
+	const closeSinglePledge = () => { if (!singlePledgeSubmitting.value) singlePledgeVisible.value = false }
+	const confirmSinglePledge = async () => {
+		if (singlePledgeSubmitting.value) return
+		singlePledgeSubmitting.value = true
+		try {
+			const versionsRes = await getAgreementVersions()
+			const versions = versionsRes.success && versionsRes.data != null ? versionsRes.data as any : {}
+			const safetyPledge = versions.safety_pledge != null ? versions.safety_pledge : {}
+			const version = safetyPledge.version != null ? '' + safetyPledge.version : 'v1'
+			const res = await acceptAgreement('safety_pledge', version, 'profile')
+			if (!res.success) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '提交失败，请重试', icon: 'none' })
+				return
+			}
+			singlePledgePassed.value = true
+			singlePledgeVisible.value = false
+			await refreshCompletion()
+			uni.showToast({ title: '单身承诺已完成', icon: 'success' })
+		} finally {
+			singlePledgeSubmitting.value = false
+		}
+	}
+	const saveIntroduction = async () => {
+		if (saving.value || uploadingMedia.value) return
+		saving.value = true
+		try {
+			const res = await updateOwnProfile({ self_intro: textValue(formData.value.introduction) || null })
+			if (!res.success) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '自我介绍保存失败', icon: 'none' })
+				return
+			}
+			await refreshCompletion()
+			uni.showToast({ title: '自我介绍已保存', icon: 'success' })
+		} finally {
+			saving.value = false
+		}
+	}
+	const goTagsEdit = (type: string = 'all') => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit?type=' + type })
 	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
 
 	const syncLocalTagDraft = () => {
@@ -587,26 +1015,51 @@
 	const onCancel = () => {
 		uni.navigateBack({ delta: 1 })
 	}
+	const openBasicEditor = () => {
+		editSheetMode.value = 'basic'
+		detailSheetVisible.value = true
+	}
+	const openPreferenceEditor = () => {
+		editSheetMode.value = 'preference'
+		detailSheetVisible.value = true
+	}
+	const cancelDetailEdit = () => {
+		if (!saving.value && !uploadingMedia.value) detailSheetVisible.value = false
+	}
 
-	const buildProfilePayload = () => ({
-		gender: formData.value.gender,
-		birthday: formData.value.birthday != '' ? formData.value.birthday : null,
-		is_married: formData.value.isMarried,
-		height: optionalNumber(formData.value.height),
-		weight: optionalNumber(formData.value.weight),
-		occupation: textValue(formData.value.occupation) || null,
-		industry: textValue(formData.value.industry) || null,
-		education_level: formData.value.educationLevel,
-		income_range: textValue(formData.value.income) || null,
-		residence_city_code: textValue(formData.value.residenceCityCode) || null,
-		hometown: textValue(formData.value.hometown) || null,
-		company: textValue(formData.value.company) || null,
-		self_intro: textValue(formData.value.introduction) || null,
-		interest_tags: formData.value.interestTags.length >= 3 ? formData.value.interestTags.slice(0, 5) : null,
-		personality_tags: formData.value.personalityTags.length >= 3 ? formData.value.personalityTags.slice(0, 5) : null,
-		mbti: textValue(formData.value.mbti).toUpperCase() || null,
-		tag_selections: formData.value.tagSelections
-	})
+	const buildProfilePayload = () => {
+		const payload: any = {
+			gender: formData.value.gender,
+			birthday: formData.value.birthday != '' ? formData.value.birthday : null,
+			is_married: formData.value.isMarried,
+			height: optionalNumber(formData.value.height),
+			weight: optionalNumber(formData.value.weight),
+			occupation: textValue(formData.value.occupation) || null,
+			industry: textValue(formData.value.industry) || null,
+			education_level: formData.value.educationLevel,
+			income: incomeValue(formData.value.income),
+			residence_province_code: textValue(formData.value.residenceProvinceCode) || null,
+			residence_city_code: textValue(formData.value.residenceApiCityCode) || null,
+			residence_district_code: textValue(formData.value.residenceDistrictCode) || null,
+			hometown_province_code: textValue(formData.value.hometownProvinceCode) || null,
+			hometown_city_code: textValue(formData.value.hometownCityCode) || null,
+			hometown_district_code: textValue(formData.value.hometownDistrictCode) || null,
+			self_intro: textValue(formData.value.introduction) || null,
+			interest_tags: formData.value.interestTags.length >= 3 ? formData.value.interestTags.slice(0, 5) : null,
+			personality_tags: formData.value.personalityTags.length >= 3 ? formData.value.personalityTags.slice(0, 5) : null,
+			mbti: textValue(formData.value.mbti).toUpperCase() || null
+		}
+		const selections = formData.value.tagSelections
+		if (selections != null && typeof selections === 'object') {
+			const supportedSelections: any = {}
+			const relationshipExpectation = selections.relationship_expectation
+			if (Array.isArray(relationshipExpectation) && relationshipExpectation.length > 0) {
+				supportedSelections.relationship_expectation = relationshipExpectation.slice(0, 5)
+			}
+			if (Object.keys(supportedSelections).length > 0) payload.tag_selections = supportedSelections
+		}
+		return payload
+	}
 
 	const buildPreferencePayload = () => ({
 		age_min: optionalNumber(formData.value.ageMin),
@@ -618,6 +1071,28 @@
 		accept_cross_province: formData.value.acceptCrossProvince,
 		extra_requirement: textValue(formData.value.extraRequirement) || null
 	})
+
+	const saveNickname = async () => {
+		if (saving.value || uploadingMedia.value) return
+		const value = textValue(formData.value.nickname).trim()
+		if (value == '') {
+			uni.showToast({ title: '昵称不能为空', icon: 'none' })
+			return
+		}
+		saving.value = true
+		try {
+			const res = await updateOwnNickname(value)
+			if (!res.success) {
+				uni.showToast({ title: res.message != null ? '' + res.message : '昵称保存失败', icon: 'none' })
+				return
+			}
+			formData.value.nickname = value
+			await refreshCompletion()
+			uni.showToast({ title: '昵称已保存', icon: 'success' })
+		} finally {
+			saving.value = false
+		}
+	}
 
 	const handleSave = async () => {
 		if (saving.value || uploadingMedia.value) return
@@ -633,6 +1108,11 @@
 		}
 		saving.value = true
 		try {
+			const nicknameRes = await updateOwnNickname(textValue(formData.value.nickname))
+			if (!nicknameRes.success) {
+				uni.showToast({ title: nicknameRes.message != null ? '' + nicknameRes.message : '昵称保存失败', icon: 'none' })
+				return
+			}
 			const profileRes = await updateOwnProfile(buildProfilePayload())
 			if (!profileRes.success) {
 				uni.showToast({ title: profileRes.message != null ? '' + profileRes.message : '基础资料保存失败', icon: 'none' })
@@ -643,8 +1123,10 @@
 				uni.showToast({ title: preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求保存失败', icon: 'none' })
 				return
 			}
+			await refreshCompletion()
 			uni.showToast({ title: '资料已保存', icon: 'success' })
-			setTimeout(() => uni.navigateBack({ delta: 1 }), 700)
+			if (detailSheetVisible.value) detailSheetVisible.value = false
+			else setTimeout(() => uni.navigateBack({ delta: 1 }), 700)
 		} catch (e) {
 			uni.showToast({ title: '网络异常，资料未保存', icon: 'none' })
 		} finally {
@@ -654,6 +1136,20 @@
 </script>
 
 <style scoped>
+.crop-overlay { position: fixed; z-index: 200; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(12,19,19,0.78); }
+.crop-panel { position: relative; z-index: 2; width: calc(100% - 40px); padding: 20px; box-sizing: border-box; border-radius: 20px; background: var(--surface); }
+.crop-title { display: block; color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; }
+.crop-stage { position: relative; width: 100%; height: 280px; margin-top: 18px; overflow: hidden; background: #101515; }
+.crop-stage-background { height: 210px; }
+.crop-preview-image { width: 100%; height: 100%; transform-origin: center center; }
+.crop-frame { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; transform: translate(-50%, -50%); border: 2px solid #FFFFFF; box-shadow: 0 0 0 999px rgba(0,0,0,0.38); }
+.crop-frame-background { width: calc(100% - 24px); height: 164px; }
+.crop-hint { display: block; margin-top: 12px; color: var(--muted); font-size: 12px; text-align: center; }
+.crop-actions { display: flex; flex-direction: row; gap: 12px; margin-top: 18px; }
+.crop-cancel, .crop-confirm { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; font-size: 14px; font-weight: 600; line-height: 44px; padding: 0; margin: 0; }
+.crop-cancel { background: var(--warm); color: var(--ink2); }
+.crop-confirm { border: none; background: var(--sage); color: var(--text-invert); }
+.crop-canvas { position: fixed; left: -900px; top: -900px; z-index: 1; width: 800px; height: 800px; opacity: 0.01; pointer-events: none; }
 .edit-page { min-height: 100vh; background: var(--canvas); display: flex; flex-direction: column; }
 .nav-bar { height: 72px; margin-top: 32px; padding: 36px 16px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: center; position: relative; background: var(--paper); border-bottom: 1px solid var(--line); }
 .nav-back { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
@@ -691,6 +1187,8 @@
 .progress-track { height: 6px; border-radius: 3px; background: var(--warm); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--sage), var(--accent)); }
 .progress-hint { font-size: 11px; color: var(--muted); }
+.progress-missing { font-size: 12px; line-height: 18px; color: var(--accent2); font-weight: 600; }
+.completion-warning { display: block; margin-top: 8px; font-size: 12px; line-height: 18px; color: #D64545; font-weight: 600; }
 .preview-action { display: flex; flex-direction: row; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 16px; background: var(--sage-soft); color: var(--sage); }
 .preview-action text { font-size: 13px; font-weight: 600; }
 .preview-action-arrow { font-size: 16px !important; }
@@ -722,6 +1220,10 @@
 
 /* Preview */
 .preview-list { display: flex; flex-direction: column; }
+.nickname-card { gap: 12px; }
+.nickname-edit-row { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+.nickname-edit-input { flex: 1; min-width: 0; height: 42px; padding: 0 14px; box-sizing: border-box; border-radius: 12px; background: var(--warm); color: var(--ink); font-size: 15px; }
+.nickname-edit-save { flex-shrink: 0; min-width: 72px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 21px; background: var(--sage-soft); color: var(--sage); font-size: 14px; font-weight: 700; }
 .preview-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 0; }
 .preview-row + .preview-row { border-top: 1px solid var(--line); }
 .preview-label { font-size: 13px; color: var(--muted); }
@@ -744,7 +1246,8 @@
 
 /* Intro */
 .intro-card { gap: 10px; }
-.intro-main-input { width: 100%; min-height: 100px; padding: 12px; box-sizing: border-box; border: none; border-radius: 12px; background: var(--warm); color: var(--ink); font-size: 13px; line-height: 1.5; }
+.intro-main-input { width: 100%; min-height: 100px; padding: 12px; box-sizing: border-box; border: none; border-radius: 12px; background: var(--warm); color: var(--muted); font-size: 13px; line-height: 1.5; }
+.intro-main-input.has-content { color: var(--ink); }
 
 /* Tags */
 .tags-card { gap: 6px; }
@@ -752,6 +1255,9 @@
 .tag-chip { padding: 6px 14px; border-radius: 999px; background: var(--warm); color: var(--ink2); font-size: 13px; font-weight: 500; }
 .tag-chip.tag-accent { background: var(--sage-soft); color: var(--sage); }
 .tag-chip.tag-add { background: var(--sage-soft); color: var(--sage); font-weight: 600; }
+.tag-empty { padding: 6px 0; color: var(--muted); font-size: 13px; }
+.preference-card { gap: 8px; }
+.preference-summary { padding: 12px 14px; border-radius: 12px; background: var(--warm); color: var(--ink2); font-size: 13px; line-height: 1.5; }
 
 /* QA */
 .qa-card { gap: 8px; }
@@ -762,7 +1268,6 @@
 .qa-edit-icon { font-size: 14px; color: var(--sage); }
 
 /* Bottom bar */
-.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-direction: row; gap: 12px; align-items: center; z-index: 10; }
 .cancel-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--warm); color: var(--ink2); font-size: 15px; font-weight: 600; }
 .save-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--sage); color: var(--text-invert); font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(51,141,107,0.25); }
 .save-button.disabled { opacity: 0.55; }
@@ -770,6 +1275,15 @@
 
 /* Sheet overlay */
 .sheet-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; width: 100%; height: 100vh; background: rgba(12,19,19,0.36); z-index: 100; display: flex; align-items: flex-end; }
+.pledge-overlay { position: fixed; z-index: 120; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; background: rgba(12,19,19,0.38); }
+.pledge-dialog { width: 100%; padding: 24px 20px 20px; box-sizing: border-box; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-md); }
+.pledge-title { display: block; color: var(--ink); font-size: 18px; font-weight: 700; text-align: center; }
+.pledge-copy { display: block; margin-top: 14px; color: var(--ink2); font-size: 14px; line-height: 1.7; }
+.pledge-actions { display: flex; flex-direction: row; gap: 12px; margin-top: 22px; }
+.pledge-cancel, .pledge-confirm { flex: 1; height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 22px; font-size: 14px; font-weight: 700; }
+.pledge-cancel { border: 1px solid var(--line); color: var(--ink2); background: var(--paper); }
+.pledge-confirm { color: var(--text-invert); background: var(--sage); }
+.pledge-confirm.disabled { opacity: .55; }
 .sheet-panel { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 80vh; max-height: 80vh; min-height: 0; background: var(--surface); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; }
 .sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 10px auto 0; flex-shrink: 0; }
 .sheet-nav { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 12px 18px 10px; position: relative; }
@@ -791,6 +1305,7 @@
 .sheet-row.column-row { flex-direction: column; align-items: stretch; gap: 10px; }
 .sheet-textarea { width: 100%; min-height: 80px; padding: 10px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 13px; line-height: 1.5; }
 .sheet-bottom-spacer { height: 20px; }
+.sheet-footer { flex-shrink: 0; display: flex; flex-direction: row; gap: 12px; padding: 10px 18px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
 
 @media (max-width: 350px) { .scroll-content { padding-left: 12px; padding-right: 12px; } .section-card { padding: 13px 14px; } }
 .nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }

@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="uts">
-import { getOutgoingApplications, getIncomingApplications, getUserDetail, acceptDiscoveryApplication, rejectDiscoveryApplication, getCommunityQuotas } from '@/api'
+import { getOutgoingApplications, getIncomingApplications, acceptDiscoveryApplication, rejectDiscoveryApplication, getCommunityQuotas } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 const applications = ref<any[]>([])
 const receivedApplications = ref<any[]>([])
@@ -36,9 +36,7 @@ const loadApplications = async () => {
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]
 			const userId = incomingMode ? Number(row.from_user_id) : Number(row.to_user_id)
-			let detail: any = null
-			if (userId > 0) { const detailRes = await getUserDetail(userId); detail = detailRes.success ? detailRes.data : null }
-			const card = detail != null && detail.card != null ? detail.card : (detail != null ? detail : {})
+			const card = incomingMode ? (row.from_user != null ? row.from_user : {}) : (row.to_user != null ? row.to_user : {})
 			result.push({ id: row.id, name: card.nickname != null ? card.nickname : '用户 ' + userId, age: card.age != null ? card.age : '', city: card.city_code != null ? card.city_code : '未填写', salary: card.income != null ? '收入 ' + card.income : '收入未填写', status: statusText(Number(row.status)), statusClass: statusClass(Number(row.status)), avatar: resolveMediaUrl(card.avatar), applicationId: Number(row.id) })
 		}
 		return result

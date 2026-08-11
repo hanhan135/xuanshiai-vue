@@ -74,7 +74,8 @@
 		</view>
 
 		<view class="secondary-actions">
-			<button class="debug-login-button" :disabled="authLoading || !agreementChecked" @click="handleDebugLogin">调试登录</button>
+			<button class="debug-login-button" :disabled="authLoading || !agreementChecked" @click="handleDebugLogin(debugAccountPhones[0])">账号一 19730552884</button>
+			<button class="debug-login-button" :disabled="authLoading || !agreementChecked" @click="handleDebugLogin(debugAccountPhones[1])">账号二 13000000000</button>
 			<text class="secondary-divider">|</text>
 			<text class="secondary-link" @click="handleFirstLogin">首次登录引导</text>
 		</view>
@@ -89,8 +90,7 @@
 
 <script setup lang="uts">
 	import { getProfileCompletion } from '@/api/auth.uts'
-	import { loginByPhone, loginByWechat, sendSms } from '@/api'
-	import { setAuthTokens } from '@/api/config.uts'
+	import { loginByExistingAccount, loginByPhone, loginByWechat, sendSms } from '@/api'
 
 	const authLoading = ref(false)
 	const agreementChecked = ref(uni.getStorageSync('xsa_login_agreed') == true)
@@ -99,8 +99,11 @@
 	const countdown = ref(0)
 	const codeButtonDisabled = ref(false)
 	const codeButtonText = ref('获取验证码')
+	const debugAccountPhones = ['19730552884', '13000000000']
+	const debugAccountPassword = 'password123'
 
 	const goHome = () => {
+		uni.setStorageSync('xsa_skip_welcome_once', true)
 		uni.switchTab({ url: '/pages/index/index' })
 	}
 
@@ -241,13 +244,21 @@
 		}
 	}
 
-	const handleDebugLogin = () => {
+	const handleDebugLogin = async (debugPhone: string) => {
 		if (authLoading.value || !agreementChecked.value) return
-		setAuthTokens('debug_access_token_xsa')
-		uni.setStorageSync('xsa_user_id', 1)
-		uni.setStorageSync('xsa_login_agreed', true)
-		uni.showToast({ title: '本地调试登录成功', icon: 'success' })
-		setTimeout(() => { goHome() }, 400)
+		authLoading.value = true
+		try {
+			const res = await loginByExistingAccount(debugPhone, debugAccountPassword)
+			if (!res.success || res.data == null || res.data.access_token == null) {
+				uni.showToast({ title: responseMessage(res, '调试账号登录失败，请检查后端账号'), icon: 'none' })
+				return
+			}
+			await finishLogin(res.data)
+		} catch (e) {
+			uni.showToast({ title: '网络异常，请稍后重试', icon: 'none' })
+		} finally {
+			authLoading.value = false
+		}
 	}
 
 	const handleFirstLogin = () => {
@@ -288,8 +299,8 @@
 	.agreement-check checkbox { transform: scale(.72); }
 	.agreement-link { color: var(--accent2); }
 	.agreement-copy { color: var(--muted); }
-	.secondary-actions { position: relative; z-index: 1; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; margin-top: 22px; }
-	.debug-login-button { width: auto; height: 36px; margin: 0; padding: 0 18px; box-sizing: border-box; border: 1px solid var(--accent); border-radius: 18px; background: var(--surface); color: var(--accent2); font-size: 13px; font-weight: 700; line-height: 34px; box-shadow: var(--shadow-sm); }
+	.secondary-actions { position: relative; z-index: 1; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 22px; }
+	.debug-login-button { width: auto; min-width: 124px; height: 36px; margin: 0; padding: 0 10px; box-sizing: border-box; border: 1px solid var(--accent); border-radius: 18px; background: var(--surface); color: var(--accent2); font-size: 11px; font-weight: 700; line-height: 34px; box-shadow: var(--shadow-sm); }
 	.debug-login-button:active { background: var(--accent-bg); }
 	.debug-login-button[disabled] { opacity: .55; }
 	.secondary-divider { color: var(--line); font-size: 12px; }

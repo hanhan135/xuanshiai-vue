@@ -23,14 +23,14 @@
 
       <view class="section-heading section-gap"><text class="section-title">我的安全设置</text><text class="section-caption">管理主动设置的安全边界</text></view>
       <XsaCard variant="standard" class="security-card">
-        <view class="security-item" @tap="toggleSafety"><view class="security-item-icon block"><text>禁</text></view><view class="security-item-copy"><text class="security-item-title">已屏蔽用户</text><text class="security-item-desc">{{ blockedSummary }}</text></view><text class="security-item-value">{{ blockedLoading ? '...' : blockedUsers.length + '人' }} ›</text></view>
+        <view class="security-item" @tap="toggleSafety"><view class="security-item-copy"><text class="security-item-title">已屏蔽用户</text><text class="security-item-desc">{{ blockedSummary }}</text></view><text class="security-item-value">{{ blockedLoading ? '...' : blockedUsers.length + '人' }} ›</text></view>
         <view class="inline-content" v-if="safetyVisible">
           <view v-if="blockedLoading" class="state-text">正在加载黑名单...</view>
           <view v-else-if="blockedError != ''" class="retry-row" @tap="loadBlockedUsers"><text class="state-error">{{ blockedError }}，点击重试</text></view>
           <XsaEmpty v-else-if="blockedLoaded && blockedUsers.length == 0" type="noData" text="暂无已拉黑用户" description="你可以在相关内容或用户资料的操作菜单中进行拉黑管理。" size="small" />
           <view v-else class="blocked-list"><view class="blocked-row" v-for="user in blockedUsers" :key="user.id"><view class="blocked-avatar"><text>人</text></view><view class="blocked-copy"><text class="blocked-name">{{ user.nickname || '已拉黑用户' }}</text><text class="blocked-desc">已加入黑名单</text></view><XsaButton variant="text" size="small" :loading="isUnblocking(user.id)" :disabled="isUnblocking(user.id)" @click="confirmUnblock(user.id)">解除拉黑</XsaButton></view></view>
         </view>
-        <view class="security-item" @tap="toggleRecords"><view class="security-item-icon records"><text>▧</text></view><view class="security-item-copy"><text class="security-item-title">举报与申诉记录</text><text class="security-item-desc">{{ recordsSummary }}</text></view><text class="security-item-value">查看 ›</text></view>
+        <view class="security-item" @tap="toggleRecords"><view class="security-item-copy"><text class="security-item-title">举报与申诉记录</text><text class="security-item-desc">{{ recordsSummary }}</text></view><text class="security-item-value">查看 ›</text></view>
         <view class="inline-content" v-if="recordsVisible">
           <view v-if="recordsLoading" class="state-text">正在加载举报与申诉记录...</view>
           <view v-else-if="recordsError != ''" class="retry-row" @tap="loadReports"><text class="state-error">{{ recordsError }}，点击重试</text></view>
@@ -90,8 +90,64 @@ const openGovernance = () => openArticle('governance_notice')
 const openAiSupport = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/help?open=ai', fail: () => { uni.showToast({ title: 'AI 客服打开失败，请重试', icon: 'none' }) } }) }
 onMounted(() => { loadSecurityCenter(); loadBlockedUsers() })
 </script>
-<style scoped>
-.security-page { min-height: 100vh; padding-bottom: 30px; background: #FFF; color: #1E2933; }.security-nav { height: 100px; padding: 44px 20px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; font-size: 20px; font-weight: 800; }.back,.placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }.back { font-size: 38px; font-weight: 300; }.security-hero { position: relative; height: 190px; padding: 38px 26px; box-sizing: border-box; overflow: hidden; background: linear-gradient(135deg,#E8FAEC,#F5FFF8); }.hero-title { display: block; font-size: 30px; font-weight: 800; }.hero-copy { display: block; margin-top: 10px; color: #688073; font-size: 16px; }.shield { position: absolute; right: 55px; top: 34px; font-size: 100px; color: #56C493; }.governance { margin: -1px 8px 0; padding: 28px 18px 18px; border-radius: 18px; background: #FFF; box-shadow: 0 3px 14px rgba(84,120,95,.08); }.governance-title,.tools-title { display: block; color: #8B9096; font-size: 14px; }.report-total { margin-top: 16px; padding: 20px 14px; display: flex; flex-direction: row; align-items: center; gap: 10px; border-radius: 12px; background: #D9F5E6; color: #7A8087; }.report-icon { width: 38px; height: 38px; border-radius: 19px; display: flex; align-items: center; justify-content: center; background: #5AC99D; color: #FFF; }.report-number { margin-left: auto; color: #1E2933; font-size: 25px; font-weight: 800; }.report-stats { display: flex; flex-direction: row; justify-content: space-around; margin-top: 20px; text-align: center; color: #91969D; font-size: 12px; }.report-stats view { display: flex; flex-direction: column; gap: 8px; }.report-stats b { color: #1E2933; font-size: 20px; }.tools-title { margin: 24px 24px 12px; }.tools { display: flex; flex-direction: row; gap: 12px; padding: 0 24px; }.tools view { flex: 1; padding: 20px 12px; border-radius: 14px; background: #F6F7FA; text-align: center; color: #E54F3A; font-size: 19px; font-weight: 800; }.tools small { display: block; margin-top: 6px; color: #90959B; font-size: 11px; font-weight: 400; }.security-tabs { display: flex; flex-direction: row; justify-content: space-around; margin-top: 20px; padding: 16px 12px; border-bottom: 1px solid #E6E7E9; color: #9B9FA4; }.security-tabs .active { color: #28A78D; font-weight: 800; }.security-article { min-height: 74px; padding: 20px 22px; box-sizing: border-box; display: flex; flex-direction: row; justify-content: space-between; align-items: center; border-bottom: 1px solid #E7E8EA; font-size: 14px; }.article-arrow { color: #A7ADB3; font-size: 24px; }
-@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'); }.ic { font-style: normal; }.ic-sys { font-family: "iconfont-sys" !important; }.ic-fanhui:before { content: "\e606"; }.ic-shiming:before { content: "\e605"; }.ic-jiantou-you:before { content: "\e928"; }
-.back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #2C2C2C; }
+<style>
+.page { min-height: 100vh; background: var(--canvas); }
+.scroll { height: 100vh; padding: 0 16px; box-sizing: border-box; }
+.hero { display: flex; flex-direction: row; align-items: center; min-height: 184px; margin: 12px 0 22px; padding: 28px 24px; border-radius: 28px; background: linear-gradient(135deg, var(--security-hero) 0%, var(--paper) 100%); box-shadow: var(--shadow-sm); overflow: hidden; }
+.hero-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.hero-title { color: var(--ink); font-family: var(--sans); font-size: 28px; font-weight: 800; line-height: 1.3; letter-spacing: 0; }
+.hero-subtitle { color: var(--ink2); font-family: var(--serif); font-size: 17px; font-weight: 600; line-height: 1.55; }
+.hero-note { color: var(--accent2); font-size: 11px; font-weight: 700; line-height: 1.5; letter-spacing: 0; }
+.section-heading { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0 2px 10px; }
+.section-gap { margin-top: 26px; }
+.section-title { color: var(--ink); font-size: 18px; font-weight: 800; }
+.section-help { color: var(--muted); font-size: 12px; }
+.section-caption { margin-left: auto; color: var(--muted); font-size: 11px; }
+.governance-card { margin-bottom: 0; }
+.governance-state { min-height: 150px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; text-align: center; }
+.governance-state.error, .state-error { color: var(--accent2); }
+.governance-total { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 14px 12px; border-radius: 14px; background: var(--sage-soft); }
+.governance-icon { flex-shrink: 0; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: var(--text-invert); font-size: 22px; }
+.governance-total-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.governance-total-label { color: var(--ink2); font-size: 14px; }
+.governance-total-note { color: var(--muted); font-size: 10px; }
+.governance-total-value { color: var(--ink); font-size: 32px; font-weight: 800; line-height: 1; }
+.governance-breakdown { display: flex; flex-direction: row; padding: 14px 0 4px; }
+.governance-stat { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.governance-stat-label { color: var(--muted); font-size: 13px; }
+.governance-stat-value { color: var(--ink); font-size: 25px; font-weight: 800; }
+.governance-link { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 4px; padding-top: 10px; color: var(--accent2); font-size: 12px; }
+.inline-arrow, .row-arrow { color: var(--muted); font-size: 22px; line-height: 1; }
+.security-card { padding-top: 4px; padding-bottom: 4px; }
+.security-item { display: flex; flex-direction: row; align-items: center; gap: 0; min-height: 62px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.security-item:last-child { border-bottom: 0; }
+.security-item-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.security-item-title { color: var(--ink2); font-size: 13px; font-weight: 800; }
+.security-item-desc { color: var(--muted); font-size: 10px; }
+.security-item-value { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+.inline-content { padding: 4px 0 10px; }
+.state-text, .empty-safety { color: var(--muted); font-size: 11px; text-align: center; padding: 12px 0; }
+.retry-row { text-align: center; padding: 8px 0; }
+.blocked-list { display: flex; flex-direction: column; }
+.blocked-row, .report-row { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.blocked-row:last-child, .report-row:last-child { border-bottom: 0; }
+.blocked-avatar { flex-shrink: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--warm); color: var(--muted); font-size: 11px; }
+.blocked-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.blocked-name { color: var(--ink2); font-size: 12px; font-weight: 700; }
+.blocked-desc, .report-text { color: var(--muted); font-size: 10px; }
+.article-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.article-list { display: flex; flex-direction: column; padding: 4px 0 0; }
+.article-card { display: flex; flex-direction: row; align-items: center; gap: 10px; min-height: 58px; padding: 9px 3px; border-bottom: 1px solid var(--line); }
+.article-card:last-child { border-bottom: 0; }
+.article-mark { flex-shrink: 0; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 14px; font-weight: 800; }
+.guide-mark { background: var(--sage-soft); color: var(--sage); }
+.governance-mark { background: var(--accent-bg); color: var(--accent2); }
+.article-title { color: var(--ink2); font-size: 13px; font-weight: 800; }
+.article-desc { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.ai-entry { display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 50px; padding: 10px 2px; }
+.ai-entry-title { color: var(--accent2); font-size: 12px; font-weight: 800; }
+.ai-entry-desc { min-width: 0; flex: 1; color: var(--muted); font-size: 10px; }
+.notice { margin: 18px 2px 0; padding: 11px 12px; border-radius: 10px; background: var(--sage-soft); color: var(--ink2); font-size: 10px; line-height: 1.65; }
+.bottom-space { height: 40px; }
+.text-accent { color: var(--accent2); }
 </style>

@@ -1,0 +1,17 @@
+import { request } from './request.uts'
+
+export async function getMembershipStatus() {
+	return request({ url: '/users/me/membership', method: 'GET' })
+}
+
+export async function createMembershipOrder(packageCode: string, idempotencyKey: string) {
+	return request({ url: '/membership/orders', method: 'POST', data: { package_code: packageCode }, headers: { 'Idempotency-Key': idempotencyKey } })
+}
+
+export async function getMembershipOrder(orderNo: string) {
+	return request({ url: '/membership/orders/' + encodeURIComponent(orderNo), method: 'GET' })
+}
+
+export async function testPayOrder(orderNo: string) {
+	return request({ url: '/payments/test/pay', method: 'POST', data: { order_no: orderNo, success: true } })
+}

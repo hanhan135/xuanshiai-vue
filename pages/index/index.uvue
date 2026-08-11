@@ -272,7 +272,7 @@
 				</view>
 
 				<view class="square-feed">
-					<view class="square-user-card" @tap="goUserDetail(squareAt(0).id)">
+					<view v-if="squareUsers.length > 0" class="square-user-card" @tap="goUserDetail(squareAt(0).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(0).avatar" mode="aspectFill"></image>
 							<view class="vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
@@ -295,7 +295,7 @@
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(squareAt(1).id)">
+					<view v-if="squareUsers.length > 1" class="square-user-card" @tap="goUserDetail(squareAt(1).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(1).avatar" mode="aspectFill"></image>
 						</view>
@@ -327,7 +327,7 @@
 							<text class="sq-section-more">查看全部 ›</text>
 						</view>
 						<view class="sq-vip-row">
-							<view class="sq-vip-mini" @tap="goUserDetail(squareAt(2).id)">
+							<view v-if="squareUsers.length > 2" class="sq-vip-mini" @tap="goUserDetail(squareAt(2).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(2).avatar" mode="aspectFill"></image>
 									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
@@ -339,7 +339,7 @@
 										<view class="sq-vip-like" @tap.stop="onLike(squareAt(2).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
-							<view class="sq-vip-mini" @tap="goUserDetail(squareAt(3).id)">
+							<view v-if="squareUsers.length > 3" class="sq-vip-mini" @tap="goUserDetail(squareAt(3).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(3).avatar" mode="aspectFill"></image>
 									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
@@ -352,9 +352,10 @@
 									</view></view>
 							</view>
 						</view>
+						<text v-if="squareUsers.length < 3" class="sq-section-empty">暂无会员专区资料</text>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(squareAt(4).id)">
+					<view v-if="squareUsers.length > 4" class="square-user-card" @tap="goUserDetail(squareAt(4).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(4).avatar" mode="aspectFill"></image>
 						</view>
@@ -376,7 +377,7 @@
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(squareAt(5).id)">
+					<view v-if="squareUsers.length > 5" class="square-user-card" @tap="goUserDetail(squareAt(5).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(5).avatar" mode="aspectFill"></image>
 						</view>
@@ -408,7 +409,7 @@
 							<text class="sq-section-more">查看全部 ›</text>
 						</view>
 						<view class="sq-vip-row">
-							<view class="sq-vip-mini" @tap="goUserDetail(squareAt(6).id)">
+							<view v-if="squareUsers.length > 6" class="sq-vip-mini" @tap="goUserDetail(squareAt(6).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(6).avatar" mode="aspectFill"></image>
 									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
@@ -420,7 +421,7 @@
 										<view class="sq-vip-like" @tap.stop="onLike(squareAt(6).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
-							<view class="sq-vip-mini" @tap="goUserDetail(squareAt(7).id)">
+							<view v-if="squareUsers.length > 7" class="sq-vip-mini" @tap="goUserDetail(squareAt(7).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(7).avatar" mode="aspectFill"></image>
 									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
@@ -433,9 +434,22 @@
 									</view></view>
 							</view>
 						</view>
+						<text v-if="squareUsers.length < 7" class="sq-section-empty">暂无高收入专区资料</text>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(squareAt(8).id)">
+					<view class="sq-section">
+						<view class="sq-section-header">
+							<view class="sq-section-title-group">
+								<text class="ic ic-vip ic-huiyuan sq-section-icon"></text>
+								<text class="sq-section-title">高学历专区</text>
+								<text class="sq-section-count"></text>
+							</view>
+							<text class="sq-section-more">查看全部 ›</text>
+						</view>
+						<text v-if="squareUsers.length < 9" class="sq-section-empty">暂无高学历专区资料</text>
+					</view>
+
+					<view v-if="squareUsers.length > 8" class="square-user-card" @tap="goUserDetail(squareAt(8).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(8).avatar" mode="aspectFill"></image>
 						</view>
@@ -457,7 +471,7 @@
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(squareAt(9).id)">
+					<view v-if="squareUsers.length > 9" class="square-user-card" @tap="goUserDetail(squareAt(9).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(9).avatar" mode="aspectFill"></image>
 						</view>
@@ -478,6 +492,7 @@
 							</view>
 						</view>
 					</view>
+					<view v-if="squareUsers.length === 0" class="square-empty-state"><text>暂无广场资料</text></view>
 				</view>
 				<view class="scroll-bottom-spacer"></view>
 			</scroll-view>
@@ -516,11 +531,7 @@
 				<view class="vip-filter-row">
 					<text class="vip-result-count">{{ squareTotal > 0 ? '共' + squareTotal + '位嘉宾' : '' }}</text>
 					<view class="vip-filter-right">
-						<view class="vip-sort-btn">
-							<text class="vip-sort-text">综合排序</text>
-							<text class="ic ic-sys ic-xiala vip-sort-icon"></text>
-						</view>
-						<view class="vip-accelerate-btn">
+						<view class="vip-accelerate-btn" @click="onSearch">
 							<text class="ic ic-home ic-star vip-accel-icon"></text>
 							<text class="vip-accel-text">加速匹配</text>
 						</view>
@@ -747,7 +758,7 @@
 		uni.setStorageSync(WELCOME_AGREEMENT_KEY, true)
 		uni.setStorageSync('xsa_welcome_agreed', true)
 		uni.setStorageSync('xsa_login_agreed', true)
-		uni.setStorageSync('xsa_skip_welcome_once', true)
+		uni.removeStorageSync('xsa_skip_welcome_once')
 		welcomeAgreementVisible.value = false; welcomeVisible.value = false
 		uni.navigateTo({ url: '/pages/auth/login' })
 	}
@@ -814,7 +825,7 @@
 	const squareTotal = ref(0)
 	const membershipPlans = ref<any[]>([])
 	const planAt = (index: number): any => membershipPlans.value.length > index ? membershipPlans.value[index] : { duration: '', price: '' }
-	const squareAt = (index: number): any => squareUsers.value.length > index ? squareUsers.value[index] : { id: 0, name: '', age: '', avatar: '', distance: 0, job: '', city: '', height: '' }
+	const squareAt = (index: number): any => squareUsers.value.length > index ? squareUsers.value[index] : {}
 	const toVipCard = (user: any): any => ({ id: Number(user.id || 0), name: user.name != null ? '' + user.name : '', age: user.age != null ? '' + user.age + '岁' : '', height: user.height != null ? '' + user.height + 'cm' : '', gender: user.gender != null ? '' + user.gender : '', photo: user.avatar != null ? '' + user.avatar : '' })
 	const vipCardRows = computed(() => {
 		const cards: any[] = []
@@ -951,7 +962,7 @@
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]
 			const author = row.user != null ? row.user : {}
-			mapped.push({ id: Number(row.id || 0), avatar: author.avatar != null ? author.avatar : '', name: author.name != null ? author.name : '', timeText: row.timeText != null ? row.timeText : '', location: row.location != null ? row.location : '', content: row.content != null ? row.content : '', photos: row.photos != null && Array.isArray(row.photos) ? row.photos : [], tags: row.tags != null && Array.isArray(row.tags) ? row.tags : [], likeCount: Number(row.likeCount || 0), commentCount: Number(row.commentCount || 0) })
+			mapped.push({ id: Number(row.id || 0), avatar: author.avatar != null ? resolveMediaUrl(author.avatar) : '', name: author.name != null ? author.name : '', timeText: row.timeText != null ? row.timeText : '', location: row.location != null ? row.location : '', content: row.content != null ? row.content : '', photos: row.photos != null && Array.isArray(row.photos) ? row.photos.map((photo: any) => resolveMediaUrl(photo)) : [], tags: row.tags != null && Array.isArray(row.tags) ? row.tags : [], likeCount: Number(row.likeCount || 0), commentCount: Number(row.commentCount || 0) })
 		}
 		feedDynamics.value = mapped
 	}
@@ -971,7 +982,7 @@
 
 	// ========== 申请认识 ==========
 	const applyVisible = ref(false)
-	const applyUserId = ref(1)
+	const applyUserId = ref(0)
 	const successVisible = ref(false)
 	const matchedVisible = ref(false)
 	const toastVisible = ref(false)
@@ -1000,14 +1011,13 @@
 	const startChat = () => { matchedVisible.value = false; const user = currentRecommendUser.value as any; uni.navigateTo({ url: '/pagesSub/chat/detail?userId=' + Number(user.id || 0) + '&userName=' + encodeURIComponent(user.name != null ? '' + user.name : '') }) }
 
 	// ========== 通用操作 ==========
-	// 推荐卡默认嘉宾 id（与 mock 动态作者对齐，便于验证关注·喜欢）
 	const recommendUserId = computed(() => Number(currentRecommendUser.value.id || 0))
-	const goUserDetail = (userId: number = 1) => {
-		const id = userId > 0 ? userId : 1
+	const goUserDetail = (userId: number = 0) => {
+		const id = Number(userId)
+		if (id <= 0) return
 		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id })
 	}
 	const shareProfile = () => { showToast('已生成分享入口') }
-	// 用户级喜欢：写入 mockLikedUserIds，供社区「关注·喜欢」使用
 	const onLike = async (userId: number = 0) => {
 		const id = userId > 0 ? userId : recommendUserId.value
 		const ok = await guardRealName('like')
@@ -1043,6 +1053,19 @@
 		loadHomeDiscovery()
 		loadMembershipPlans()
 		loadFeedDynamics()
+	})
+
+	onShow(() => {
+		const freshLaunch = uni.getStorageSync('xsa_new_app_launch') == true
+		const skipWelcomeOnce = uni.getStorageSync('xsa_skip_welcome_once') == true
+		if (freshLaunch) {
+			uni.removeStorageSync('xsa_new_app_launch')
+			if (skipWelcomeOnce) uni.removeStorageSync('xsa_skip_welcome_once')
+			welcomeVisible.value = !skipWelcomeOnce
+		} else if (skipWelcomeOnce) {
+			uni.removeStorageSync('xsa_skip_welcome_once')
+			welcomeVisible.value = false
+		}
 	})
 </script>
 
@@ -1234,6 +1257,7 @@
 .want-top-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
 
 .square-feed { display: flex; flex-direction: column; gap: 28rpx; }
+.square-empty-state { padding: 96rpx 24rpx; color: var(--text-muted); text-align: center; font-size: 26rpx; }
 .square-user-card { display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
 .sq-photo-wrap { width: 100%; height: 440rpx; position: relative; overflow: hidden; }
 .sq-photo { width: 100%; height: 100%; }
@@ -1257,6 +1281,7 @@
 .sq-section-title { font-size: 30rpx; font-weight: 700; color: var(--gold); }
 .sq-section-count { font-size: 24rpx; color: var(--gold); font-weight: 500; }
 .sq-section-more { font-size: 24rpx; color: var(--text-muted); }
+.sq-section-empty { padding: 12rpx 0 4rpx; color: var(--text-muted); font-size: 24rpx; text-align: center; }
 .sq-vip-row { display: flex; flex-direction: row; gap: 24rpx; }
 .sq-vip-mini { position: relative; flex: 1; display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
 .sq-vip-photo { width: 100%; height: 320rpx; }
@@ -1288,9 +1313,6 @@
 .vip-filter-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 24rpx 0; }
 .vip-result-count { font-size: 28rpx; font-weight: 600; color: var(--text-primary); }
 .vip-filter-right { display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
-.vip-sort-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--bg-card); }
-.vip-sort-text { font-size: 24rpx; color: var(--text-secondary); }
-.vip-sort-icon { font-size: 20rpx; color: var(--text-muted); }
 .vip-accelerate-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--accent); }
 .vip-accel-icon { font-size: 24rpx; color: var(--text-inverse); }
 .vip-accel-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
