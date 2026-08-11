@@ -4,6 +4,7 @@
  */
 
 import { getUserDetail } from './user.uts'
+import { getMembershipStatus } from './membership.uts'
 import { getAccessToken } from './config.uts'
 import {
   AI_AVATAR_QUICK_QUESTIONS,
@@ -12,9 +13,11 @@ import {
 } from '@/mock/ai-avatar.uts'
 
 export const AI_AVATAR_STORAGE_PREFIX = 'xsa-ai-avatar-conversations-v1-'
+export const AI_AVATAR_OWNER_STORAGE_PREFIX = 'xsa-ai-avatar-owner-v1-'
 export const AI_AVATAR_HANDOFF_DELAY = 6000
 const AI_AVATAR_PROFILE_PREFIX = 'xsa-ai-avatar-profile-v1-'
 const SELF_AVATAR = '/static/portraits/profile-man-light.jpg'
+const USER_ID_STORAGE_KEY = 'xsa_user_id'
 
 function success(data: any = null, message: string = 'success'): any {
   return { success: true, data: data, code: 0, message: message }
@@ -47,6 +50,26 @@ function listValue(value: any): string[] {
     if (item.length > 0 && result.indexOf(item) < 0) result.push(item)
   }
   return result
+}
+
+function currentUserId(): number {
+  try {
+    const value = uni.getStorageSync(USER_ID_STORAGE_KEY)
+    const id = Number(value)
+    return id > 0 ? id : 0
+  } catch (e) {
+    return 0
+  }
+}
+
+function tokenScope(): string {
+  const userId = currentUserId()
+  if (userId > 0) return 'user-' + String(userId)
+  const token = getAccessToken()
+  if (token == '') return 'guest'
+  let hash = 7
+  for (let i = 0; i < token.length; i++) hash = (hash * 31 + token.charCodeAt(i)) % 2147483647
+  return 'token-' + String(hash)
 }
 
 function unwrapProfile(raw: any): any {
@@ -96,18 +119,57 @@ function normalizeAiAvatarProfile(raw: any, restricted: boolean): any {
   }
 }
 
+function isTrueFlag(value: any): boolean {
+  if (value === true || value === 1) return true
+  return value != null && String(value).toLowerCase() == 'true'
+}
+
+function hasRestrictedProfileFlag(raw: any): boolean {
+  const parts = unwrapProfile(raw)
+  const sources: any[] = [raw, parts.envelope, parts.profile, parts.card]
+  const keys = ['detailLocked', 'detail_locked', 'isLocked', 'is_locked', 'locked', 'restricted', 'privacy_locked', 'vip_locked']
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i]
+    if (source == null || typeof source != 'object') continue
+    for (let j = 0; j < keys.length; j++) {
+      if (isTrueFlag(source[keys[j]])) return true
+    }
+  }
+  return false
+}
+
+function hasVipProfileFlag(raw: any): boolean {
+  const parts = unwrapProfile(raw)
+  const sources: any[] = [raw, parts.envelope, parts.profile, parts.card]
+  const keys = ['isVip', 'isVIP', 'is_vip', 'vip', 'vip_member']
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i]
+    if (source == null || typeof source != 'object') continue
+    for (let j = 0; j < keys.length; j++) {
+      if (isTrueFlag(source[keys[j]])) return true
+    }
+  }
+  return false
+}
+
 function storageKey(userId: number): string {
-  return AI_AVATAR_STORAGE_PREFIX + String(userId)
+  return AI_AVATAR_STORAGE_PREFIX + String(userId) + '-' + tokenScope()
 }
 
 function profileStorageKey(userId: number): string {
-  return AI_AVATAR_PROFILE_PREFIX + String(userId)
+  return AI_AVATAR_PROFILE_PREFIX + String(userId) + '-' + tokenScope()
+}
+
+function ownerStorageKey(userId: number): string {
+  return AI_AVATAR_OWNER_STORAGE_PREFIX + String(userId)
 }
 
 function readProfileSnapshot(userId: number): any {
   try {
-    const saved = uni.getStorageSync(profileStorageKey(userId))
-    return saved != null && typeof saved == 'object' ? saved : null
+    const key = profileStorageKey(userId)
+    const saved = uni.getStorageSync(key)
+    if (saved != null && typeof saved == 'object') return saved
+    return null
   } catch (e) {
     return null
   }
@@ -115,11 +177,115 @@ function readProfileSnapshot(userId: number): any {
 
 function readMessages(userId: number): any[] {
   try {
-    const saved = uni.getStorageSync(storageKey(userId))
-    return Array.isArray(saved) ? saved as any[] : []
+    const key = storageKey(userId)
+    const saved = uni.getStorageSync(key)
+    if (Array.isArray(saved)) return saved as any[]
+    return []
   } catch (e) {
     return []
   }
+}
+
+function readOwnerState(ownerId: number): any {
+  const empty = { chatRecords: [], pendingQuestions: [], myAnswers: [] }
+  if (ownerId <= 0) return empty
+  try {
+    const saved = uni.getStorageSync(ownerStorageKey(ownerId))
+    if (saved == null || typeof saved != 'object') return empty
+    return {
+      chatRecords: Array.isArray(saved.chatRecords) ? saved.chatRecords : [],
+      pendingQuestions: Array.isArray(saved.pendingQuestions) ? saved.pendingQuestions : [],
+      myAnswers: Array.isArray(saved.myAnswers) ? saved.myAnswers : []
+    }
+  } catch (e) {
+    return empty
+  }
+}
+
+function writeOwnerState(ownerId: number, state: any) {
+  if (ownerId <= 0) return
+  try { uni.setStorageSync(ownerStorageKey(ownerId), state) } catch (e) { console.error('AI 分身管理记录保存失败', e) }
+}
+
+function normalizeQuestion(value: any): string {
+  return value != null ? String(value).trim().replace(/\s+/g, ' ').toLowerCase() : ''
+}
+
+function ownerHasAnswer(ownerId: number, question: string): boolean {
+  const normalized = normalizeQuestion(question)
+  if (normalized == '') return false
+  const state = readOwnerState(ownerId)
+  for (let i = 0; i < state.myAnswers.length; i++) {
+    if (normalizeQuestion(state.myAnswers[i].question) == normalized) return true
+  }
+  return false
+}
+
+function ownerAnswers(ownerId: number): any[] {
+  const state = readOwnerState(ownerId)
+  return state.myAnswers.map((item: any) => ({ question: item.question, answer: item.answer }))
+}
+
+function enrichProfileWithOwnerAnswers(profile: any, restricted: boolean = false): any {
+  if (profile == null || typeof profile != 'object') return profile
+  if (restricted === true || profile.restricted === true) {
+    profile.customAnswers = []
+    return profile
+  }
+  const ownerId = Number(profile.id)
+  profile.customAnswers = ownerAnswers(ownerId)
+  return profile
+}
+
+function topicLabel(category: string): string {
+  if (category == 'basic') return '基本资料'
+  if (category == 'interest') return '兴趣爱好'
+  if (category == 'expectation') return '择偶标准'
+  if (category == 'platform') return '平台规则'
+  return '公开资料问答'
+}
+
+function recordOwnerInteraction(ownerId: number, question: string, category: string, handoff: any = null): any {
+  if (ownerId <= 0) return null
+  const state = readOwnerState(ownerId)
+  let pending = null
+  const topic = topicLabel(category)
+  let chat = null
+  for (let i = 0; i < state.chatRecords.length; i++) {
+    if (state.chatRecords[i].topic == topic) { chat = state.chatRecords[i]; break }
+  }
+  if (chat == null) {
+    chat = { id: 'topic-' + category, topic: topic, count: 0, time: '刚刚' }
+    state.chatRecords.unshift(chat)
+  }
+  chat.count = Number(chat.count) + 1
+  chat.time = '刚刚'
+  if (handoff != null && !ownerHasAnswer(ownerId, question)) {
+    const normalized = normalizeQuestion(question)
+    for (let i = 0; i < state.pendingQuestions.length; i++) {
+      if (normalizeQuestion(state.pendingQuestions[i].question) == normalized && state.pendingQuestions[i].status == 'pending') {
+        pending = state.pendingQuestions[i]
+        break
+      }
+    }
+    const handoffRef = { conversationKey: handoff.conversationKey, messageId: handoff.messageId }
+    if (pending == null) {
+      pending = {
+        id: 'question-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        question: question,
+        askedCount: 1,
+        status: 'pending',
+        handoffs: [handoffRef]
+      }
+      state.pendingQuestions.unshift(pending)
+    } else {
+      pending.askedCount = Number(pending.askedCount) + 1
+      if (!Array.isArray(pending.handoffs)) pending.handoffs = []
+      pending.handoffs.push(handoffRef)
+    }
+  }
+  writeOwnerState(ownerId, state)
+  return pending != null ? pending.id : null
 }
 
 function writeMessages(userId: number, messages: any[]) {
@@ -170,29 +336,53 @@ function resolvePendingMessages(messages: any[], profile: any, force: boolean = 
 export async function getAiAvatarProfile(userId: number, restricted: boolean = false): Promise<any> {
   if (getAccessToken() == '') return failure('请先登录后使用 AI 分身', 'AUTH_REQUIRED')
   if (userId <= 0) return failure('用户资料不存在', 'USER_NOT_FOUND')
+
+  // Revalidate the visible profile before using a local snapshot. The route's
+  // locked flag is only a hint and must not override current privacy state.
+  let currentRes: any = null
+  try { currentRes = await getUserDetail(userId) } catch (e) {}
+  if (currentRes != null && currentRes.success === true && currentRes.data != null) {
+    let viewerIsVip = false
+    try {
+      const membershipRes = await getMembershipStatus()
+      viewerIsVip = membershipRes.success === true && membershipRes.data != null && membershipRes.data.is_vip === true
+    } catch (e) {}
+    const effectiveRestricted = restricted === true || hasRestrictedProfileFlag(currentRes.data) || (hasVipProfileFlag(currentRes.data) && !viewerIsVip)
+    const profile = normalizeAiAvatarProfile(currentRes.data, effectiveRestricted)
+    profile.id = userId
+    profile.snapshotUpdatedAt = Date.now()
+    try { uni.setStorageSync(profileStorageKey(userId), profile) } catch (e) {}
+    return success(enrichProfileWithOwnerAnswers(profile, effectiveRestricted))
+  }
+
+  // Network fallback is fail-closed: only previously visible basics survive,
+  // while expectations, dynamics, and owner answers are removed.
   const saved = readProfileSnapshot(userId)
   if (saved != null) {
-    const profile = normalizeAiAvatarProfile(saved, restricted)
+    const profile = normalizeAiAvatarProfile(saved, true)
     profile.id = userId
-    if (restricted === true) profile.expectations = []
-    return success(profile)
+    profile.restricted = true
+    profile.stale = true
+    profile.expectations = []
+    profile.interests = []
+    profile.customAnswers = []
+    return success(profile, '公开资料快照暂时是旧数据')
   }
-  const res = await getUserDetail(userId)
-  if (!res.success || res.data == null) return failure(res.message != null ? String(res.message) : '用户资料暂时无法打开', res.code)
-  return success(normalizeAiAvatarProfile(res.data, restricted))
+  return failure(currentRes != null && currentRes.message != null ? String(currentRes.message) : '用户资料暂时无法打开', currentRes != null ? currentRes.code : -1)
 }
 
 export function saveAiAvatarProfileSnapshot(userId: number, snapshot: any, restricted: boolean = false): any {
   if (userId <= 0 || snapshot == null || typeof snapshot != 'object') return failure('用户资料不存在', 'USER_NOT_FOUND')
   const profile = normalizeAiAvatarProfile(snapshot, restricted)
   profile.id = userId
+  profile.snapshotUpdatedAt = Date.now()
   if (restricted === true) profile.expectations = []
   try {
     uni.setStorageSync(profileStorageKey(userId), profile)
   } catch (e) {
     return failure('公开资料快照保存失败')
   }
-  return success(profile)
+  return success(enrichProfileWithOwnerAnswers(profile, restricted))
 }
 
 export function getAiAvatarQuickQuestions(): any {
@@ -201,6 +391,8 @@ export function getAiAvatarQuickQuestions(): any {
 
 export function getAiAvatarConversation(userId: number, profile: any): any {
   if (userId <= 0) return failure('用户资料不存在', 'USER_NOT_FOUND')
+  if (profile == null || typeof profile != 'object') return failure('AI 分身资料暂时无法读取', 'PROFILE_REQUIRED')
+  profile = enrichProfileWithOwnerAnswers(profile, profile.restricted === true)
   let messages = readMessages(userId)
   if (messages.length == 0) {
     messages = [initialMessage(profile)]
@@ -215,8 +407,13 @@ export function sendAiAvatarMessage(userId: number, content: string, profile: an
   const question = content != null ? String(content).trim() : ''
   if (question.length == 0) return failure('请输入问题', 'EMPTY_MESSAGE')
   if (question.length > 300) return failure('问题不能超过 300 个字', 'MESSAGE_TOO_LONG')
+  if (userId <= 0 || profile == null || typeof profile != 'object') return failure('AI 分身资料暂时无法读取', 'PROFILE_REQUIRED')
+  profile = enrichProfileWithOwnerAnswers(profile, profile.restricted === true)
   let messages = readMessages(userId)
-  if (messages.length == 0) messages = [initialMessage(profile)]
+  if (messages.length == 0) {
+    messages = [initialMessage(profile)]
+    writeMessages(userId, messages)
+  }
   messages = resolvePendingMessages(messages, profile)
   messages.push(message(question, true, profile, 'user'))
   const result = buildMockAiAvatarReply(profile, question)
@@ -226,12 +423,20 @@ export function sendAiAvatarMessage(userId: number, content: string, profile: an
     extra.handoffQuestion = question
     extra.handoffDueAt = Date.now() + AI_AVATAR_HANDOFF_DELAY
   }
-  messages.push(message(result.reply, false, profile, result.source, extra))
+  const replyMessage = message(result.reply, false, profile, result.source, extra)
+  const ownerQuestionId = recordOwnerInteraction(Number(profile.id), question, result.category, result.handoffRequired === true ? {
+    conversationKey: storageKey(userId),
+    messageId: replyMessage.id
+  } : null)
+  if (ownerQuestionId != null) replyMessage.handoffId = ownerQuestionId
+  messages.push(replyMessage)
   writeMessages(userId, messages)
   return success({ messages: messages, result: result })
 }
 
 export function resolveAiAvatarHandoffs(userId: number, profile: any): any {
+  if (userId <= 0 || profile == null || typeof profile != 'object') return failure('AI 分身资料暂时无法读取', 'PROFILE_REQUIRED')
+  profile = enrichProfileWithOwnerAnswers(profile, profile.restricted === true)
   const messages = readMessages(userId)
   const resolved = resolvePendingMessages(messages, profile)
   if (JSON.stringify(resolved) != JSON.stringify(messages)) writeMessages(userId, resolved)
@@ -242,4 +447,102 @@ export function clearAiAvatarConversation(userId: number): any {
   if (userId <= 0) return failure('用户资料不存在', 'USER_NOT_FOUND')
   try { uni.removeStorageSync(storageKey(userId)) } catch (e) { return failure('清空记录失败') }
   return success([], 'AI 分身聊天记录已清空')
+}
+
+export function getAiAvatarOwnerId(): number {
+  return currentUserId()
+}
+
+export function getAiAvatarOwnerDashboard(ownerId: number = 0): any {
+  if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
+  const currentId = currentUserId()
+  const id = ownerId > 0 ? ownerId : currentId
+  if (currentId <= 0 || id <= 0) return failure('当前账号资料暂时无法读取', 'USER_REQUIRED')
+  if (id != currentId) return failure('无权管理其他账号的 AI 分身', 'FORBIDDEN')
+  const state = readOwnerState(id)
+  return success({
+    chatRecords: state.chatRecords,
+    pendingQuestions: state.pendingQuestions.filter((item: any) => item.status == null || item.status == 'pending'),
+    myAnswers: state.myAnswers
+  })
+}
+
+function updateVisitorHandoff(conversationKey: string, messageId: string, answer: string): void {
+  if (conversationKey == '' || messageId == '') return
+  try {
+    const messages = uni.getStorageSync(conversationKey)
+    if (!Array.isArray(messages)) return
+    for (let i = 0; i < messages.length; i++) {
+      const item = messages[i]
+      if (String(item.id) == messageId && item.handoffStatus == 'pending') {
+        item.content = '本人补充回答（演示）：' + answer
+        item.source = 'owner-answer'
+        item.handoffStatus = 'answered'
+        item.isMockPersonReply = false
+        break
+      }
+    }
+    uni.setStorageSync(conversationKey, messages)
+  } catch (e) {}
+}
+
+export function submitAiAvatarOwnerAnswer(ownerId: number, questionId: string, answer: string): any {
+  if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
+  const currentId = currentUserId()
+  const id = ownerId > 0 ? ownerId : currentId
+  const value = answer != null ? String(answer).trim() : ''
+  if (currentId <= 0 || id <= 0) return failure('当前账号资料暂时无法读取', 'USER_REQUIRED')
+  if (id != currentId) return failure('无权管理其他账号的 AI 分身', 'FORBIDDEN')
+  if (value == '') return failure('回答不能为空', 'EMPTY_ANSWER')
+  if (value.length > 500) return failure('回答不能超过 500 个字', 'ANSWER_TOO_LONG')
+  const state = readOwnerState(id)
+  let question = null
+  for (let i = 0; i < state.pendingQuestions.length; i++) {
+    if (String(state.pendingQuestions[i].id) == String(questionId)) { question = state.pendingQuestions[i]; break }
+  }
+  if (question == null) {
+    for (let i = 0; i < state.myAnswers.length; i++) {
+      if (String(state.myAnswers[i].id) == String(questionId)) {
+        state.myAnswers[i].answer = value
+        state.myAnswers[i].time = '刚刚'
+        writeOwnerState(id, state)
+        return getAiAvatarOwnerDashboard(id)
+      }
+    }
+    return failure('待回答问题不存在', 'QUESTION_NOT_FOUND')
+  }
+  question.status = 'answered'
+  let existing = null
+  for (let i = 0; i < state.myAnswers.length; i++) {
+    if (normalizeQuestion(state.myAnswers[i].question) == normalizeQuestion(question.question)) { existing = state.myAnswers[i]; break }
+  }
+  if (existing == null) state.myAnswers.unshift({ id: 'answer-' + Date.now(), question: question.question, answer: value, time: '刚刚' })
+  else { existing.answer = value; existing.time = '刚刚' }
+  if (Array.isArray(question.handoffs)) {
+    for (let i = 0; i < question.handoffs.length; i++) updateVisitorHandoff(String(question.handoffs[i].conversationKey), String(question.handoffs[i].messageId), value)
+  }
+  writeOwnerState(id, state)
+  return getAiAvatarOwnerDashboard(id)
+}
+
+export function deleteAiAvatarOwnerQuestion(ownerId: number, questionId: string): any {
+  if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
+  const currentId = currentUserId()
+  const id = ownerId > 0 ? ownerId : currentId
+  if (currentId <= 0 || id != currentId) return failure('无权管理其他账号的 AI 分身', 'FORBIDDEN')
+  const state = readOwnerState(id)
+  state.pendingQuestions = state.pendingQuestions.filter((item: any) => String(item.id) != String(questionId))
+  writeOwnerState(id, state)
+  return getAiAvatarOwnerDashboard(id)
+}
+
+export function deleteAiAvatarOwnerAnswer(ownerId: number, answerId: string): any {
+  if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
+  const currentId = currentUserId()
+  const id = ownerId > 0 ? ownerId : currentId
+  if (currentId <= 0 || id != currentId) return failure('无权管理其他账号的 AI 分身', 'FORBIDDEN')
+  const state = readOwnerState(id)
+  state.myAnswers = state.myAnswers.filter((item: any) => String(item.id) != String(answerId))
+  writeOwnerState(id, state)
+  return getAiAvatarOwnerDashboard(id)
 }

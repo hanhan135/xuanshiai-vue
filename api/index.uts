@@ -149,14 +149,20 @@ export {
 // AI 分身（当前为本地 Mock，不进入真人消息系统）
 export {
   AI_AVATAR_STORAGE_PREFIX,
+  AI_AVATAR_OWNER_STORAGE_PREFIX,
   AI_AVATAR_HANDOFF_DELAY,
+  getAiAvatarOwnerId,
   saveAiAvatarProfileSnapshot,
   getAiAvatarProfile,
   getAiAvatarQuickQuestions,
   getAiAvatarConversation,
   sendAiAvatarMessage,
   resolveAiAvatarHandoffs,
-  clearAiAvatarConversation
+  clearAiAvatarConversation,
+  getAiAvatarOwnerDashboard,
+  submitAiAvatarOwnerAnswer,
+  deleteAiAvatarOwnerQuestion,
+  deleteAiAvatarOwnerAnswer
 } from './ai-avatar.uts'
 
 // 安全中心相关

@@ -33,6 +33,15 @@ function includesAny(text: string, words: string[]): boolean {
   return false
 }
 
+function normalizeQuestion(value: any): string {
+  if (value == null) return ''
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[，。！？；：,.!?;:]/g, '')
+}
+
 function classifyQuestion(content: string): string {
   const text = content.toLowerCase()
   if (includesAny(text, ['平台', '规则', '认证', '实名', '举报', '安全', '联系方式', '申请认识'])) return 'platform'
@@ -45,6 +54,20 @@ function classifyQuestion(content: string): string {
 
 export function buildMockAiAvatarReply(profile: any, content: string): any {
   const question = content != null ? String(content).trim() : ''
+  const normalizedQuestion = normalizeQuestion(question)
+  const customAnswers = profile != null && profile.restricted !== true && Array.isArray(profile.customAnswers) ? profile.customAnswers : []
+  for (let i = 0; i < customAnswers.length; i++) {
+    const item = customAnswers[i]
+    if (item != null && normalizeQuestion(item.question) == normalizedQuestion && String(item.answer).trim() != '') {
+      return {
+        category: 'owner-answer',
+        source: 'owner-answer',
+        reply: `这是 ${firstValue(profile != null ? profile.name : null, 'Ta')} 本人补充的演示回答：${String(item.answer).trim()}`,
+        handoffRequired: false,
+        handoffStatus: 'none'
+      }
+    }
+  }
   const category = classifyQuestion(question)
   const name = firstValue(profile != null ? profile.name : null, 'Ta')
   const age = firstValue(profile != null ? profile.age : null)

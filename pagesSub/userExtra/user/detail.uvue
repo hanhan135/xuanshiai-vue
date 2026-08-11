@@ -518,13 +518,21 @@ onMounted(async () => {
 	const currentPage = pages[pages.length - 1]
 	const options = currentPage.options
 	isPreview.value = options.preview === 'true' || options.preview === true
-	isOwnProfile.value = options.own === 'true' || options.own === true || isPreview.value
 
 	let parsed = 1
 	if (options.userId != null && options.userId != '') {
 		const candidate = Number(options.userId)
 		if (!isNaN(candidate) && candidate > 0) parsed = candidate
 	}
+	let viewerId = 0
+	try {
+		const storedViewerId = uni.getStorageSync('xsa_user_id')
+		if (storedViewerId != null && storedViewerId != '') {
+			const candidateViewerId = Number(storedViewerId)
+			if (!isNaN(candidateViewerId) && candidateViewerId > 0) viewerId = candidateViewerId
+		}
+	} catch (e) {}
+	isOwnProfile.value = options.own === 'true' || options.own === true || isPreview.value || (viewerId > 0 && viewerId == parsed)
 	user.value.id = parsed
 	applyUserId.value = parsed
 	await loadViewerMembership()

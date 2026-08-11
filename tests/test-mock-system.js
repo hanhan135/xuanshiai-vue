@@ -138,8 +138,20 @@ try {
   const mockContent = fs.readFileSync(path.join(__dirname, '../mock/ai-avatar.uts'), 'utf-8')
   const chatContent = fs.readFileSync(path.join(__dirname, '../pagesSub/chat/detail.uvue'), 'utf-8')
   const profileContent = fs.readFileSync(path.join(__dirname, '../pagesSub/userExtra/user/detail.uvue'), 'utf-8')
+  const ownerContent = fs.readFileSync(path.join(__dirname, '../pagesSub/profileExtra/my-ai-avatar.uvue'), 'utf-8')
   const checks = [
     ['独立本地存储键', apiContent.includes('xsa-ai-avatar-conversations-v1-')],
+    ['当前账号作用域', apiContent.includes('tokenScope()') && apiContent.includes('USER_ID_STORAGE_KEY')],
+    ['本人主页按登录账号识别', profileContent.includes("uni.getStorageSync('xsa_user_id')") && profileContent.includes('viewerId == parsed')],
+    ['旧版无账号记录不再迁移', !apiContent.includes('legacyStorageKey') && !apiContent.includes('legacyProfileStorageKey')],
+    ['本人答案忽略空格和标点差异', mockContent.includes('normalizeQuestion') && mockContent.includes('normalizeQuestion(item.question) == normalizedQuestion')],
+    ['AI 资料进入前重新校验隐私', apiContent.includes('getMembershipStatus') && apiContent.includes('hasVipProfileFlag') && apiContent.includes('snapshotUpdatedAt')],
+    ['网络降级不暴露敏感资料', apiContent.includes('profile.interests = []') && apiContent.includes('profile.customAnswers = []') && apiContent.includes('profile.stale = true')],
+    ['本人管理数据接口', apiContent.includes('getAiAvatarOwnerDashboard') && ownerContent.includes('getAiAvatarOwnerDashboard')],
+    ['本人回答回写访客会话', apiContent.includes('updateVisitorHandoff') && apiContent.includes('submitAiAvatarOwnerAnswer')],
+    ['本人回答来源标记', mockContent.includes("source: 'owner-answer'") && chatContent.includes("msg.source === 'owner-answer'")],
+    ['受限资料不暴露本人答案', apiContent.includes('profile.customAnswers = []') && apiContent.includes('profile.restricted === true') && mockContent.includes('profile.restricted !== true')],
+    ['管理页不再硬编码数据', !ownerContent.includes('const chatRecords = ref<any[]>([\n') && !ownerContent.includes('const pendingQuestions = ref<any[]>([\n') && !ownerContent.includes('const myAnswers = ref<any[]>([\n')],
     ['本地历史读取', apiContent.includes('getAiAvatarConversation')],
     ['首次欢迎消息持久化', apiContent.includes('messages = [initialMessage(profile)]') && apiContent.includes('writeMessages(userId, messages)')],
     ['模拟转交恢复', apiContent.includes('resolveAiAvatarHandoffs')],

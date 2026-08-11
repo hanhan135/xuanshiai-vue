@@ -27,9 +27,18 @@
 
 		<!-- 列表区 -->
 		<scroll-view scroll-y class="aia-body" enhanced show-scrollbar="false">
+			<view v-if="loading" class="aia-state">
+				<text class="aia-state-title">正在读取 AI 分身数据</text>
+			</view>
+			<view v-else-if="errorMessage != ''" class="aia-state">
+				<text class="aia-state-title">AI 分身暂时无法打开</text>
+				<text class="aia-state-copy">{{ errorMessage }}</text>
+				<view class="aia-retry" @tap="loadDashboard"><text>重新加载</text></view>
+			</view>
+			<view v-else>
 			<!-- Tab 1：对话记录 -->
 			<view v-if="activeTab == 0">
-				<text class="aia-tip">为保护双方隐私，访客身份与具体聊天内容对你不可见，仅展示话题摘要。</text>
+				<text class="aia-tip">为保护双方隐私，访客身份与具体聊天内容对你不可见，仅展示匿名话题摘要。当前数据保存在本设备，仅用于前端演示。</text>
 				<view v-if="chatRecords.length > 0">
 					<view class="aia-chat-item" v-for="item in chatRecords" :key="item.id">
 						<view class="aia-chat-avatar">
@@ -53,7 +62,7 @@
 
 			<!-- Tab 2：待回答 -->
 			<view v-if="activeTab == 1">
-				<text class="aia-tip">这些问题分身暂时无法回答，已转交给你；回答后将同步给分身，用于后续回复。</text>
+				<text class="aia-tip">这些问题来自本设备上的 AI 分身演示。你提交回答后，会用于本设备后续相同问题的回复，不会通知真人用户。</text>
 				<view v-if="pendingQuestions.length > 0">
 					<view class="aia-qa-item" v-for="item in pendingQuestions" :key="item.id" @tap="openPending(item)">
 						<view class="aia-qa-head">
@@ -79,7 +88,7 @@
 
 			<!-- Tab 3：我的回答 -->
 			<view v-if="activeTab == 2">
-				<text class="aia-tip">你的回答会沉淀为分身的问答知识，让分身越来越懂你。</text>
+				<text class="aia-tip">这些是你为 AI 分身补充的演示答案，可编辑或删除。正式接入后端前，不会同步到其他设备。</text>
 				<view v-if="myAnswers.length > 0">
 					<view class="aia-ans-item" v-for="item in myAnswers" :key="item.id" @tap="openEdit(item)">
 						<view class="aia-ans-top">
@@ -109,6 +118,7 @@
 				</view>
 			</view>
 			<view class="aia-bottom-spacer"></view>
+			</view>
 		</scroll-view>
 
 		<!-- 回答弹窗 -->
@@ -148,42 +158,63 @@
 </template>
 
 <script setup lang="uts">
+import {
+	getAiAvatarOwnerId,
+	getAiAvatarOwnerDashboard,
+	submitAiAvatarOwnerAnswer,
+	deleteAiAvatarOwnerQuestion,
+	deleteAiAvatarOwnerAnswer
+} from '@/api'
+
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
 
 const activeTab = ref(0)
-
-// TODO(接口占位)：接入真实接口后替换为 api 请求，当前为演示占位数据
-const chatRecords = ref<any[]>([
-	{ id: 1, topic: '围绕「择偶标准 · 兴趣爱好」展开', count: 12, time: '今天 14:20' },
-	{ id: 2, topic: '围绕「基本信息 · 生活方式」展开', count: 6, time: '今天 09:05' },
-	{ id: 3, topic: '咨询平台规则「头像真实性」', count: 4, time: '昨天 21:47' },
-])
-
-const pendingQuestions = ref<any[]>([
-	{ id: 1, question: '如果未来定居城市不一致，你会怎么考虑？', askedCount: 3 },
-	{ id: 2, question: '你对婚后和父母同住怎么看？', askedCount: 5 },
-	{ id: 3, question: '平时工作忙的时候，你希望对方怎么和你相处？', askedCount: 2 },
-])
-
-const myAnswers = ref<any[]>([
-	{ id: 1, question: '你周末一般喜欢怎么过？', answer: '天气好会去周边徒步，宅家就看书、做烘焙，偶尔也会约朋友打羽毛球。', time: '08-02 15:20' },
-	{ id: 2, question: '能接受异地恋吗？', answer: '短期可以，长期还是希望双向奔赴，到同一座城市生活。', time: '07-28 22:10' },
-	{ id: 3, question: '你理想中的第一次见面是什么样的？', answer: '轻松一点，喝杯咖啡聊聊天就好，不用太有仪式感。', time: '07-25 12:05' },
-])
+const ownerId = ref(0)
+const loading = ref(true)
+const errorMessage = ref('')
+const chatRecords = ref<any[]>([])
+const pendingQuestions = ref<any[]>([])
+const myAnswers = ref<any[]>([])
 
 const answerVisible = ref(false)
 const answerMode = ref('pending') // pending=回答新问题 / edit=编辑已有回答
 const answerQuestion = ref('')
 const answerText = ref('')
-const editingId = ref(-1)
+const editingId = ref('')
+
+const applyDashboard = (data: any) => {
+	const value = data != null && typeof data == 'object' ? data : {}
+	chatRecords.value = Array.isArray(value.chatRecords) ? value.chatRecords : []
+	pendingQuestions.value = Array.isArray(value.pendingQuestions) ? value.pendingQuestions : []
+	myAnswers.value = Array.isArray(value.myAnswers) ? value.myAnswers : []
+}
+
+const loadDashboard = async () => {
+	loading.value = true
+	errorMessage.value = ''
+	ownerId.value = getAiAvatarOwnerId()
+	try {
+		const res = getAiAvatarOwnerDashboard(ownerId.value)
+		if (!res.success || res.data == null) {
+			errorMessage.value = res.message != null ? String(res.message) : '请先登录后管理 AI 分身'
+			return
+		}
+		applyDashboard(res.data)
+	} catch (error) {
+		console.error('AI 分身管理数据加载失败', error)
+		errorMessage.value = '网络或本地数据异常，请稍后重试'
+	} finally {
+		loading.value = false
+	}
+}
 
 const back = () => { uni.navigateBack({ delta: 1 }) }
 const switchTab = (idx: number) => { activeTab.value = idx }
 
 const openPending = (item: any) => {
 	answerMode.value = 'pending'
-	editingId.value = Number(item.id)
+	editingId.value = String(item.id)
 	answerQuestion.value = '' + item.question
 	answerText.value = ''
 	answerVisible.value = true
@@ -191,7 +222,7 @@ const openPending = (item: any) => {
 
 const openEdit = (item: any) => {
 	answerMode.value = 'edit'
-	editingId.value = Number(item.id)
+	editingId.value = String(item.id)
 	answerQuestion.value = '' + item.question
 	answerText.value = '' + item.answer
 	answerVisible.value = true
@@ -205,34 +236,62 @@ const closeAnswer = () => {
 const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
 
 const submitAnswer = () => {
-	if (answerText.value == '') {
+	const value = answerText.value != null ? String(answerText.value).trim() : ''
+	if (value == '') {
 		uni.showToast({ title: '先写点内容再提交', icon: 'none' })
 		return
 	}
 	if (answerMode.value == 'pending') {
-		const idx = pendingQuestions.value.findIndex((it: any) => Number(it.id) == editingId.value)
-		if (idx >= 0) pendingQuestions.value.splice(idx, 1)
-		myAnswers.value.unshift({ id: Date.now(), question: answerQuestion.value, answer: answerText.value, time: '刚刚' })
-		uni.showToast({ title: '已提交，将同步给你的分身', icon: 'none' })
+		const res = submitAiAvatarOwnerAnswer(ownerId.value, editingId.value, value)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? String(res.message) : '提交失败', icon: 'none' })
+			return
+		}
+		if (res.data != null) applyDashboard(res.data)
+		uni.showToast({ title: '已保存到本设备的 AI 演示数据', icon: 'none' })
 	} else {
-		const idx = myAnswers.value.findIndex((it: any) => Number(it.id) == editingId.value)
-		if (idx >= 0) myAnswers.value[idx].answer = answerText.value
+		const res = submitAiAvatarOwnerAnswer(ownerId.value, editingId.value, value)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? String(res.message) : '保存失败', icon: 'none' })
+			return
+		}
+		if (res.data != null) applyDashboard(res.data)
 		uni.showToast({ title: '已保存修改', icon: 'none' })
 	}
+	answerText.value = ''
 	answerVisible.value = false
 }
 
-const deletePending = (id: number) => {
-	const idx = pendingQuestions.value.findIndex((it: any) => Number(it.id) == id)
-	if (idx >= 0) pendingQuestions.value.splice(idx, 1)
-	uni.showToast({ title: '已删除该问题', icon: 'none' })
+const deletePending = (id: any) => {
+	uni.showModal({
+		title: '删除待回答问题',
+		content: '删除后不会再显示这个问题，确定继续吗？',
+		confirmText: '删除',
+		success: (result: any) => {
+			if (result.confirm !== true) return
+			const res = deleteAiAvatarOwnerQuestion(ownerId.value, String(id))
+			if (res.success && res.data != null) applyDashboard(res.data)
+			uni.showToast({ title: res.success ? '已删除' : '删除失败', icon: 'none' })
+		}
+	})
 }
 
-const deleteAnswer = (id: number) => {
-	const idx = myAnswers.value.findIndex((it: any) => Number(it.id) == id)
-	if (idx >= 0) myAnswers.value.splice(idx, 1)
-	uni.showToast({ title: '已删除该回答', icon: 'none' })
+const deleteAnswer = (id: any) => {
+	uni.showModal({
+		title: '删除本人回答',
+		content: '删除后 AI 分身将不再使用这条演示答案，确定继续吗？',
+		confirmText: '删除',
+		success: (result: any) => {
+			if (result.confirm !== true) return
+			const res = deleteAiAvatarOwnerAnswer(ownerId.value, String(id))
+			if (res.success && res.data != null) applyDashboard(res.data)
+			uni.showToast({ title: res.success ? '已删除' : '删除失败', icon: 'none' })
+		}
+	})
 }
+
+onMounted(() => { loadDashboard() })
+onShow(() => { if (!answerVisible.value) loadDashboard() })
 </script>
 
 <style>
@@ -254,10 +313,12 @@ page {
 }
 
 .aia-page {
+	height: 100vh;
 	min-height: 100vh;
 	background-color: var(--aia-bg);
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
 }
 
 /* ==================== 导航栏 ==================== */
@@ -344,7 +405,40 @@ page {
 /* ==================== 列表区 ==================== */
 .aia-body {
 	flex: 1;
+	min-height: 0;
 	padding: 14px 16px 0;
+}
+
+.aia-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 300px;
+	padding: 24px;
+	text-align: center;
+}
+
+.aia-state-title {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--aia-text);
+}
+
+.aia-state-copy {
+	margin-top: 8px;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--aia-text-2);
+}
+
+.aia-retry {
+	margin-top: 16px;
+	padding: 9px 18px;
+	border-radius: 8px;
+	background-color: var(--aia-accent-deep);
+	color: #FFFFFF;
+	font-size: 12px;
 }
 
 .aia-tip {

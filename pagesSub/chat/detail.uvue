@@ -382,6 +382,7 @@ let contactExchangeRecords = ref([] as any[])
 	}
 
 	const getAiMessageLabel = (msg: any): string => {
+		if (msg != null && msg.source === 'owner-answer') return '本人补充回答（演示）'
 		if (msg != null && msg.source === 'mock-person') return '本人回答（模拟）'
 		if (msg != null && msg.source === 'ai-avatar' && msg.handoffStatus === 'pending') return '已转交（演示）'
 		return 'AI 分身'
