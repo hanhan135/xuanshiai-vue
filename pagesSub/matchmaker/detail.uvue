@@ -527,17 +527,17 @@ const showToast = (msg: string) => {
 
 <style scoped>
 .detail-page {
-	--rose: #F33E78;
-	--rose-dark: #C61F58;
-	--rose-soft: #FFE4EE;
-	--rose-faint: #FFF5F9;
-	--rose-line: #FFD2E2;
+	--rose: #7EC8A0;
+	--rose-dark: #5BAF80;
+	--rose-soft: #E8F5EE;
+	--rose-faint: #F5F9F2;
+	--rose-line: #D6EBDD;
 	--gold: #F0A332;
 	--gold-soft: #FFF0CF;
 	--violet: #8B58E8;
 	--violet-soft: #EFE2FF;
-	--green: #18B866;
-	--blue: #168AEC;
+	--green: #5BAF80;
+	--blue: #7EC8A0;
 	min-height: 100vh;
 	background: linear-gradient(180deg, var(--rose-faint) 0%, var(--paper) 40%, var(--paper) 100%);
 }

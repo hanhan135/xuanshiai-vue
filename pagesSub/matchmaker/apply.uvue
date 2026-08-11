@@ -544,7 +544,7 @@
 		min-height: 0;
 		padding: 22px 20px 17px;
 		border-radius: 20px;
-		background: var(--navy);
+		background: linear-gradient(145deg, var(--accent-bg), var(--surface));
 		box-sizing: border-box;
 	}
 
@@ -585,7 +585,7 @@
 		font-size: 10px;
 		font-weight: 800;
 		letter-spacing: 0.13em;
-		color: var(--soft);
+		color: var(--accent2);
 	}
 
 	.hero-eyebrow-dot {
@@ -601,14 +601,14 @@
 		line-height: 1.32;
 		font-family: var(--serif);
 		font-weight: 700;
-		color: var(--paper);
+		color: var(--ink);
 	}
 
 	.custom-hero-desc {
 		max-width: 286px;
 		font-size: 13px;
 		line-height: 1.65;
-		color: #D5E6E2;
+		color: var(--ink2);
 	}
 
 	.hero-privacy {

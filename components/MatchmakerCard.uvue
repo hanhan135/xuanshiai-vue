@@ -72,15 +72,15 @@ const handleContact = () => {
 	.matchmaker-card {
 		width: 100%;
 		min-width: 0;
-		border-radius: 24rpx 14rpx 22rpx 14rpx;
+		border-radius: 20rpx;
 		background: var(--match-paper);
 		overflow: hidden;
-		box-shadow: var(--match-shadow);
+		box-shadow: 0 6rpx 18rpx rgba(91, 175, 128, 0.07);
 		border: 1px solid var(--match-line);
 	}
 
 	.card-body {
-		min-height: 254rpx;
+		min-height: 236rpx;
 		padding: 18rpx;
 		display: flex;
 		flex-direction: column;
@@ -96,8 +96,8 @@ const handleContact = () => {
 	}
 
 	.card-avatar {
-		width: 82rpx;
-		height: 82rpx;
+		width: 72rpx;
+		height: 72rpx;
 		border-radius: 50%;
 		overflow: hidden;
 		flex-shrink: 0;
@@ -113,7 +113,7 @@ const handleContact = () => {
 	}
 
 	.card-name {
-		font-size: 29rpx;
+		font-size: 27rpx;
 		line-height: 1.2;
 		font-family: var(--serif);
 		font-weight: 700;
@@ -124,7 +124,7 @@ const handleContact = () => {
 	}
 
 	.card-copy {
-		height: 44rpx;
+		height: 42rpx;
 		font-size: 18rpx;
 		line-height: 1.35;
 		color: var(--ink2);
@@ -136,7 +136,7 @@ const handleContact = () => {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		gap: 10rpx;
-		padding: 12rpx 0;
+		padding: 10rpx 0;
 		border-top: 1px solid var(--match-line);
 		border-bottom: 1px solid var(--match-line);
 	}
@@ -153,7 +153,7 @@ const handleContact = () => {
 	}
 
 	.meta-value {
-		font-size: 27rpx;
+		font-size: 25rpx;
 		line-height: 1;
 		font-weight: 800;
 		color: var(--match-deep);
@@ -205,13 +205,13 @@ const handleContact = () => {
 	}
 
 	.card-button {
-		width: 88rpx;
+		width: 82rpx;
 		height: 40rpx;
 		flex-shrink: 0;
-		border-radius: 14rpx;
-		background: var(--match-mist);
-		border: 1px solid var(--match-line);
-		color: var(--match-deep);
+		border-radius: 999rpx;
+		background: var(--accent-bg);
+		border: 1px solid #D6EBDD;
+		color: var(--accent2);
 		display: flex;
 		align-items: center;
 		justify-content: center;

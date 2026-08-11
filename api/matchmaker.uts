@@ -79,18 +79,29 @@ function toMatchmakerCard(item: any) {
   }
 }
 
+function cleanPlanText(value: any, fallback: string): string {
+  const text = value != null ? String(value).trim() : ''
+  if (text.length == 0 || text.indexOf('?') >= 0) {
+    return fallback
+  }
+  return text
+}
+
 function toCustomPlan(item: any) {
-  const serviceType = Number(item.service_type)
+	const serviceType = Number(item.service_type)
+	const defaultName = serviceType == 3 ? '私人定制套餐' : '牵线服务套餐'
+	const defaultDescription = serviceType == 3 ? '红娘一对一陪伴，帮助你梳理关系期待。' : '平台红娘一对一牵线服务。'
+	const description = cleanPlanText(item.description, defaultDescription)
   return {
     id: Number(item.id),
-    name: String(item.name),
+    name: cleanPlanText(item.name, defaultName),
     price: Number(item.price),
     originalPrice: Number(item.price),
     duration: serviceType == 3 ? '私人定制服务' : '牵线服务',
-    services: [String(item.description)],
-    features: [String(item.description)],
+    services: [description],
+    features: [description],
     matchmakerCount: 1,
-    description: String(item.description),
+    description: description,
     isHot: false,
     tag: serviceType == 3 ? '私人定制' : '服务红娘'
   }

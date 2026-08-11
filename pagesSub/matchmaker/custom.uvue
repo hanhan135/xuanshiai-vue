@@ -8,8 +8,8 @@
 					<view class="hero-bg"></view>
 					<view class="hero-inner">
 						<view class="hero-copy">
-							<text class="hero-eyebrow">私人定制 · 认真婚恋</text>
-							<text class="hero-title">把认真，交给更懂你的人</text>
+							<text class="hero-eyebrow">私人定制</text>
+							<text class="hero-title">懂你的喜欢，也懂你的不将就</text>
 							<text class="hero-summary">一对一红娘服务，按你的节奏筛选与认识。</text>
 							<view class="hero-tags">
 								<view v-for="tag in heroTags" :key="tag" class="hero-tag">
@@ -568,7 +568,7 @@ const applyPlan = () => {
 	position: relative;
 	border-radius: 20rpx;
 	overflow: hidden;
-	background: linear-gradient(135deg, var(--navy) 0%, var(--accent2) 100%);
+	background: linear-gradient(145deg, var(--accent-bg) 0%, var(--surface) 100%);
 	box-shadow: var(--shadow-md);
 }
 
@@ -603,7 +603,7 @@ const applyPlan = () => {
 .hero-eyebrow {
 	font-size: 20rpx;
 	font-weight: 800;
-	color: var(--soft);
+	color: var(--accent2);
 	letter-spacing: 0.08em;
 }
 
@@ -612,14 +612,14 @@ const applyPlan = () => {
 	line-height: 1.3;
 	font-weight: 700;
 	font-family: var(--serif);
-	color: var(--text-invert);
+	color: var(--ink);
 }
 
 .hero-summary {
 	font-size: 20rpx;
 	line-height: 1.55;
-	color: var(--paper);
-	opacity: 0.8;
+	color: var(--ink2);
+	opacity: 1;
 }
 
 .hero-tags {
@@ -637,7 +637,7 @@ const applyPlan = () => {
 	gap: 8rpx;
 	padding: 8rpx 16rpx;
 	border-radius: 999rpx;
-	background: var(--paper);
+	background: var(--surface);
 }
 
 .hero-tag-dot {
