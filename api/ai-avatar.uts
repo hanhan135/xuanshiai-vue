@@ -525,6 +525,32 @@ export function submitAiAvatarOwnerAnswer(ownerId: number, questionId: string, a
   return getAiAvatarOwnerDashboard(id)
 }
 
+export function addAiAvatarOwnerAnswer(ownerId: number, question: string, answer: string): any {
+  if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
+  const currentId = currentUserId()
+  const id = ownerId > 0 ? ownerId : currentId
+  const q = question != null ? String(question).trim() : ''
+  const value = answer != null ? String(answer).trim() : ''
+  if (currentId <= 0 || id <= 0) return failure('当前账号资料暂时无法读取', 'USER_REQUIRED')
+  if (id != currentId) return failure('无权管理其他账号的 AI 分身', 'FORBIDDEN')
+  if (q == '') return failure('问题不能为空', 'EMPTY_QUESTION')
+  if (q.length > 50) return failure('问题不能超过 50 个字', 'QUESTION_TOO_LONG')
+  if (value == '') return failure('回答不能为空', 'EMPTY_ANSWER')
+  if (value.length > 500) return failure('回答不能超过 500 个字', 'ANSWER_TOO_LONG')
+  const state = readOwnerState(id)
+  for (let i = 0; i < state.myAnswers.length; i++) {
+    if (normalizeQuestion(state.myAnswers[i].question) == normalizeQuestion(q)) {
+      state.myAnswers[i].answer = value
+      state.myAnswers[i].time = '刚刚'
+      writeOwnerState(id, state)
+      return getAiAvatarOwnerDashboard(id)
+    }
+  }
+  state.myAnswers.unshift({ id: 'answer-' + Date.now(), question: q, answer: value, time: '刚刚' })
+  writeOwnerState(id, state)
+  return getAiAvatarOwnerDashboard(id)
+}
+
 export function deleteAiAvatarOwnerQuestion(ownerId: number, questionId: string): any {
   if (getAccessToken() == '') return failure('请先登录后管理 AI 分身', 'AUTH_REQUIRED')
   const currentId = currentUserId()

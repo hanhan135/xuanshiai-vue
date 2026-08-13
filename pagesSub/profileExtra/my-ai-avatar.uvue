@@ -118,8 +118,15 @@
 				</view>
 			</view>
 			<view class="aia-bottom-spacer"></view>
+			<view v-if="activeTab == 2" class="aia-add-spacer"></view>
 			</view>
 		</scroll-view>
+
+		<!-- 添加新的问答（我的回答 Tab 底部固定按钮） -->
+		<view v-if="activeTab == 2" class="aia-add-btn" @tap="openNewQA">
+			<text class="aia-add-btn-symbol">+</text>
+			<text class="aia-add-btn-text">添加新的问答</text>
+		</view>
 
 		<!-- 回答弹窗 -->
 		<view v-if="answerVisible" class="aia-mask" @tap="closeAnswer">
@@ -127,7 +134,8 @@
 				<view class="aia-sheet-head">
 					<view class="aia-sheet-q">
 						<view class="aia-q-badge"><text class="aia-q-badge-text">Q</text></view>
-						<text class="aia-sheet-q-text">{{ answerQuestion }}</text>
+						<text v-if="answerMode != 'new'" class="aia-sheet-q-text">{{ answerQuestion }}</text>
+						<input v-else class="aia-sheet-q-input" :value="answerQuestion" @input="onQuestionInput" placeholder="请输入新的问答题目" placeholder-class="aia-ph" maxlength="50" />
 					</view>
 					<view class="aia-sheet-close" @tap.stop="closeAnswer">
 						<text class="aia-sheet-close-text">×</text>
@@ -162,6 +170,7 @@ import {
 	getAiAvatarOwnerId,
 	getAiAvatarOwnerDashboard,
 	submitAiAvatarOwnerAnswer,
+	addAiAvatarOwnerAnswer,
 	deleteAiAvatarOwnerQuestion,
 	deleteAiAvatarOwnerAnswer
 } from '@/api'
@@ -178,7 +187,7 @@ const pendingQuestions = ref<any[]>([])
 const myAnswers = ref<any[]>([])
 
 const answerVisible = ref(false)
-const answerMode = ref('pending') // pending=回答新问题 / edit=编辑已有回答
+const answerMode = ref('pending') // pending=回答转交问题 / edit=编辑已有回答 / new=新增问答
 const answerQuestion = ref('')
 const answerText = ref('')
 const editingId = ref('')
@@ -233,15 +242,38 @@ const closeAnswer = () => {
 	answerVisible.value = false
 }
 
+const openNewQA = () => {
+	answerMode.value = 'new'
+	editingId.value = ''
+	answerQuestion.value = ''
+	answerText.value = ''
+	answerVisible.value = true
+}
+
+const onQuestionInput = (e: any) => { answerQuestion.value = e.detail.value }
+
 const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
 
 const submitAnswer = () => {
 	const value = answerText.value != null ? String(answerText.value).trim() : ''
+	const question = answerQuestion.value != null ? String(answerQuestion.value).trim() : ''
+	if (answerMode.value == 'new' && question == '') {
+		uni.showToast({ title: '先输入新的问答题目', icon: 'none' })
+		return
+	}
 	if (value == '') {
 		uni.showToast({ title: '先写点内容再提交', icon: 'none' })
 		return
 	}
-	if (answerMode.value == 'pending') {
+	if (answerMode.value == 'new') {
+		const res = addAiAvatarOwnerAnswer(ownerId.value, question, value)
+		if (!res.success) {
+			uni.showToast({ title: res.message != null ? String(res.message) : '添加失败', icon: 'none' })
+			return
+		}
+		if (res.data != null) applyDashboard(res.data)
+		uni.showToast({ title: '已添加，将同步给你的分身', icon: 'none' })
+	} else if (answerMode.value == 'pending') {
 		const res = submitAiAvatarOwnerAnswer(ownerId.value, editingId.value, value)
 		if (!res.success) {
 			uni.showToast({ title: res.message != null ? String(res.message) : '提交失败', icon: 'none' })
@@ -452,6 +484,41 @@ page {
 .aia-bottom-spacer {
 	height: 40px;
 	flex-shrink: 0;
+}
+
+.aia-add-spacer {
+	height: 84px;
+	flex-shrink: 0;
+}
+
+/* ---------- 添加新的问答（底部固定按钮） ---------- */
+.aia-add-btn {
+	position: fixed;
+	left: 24px;
+	right: 24px;
+	bottom: 24px;
+	height: 52px;
+	border-radius: 26px;
+	background-color: var(--aia-dark);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	z-index: 10;
+}
+
+.aia-add-btn-symbol {
+	font-size: 18px;
+	font-weight: 600;
+	color: #FFFFFF;
+	line-height: 1;
+}
+
+.aia-add-btn-text {
+	font-size: 15px;
+	font-weight: 600;
+	color: #FFFFFF;
 }
 
 /* ---------- 对话记录 ---------- */
@@ -751,6 +818,17 @@ page {
 	font-weight: 600;
 	line-height: 1.6;
 	color: var(--aia-text);
+}
+
+.aia-sheet-q-input {
+	flex: 1;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--aia-text);
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+	border-bottom-color: #ECE8E1;
+	padding: 2px 0 8px;
 }
 
 .aia-sheet-input {
