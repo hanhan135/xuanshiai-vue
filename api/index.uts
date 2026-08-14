@@ -162,6 +162,7 @@ export {
   clearAiAvatarConversation,
   getAiAvatarOwnerDashboard,
   submitAiAvatarOwnerAnswer,
+  addAiAvatarOwnerAnswer,
   deleteAiAvatarOwnerQuestion,
   deleteAiAvatarOwnerAnswer
 } from './ai-avatar.uts'
