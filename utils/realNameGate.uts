@@ -4,13 +4,13 @@
 	 * 双重认证（实名 + 学历过审）仅作展示加分，不作为话题门槛
 	 * 浏览、举报、拉黑不要求实名
 	 *
-	 * 状态枚举（定版）：passed | missing | reviewing | rejected
+	 * 状态枚举（定版）：passed | missing | reviewing | rejected | revoked
 	 * 兼容旧值：pending→reviewing，failed→rejected
 	 */
 
 import { getMeProfile } from '@/api/user.uts'
 
-export type RealNameStatus = 'passed' | 'missing' | 'reviewing' | 'rejected'
+export type RealNameStatus = 'passed' | 'missing' | 'reviewing' | 'rejected' | 'revoked'
 export type EducationStatus = 'passed' | 'missing' | 'reviewing' | 'rejected'
 
 export type GateAction =
@@ -43,6 +43,7 @@ function normalizeStatus(raw: any): RealNameStatus {
   if (s == 'passed' || s == 'true' || s == '1') return 'passed'
   if (s == 'reviewing' || s == 'pending') return 'reviewing'
   if (s == 'rejected' || s == 'failed') return 'rejected'
+  if (s == 'revoked') return 'revoked'
   if (s == 'missing' || s == 'false' || s == '0') return 'missing'
   return 'missing'
 }
@@ -108,11 +109,15 @@ export async function ensureRealName(action: GateAction | string = 'publish') {
         message = '实名认证审核中，通过后即可申请认识'
       } else if (status == 'rejected') {
         message = '实名认证未通过，请重新认证后再申请认识'
+      } else if (status == 'revoked') {
+        message = '实名认证已撤销，请重新认证后再申请认识'
       }
     } else if (status == 'reviewing') {
       message = `实名认证审核中，通过后即可${label}`
     } else if (status == 'rejected') {
       message = `实名认证未通过，请重新认证后再${label}`
+    } else if (status == 'revoked') {
+      message = `实名认证已撤销，请重新认证后再${label}`
     }
     return {
       ok: false,

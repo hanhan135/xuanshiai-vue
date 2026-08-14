@@ -256,7 +256,8 @@ function realNameStatusFrom(raw: any): string {
   const status = raw != null ? Number(raw) : 0
   if (status == 2) return 'passed'
   if (status == 1 || status == 4) return 'reviewing'
-  if (status == 3 || status == 5) return 'rejected'
+  if (status == 3) return 'rejected'
+  if (status == 5) return 'revoked'
   return 'missing'
 }
 

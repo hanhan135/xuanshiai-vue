@@ -1,11 +1,9 @@
 <template>
 	<view class="tag-edit-page">
 		<view class="nav-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
-			<view class="nav-save nav-save-back" :class="{ disabled: saving }" @tap="saveAndBack">
-				<text class="save-text">{{ saving ? '保存中' : '保存' }}</text>
-			</view>
+			<view class="nav-back" @tap="goBack"><text class="nav-back-icon">‹</text></view>
 			<text class="nav-title">编辑我的标签</text>
-			<view class="nav-save-placeholder"></view>
+			<view class="nav-back-placeholder"></view>
 		</view>
 
 		<view class="tag-content">
@@ -22,11 +20,14 @@
 					</view>
 					<text v-if="selectedItems.length === 0" class="empty-hint">从下面选择能代表你的标签</text>
 				</view>
+				<view class="selected-actions">
+					<view class="selected-save" :class="{ disabled: !canSave || saving }" @tap="saveAndBack"><text>{{ saving ? '保存中' : '保存' }}</text></view>
+				</view>
 			</view>
 
 		<view class="tag-workspace">
 			<scroll-view scroll-y class="category-sidebar" enhanced show-scrollbar="false">
-				<view v-for="category in categories" :key="category.id" class="category-side-item" :class="{ active: activeCategoryId === category.id, 'category-hidden': !isCategoryVisible(category.id) }" @tap="selectCategory(category.id)">
+				<view v-for="category in visibleCategories" :key="category.id" class="category-side-item" :class="{ active: activeCategoryId === category.id }" @tap="selectCategory(category.id)">
 					<view class="category-side-mark"></view>
 					<text class="category-side-name">{{ category.name }}</text>
 					<text v-if="categorySelectedCount(category.id) > 0" class="category-side-count">{{ categorySelectedCount(category.id) }}</text>
@@ -40,7 +41,7 @@
 				</view>
 				<view class="tag-grid">
 					<view v-for="tag in activeCategory.tags" :key="tag.id" class="tag-item" :class="{ selected: isTagSelected(activeCategory.id, tag.label) }" @tap="toggleTag(activeCategory.id, tag.label)">
-						<text class="tag-emoji">{{ tag.emoji }}</text>
+						<text v-if="tag.emoji != ''" class="tag-emoji">{{ tag.emoji }}</text>
 						<text class="tag-text">{{ tag.label }}</text>
 						<view v-if="isTagSelected(activeCategory.id, tag.label)" class="tag-check"><text>✓</text></view>
 					</view>
@@ -53,232 +54,149 @@
 </template>
 
 <script setup lang="uts">
-import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
-import type { TagCategory, TagItem } from '@/utils/tag-catalog.uts'
+import { getOwnProfile, getProfileTagOptions, updateOwnProfile } from '@/api'
+
+type TagItem = { id: string, label: string, emoji: string }
+type TagCategory = { id: string, name: string, tags: TagItem[] }
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
-const categories = TAG_CATEGORIES
-const maxTags = 20
-const activeCategoryId = ref(categories[0].id)
-const tagMode = ref('all')
-const selectedByCategory = ref<any>({})
+const categories = ref<TagCategory[]>([])
+const maxTags = 5
+const activeCategoryId = ref('')
+const tagMode = ref('interest')
+const selectedLabels = ref<string[]>([])
 const saving = ref(false)
 
+const visibleCategories = computed((): TagCategory[] => categories.value.filter((category: TagCategory) => tagMode.value === 'personality' ? category.id === 'personality' : category.id !== 'personality'))
 const activeCategory = computed((): TagCategory => {
-	if (tagMode.value === 'personality') {
-		for (const category of categories) if (category.id === 'personality') return category
-	}
-	if (tagMode.value === 'interest' && activeCategoryId.value === 'personality') {
-		for (const category of categories) if (category.id !== 'personality') return category
-	}
-	for (const category of categories) {
-		if (category.id == activeCategoryId.value) return category
-	}
-	return categories[0]
+	for (const category of visibleCategories.value) if (category.id === activeCategoryId.value) return category
+	return visibleCategories.value.length > 0 ? visibleCategories.value[0] : { id: '', name: '', tags: [] }
 })
-
 const selectedItems = computed((): TagItem[] => {
 	const result: TagItem[] = []
-	for (const category of categories) {
-		if (!isCategoryVisible(category.id)) continue
-		const values = selectedByCategory.value[category.id] as string[]
-		if (!Array.isArray(values)) continue
-		for (const tag of category.tags) {
-			if (values.indexOf(tag.label) >= 0) result.push(tag)
-		}
+	for (const category of visibleCategories.value) {
+		for (const tag of category.tags) if (selectedLabels.value.indexOf(tag.label) >= 0) result.push(tag)
 	}
 	return result
 })
+const canSave = computed(() => selectedLabels.value.length >= 3 && selectedLabels.value.length <= maxTags)
 
-function isCategoryVisible(categoryId: string): boolean {
-	if (tagMode.value === 'personality') return categoryId === 'personality'
-	if (tagMode.value === 'interest') return categoryId !== 'personality'
-	return true
-}
-
-const copySelectionMap = (source: any): any => {
-	const next: any = {}
-	let total = 0
-	for (const category of categories) {
-		const values = source != null && Array.isArray(source[category.id]) ? source[category.id] as string[] : []
-		const valid: string[] = []
-		for (const value of values) {
-			if (total + valid.length >= maxTags || valid.indexOf(value) >= 0) break
-			for (const tag of category.tags) {
-				if (tag.label == value) {
-					valid.push(value)
-					break
-				}
-			}
-		}
-		total += valid.length
-		next[category.id] = valid
-	}
-	return next
-}
-
-const applySelectionMap = (source: any) => {
-	selectedByCategory.value = copySelectionMap(source)
-}
-
-const addLabelToMap = (next: any, label: string) => {
-	const categoryId = findTagCategoryId(label)
-	let known = false
-	for (const category of categories) {
-		for (const tag of category.tags) {
-			if (tag.label == label) known = true
-		}
-	}
-	if (!known) return
-	const values = Array.isArray(next[categoryId]) ? next[categoryId] as string[] : []
-	if (values.indexOf(label) < 0 && selectedLabelCount(next) < maxTags) values.push(label)
-	next[categoryId] = values
-}
-
-const selectedLabelCount = (source: any): number => {
-	let count = 0
-	for (const category of categories) {
-		const values = source != null && Array.isArray(source[category.id]) ? source[category.id] as string[] : []
-		count += values.length
-	}
-	return count
-}
-
-const applyFlatTags = (rawTags: any) => {
-	const next: any = {}
-	for (const category of categories) next[category.id] = []
-	if (Array.isArray(rawTags)) {
-		for (const rawTag of rawTags) {
-			if (typeof rawTag === 'string') addLabelToMap(next, rawTag)
-		}
-	}
-	selectedByCategory.value = next
-}
-
-const readLocalTags = (): boolean => {
-	try {
-		const savedMap = uni.getStorageSync('xsa_my_tag_selections')
-		if (savedMap != null && typeof savedMap === 'object') {
-			applySelectionMap(savedMap)
-			return true
-		}
-		const savedTags = uni.getStorageSync('xsa_my_tags')
-		if (Array.isArray(savedTags)) {
-			applyFlatTags(savedTags)
-			return true
-		}
-	} catch (e) {
-		return false
-	}
-	return false
-}
-
-const persistLocalTags = () => {
-	try {
-		uni.setStorageSync('xsa_my_tag_selections', selectedByCategory.value)
-		uni.setStorageSync('xsa_my_tags', selectedItems.value.map((tag: TagItem) => tag.label))
-	} catch (e) {
-		// 本地存储不可用时仍保留当前页面状态，等待接口保存。
-	}
-}
-
-const load = () => {
-	if (!readLocalTags()) applyFlatTags([])
-}
-
-const selectCategory = (categoryId: string) => {
-	if (!isCategoryVisible(categoryId)) return
-	activeCategoryId.value = categoryId
-}
-
-const isTagSelected = (categoryId: string, label: string): boolean => {
-	const values = selectedByCategory.value[categoryId] as string[]
-	return Array.isArray(values) && values.indexOf(label) >= 0
-}
-
+const selectCategory = (categoryId: string) => { activeCategoryId.value = categoryId }
+const isTagSelected = (_categoryId: string, label: string): boolean => selectedLabels.value.indexOf(label) >= 0
 const categorySelectedCount = (categoryId: string): number => {
-	const values = selectedByCategory.value[categoryId] as string[]
-	return Array.isArray(values) ? values.length : 0
-}
-
-const toggleTag = (categoryId: string, label: string) => {
-	const next = copySelectionMap(selectedByCategory.value)
-	const values = next[categoryId] as string[]
-	const index = values.indexOf(label)
-	if (index >= 0) {
-		values.splice(index, 1)
-	} else {
-		if (selectedLabelCount(next) >= maxTags) {
-			uni.showToast({ title: '最多选择' + maxTags + '个标签', icon: 'none' })
-			return
-		}
-		values.push(label)
+	for (const category of categories.value) {
+		if (category.id !== categoryId) continue
+		return category.tags.filter((tag: TagItem) => selectedLabels.value.indexOf(tag.label) >= 0).length
 	}
-	next[categoryId] = values
-	selectedByCategory.value = next
+	return 0
 }
-
+const toggleTag = (_categoryId: string, label: string) => {
+	const next = selectedLabels.value.slice()
+	const index = next.indexOf(label)
+	if (index >= 0) next.splice(index, 1)
+	else if (next.length < maxTags) next.push(label)
+	selectedLabels.value = next
+}
 const removeTag = (tagId: string) => {
-	const next = copySelectionMap(selectedByCategory.value)
-	for (const category of categories) {
+	for (const category of categories.value) {
 		for (const tag of category.tags) {
-			if (tag.id != tagId) continue
-			const values = next[category.id] as string[]
-			const index = values.indexOf(tag.label)
-			if (index >= 0) values.splice(index, 1)
-			next[category.id] = values
-			selectedByCategory.value = next
+			if (tag.id !== tagId) continue
+			selectedLabels.value = selectedLabels.value.filter((label: string) => label !== tag.label)
 			return
 		}
 	}
 }
+const clearTags = () => { selectedLabels.value = [] }
 
-const clearTags = () => {
-	const next: any = {}
-	for (const category of categories) {
-		const values = selectedByCategory.value[category.id]
-		next[category.id] = isCategoryVisible(category.id) ? [] : (Array.isArray(values) ? values : [])
+const load = async () => {
+	try {
+		const optionsResponse = await getProfileTagOptions()
+		if (!optionsResponse.success || optionsResponse.data == null) {
+			uni.showToast({ title: '标签选项加载失败', icon: 'none' })
+			return
+		}
+		const rawCategories = Array.isArray(optionsResponse.data.categories) ? optionsResponse.data.categories as any[] : []
+		const mapped: TagCategory[] = []
+		for (const rawCategory of rawCategories) {
+			const key = rawCategory.key != null ? '' + rawCategory.key : ''
+			const options = Array.isArray(rawCategory.options) ? rawCategory.options as string[] : []
+			mapped.push({
+				id: key,
+				name: rawCategory.label != null ? '' + rawCategory.label : key,
+				tags: options.map((label: string, index: number): TagItem => ({ id: key + '-' + index, label, emoji: '' }))
+			})
+		}
+		categories.value = mapped
+		const visible = visibleCategories.value
+		activeCategoryId.value = visible.length > 0 ? visible[0].id : ''
+
+		const profileResponse = await getOwnProfile()
+		if (profileResponse.success && profileResponse.data != null) {
+			const profile = profileResponse.data as any
+			const values = tagMode.value === 'personality' ? profile.personality_tags : profile.interest_tags
+			selectedLabels.value = Array.isArray(values) ? (values as string[]).slice(0, maxTags) : []
+		}
+	} catch (error) {
+		console.error('[TagEdit] load failed', error)
+		uni.showToast({ title: '标签选项加载失败', icon: 'none' })
 	}
-	selectedByCategory.value = next
 }
 
-const saveAndBack = () => {
-	if (saving.value) return
+const saveAndBack = async () => {
+	if (saving.value || !canSave.value) return
 	saving.value = true
-	persistLocalTags()
-	uni.showToast({ title: '标签已保存', icon: 'success' })
-	setTimeout(() => goBack(), 650)
+	try {
+		const payload: any = {}
+		if (tagMode.value === 'personality') payload.personality_tags = selectedLabels.value.slice(0, maxTags)
+		else payload.interest_tags = selectedLabels.value.slice(0, maxTags)
+		const response = await updateOwnProfile(payload)
+		if (!response.success) {
+			uni.showToast({ title: response.message != null ? '' + response.message : '标签保存失败', icon: 'none' })
+			return
+		}
+		const responseProfile = response.data != null && response.data.profile != null ? response.data.profile : response.data
+		const savedValues = responseProfile != null
+			? (tagMode.value === 'personality' ? responseProfile.personality_tags : responseProfile.interest_tags)
+			: null
+		if (!Array.isArray(savedValues) || savedValues.length < 3) {
+			uni.showToast({ title: '后台未保存标签，请重试', icon: 'none' })
+			return
+		}
+		const eventChannel = getOpenerEventChannel()
+		if (eventChannel != null) eventChannel.emit('tagsSaved', { type: tagMode.value, tags: (savedValues as string[]).slice(0, maxTags) })
+		uni.showToast({ title: '标签已保存', icon: 'success' })
+		setTimeout(() => goBack(), 500)
+	} finally {
+		saving.value = false
+	}
 }
 
-const goBack = () => {
-	uni.navigateBack({ delta: 1 })
-}
+const goBack = () => { uni.navigateBack({ delta: 1 }) }
 
 onLoad((options: any) => {
-	const type = options != null && options.type != null ? '' + options.type : 'all'
-	if (type === 'interest' || type === 'personality') tagMode.value = type
-	if (tagMode.value === 'personality') activeCategoryId.value = 'personality'
-	else if (tagMode.value === 'interest') activeCategoryId.value = categories[0].id
+	const type = options != null && options.type != null ? '' + options.type : 'interest'
+	tagMode.value = type === 'personality' ? 'personality' : 'interest'
 })
-onMounted(() => load())
+onMounted(() => { load() })
 </script>
 
 <style scoped>
 .tag-edit-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; background: var(--canvas); color: var(--ink); }
 .nav-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 88rpx; padding-left: 24rpx; padding-right: 24rpx; background: var(--paper); border-bottom: 1px solid var(--line); }
 .nav-title { flex: 1; min-width: 0; color: var(--ink); font-size: 34rpx; font-weight: 700; text-align: center; }
-.nav-save { min-width: 104rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; border-radius: 28rpx; background: var(--accent); }
-.nav-save-back { min-width: 168rpx; flex-shrink: 0; padding: 0 10rpx; }
-.nav-save-placeholder { width: 168rpx; flex-shrink: 0; }
-.nav-save.disabled { opacity: 0.55; pointer-events: none; }
-.save-text { color: var(--text-invert); font-size: 24rpx; font-weight: 700; }
+.nav-back, .nav-back-placeholder { width: 72rpx; height: 72rpx; flex-shrink: 0; }
+.nav-back { display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { color: var(--ink); font-size: 56rpx; font-weight: 700; line-height: 1; }
 .tag-content { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 24rpx 24rpx 0; box-sizing: border-box; }
 .selected-section { display: flex; flex-direction: column; gap: 16rpx; padding: 22rpx; background: var(--surface); border: 1px solid var(--line); border-radius: 16rpx; box-shadow: var(--shadow-sm); }
 .selected-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
 .section-label { color: var(--ink); font-size: 28rpx; font-weight: 700; }
 .clear-action { color: var(--accent2); font-size: 24rpx; font-weight: 700; }
 .selected-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12rpx; min-height: 54rpx; align-items: center; }
+.selected-actions { display: flex; flex-direction: row; justify-content: flex-end; }
+.selected-save { min-width: 140rpx; height: 60rpx; display: flex; align-items: center; justify-content: center; border-radius: 30rpx; background: var(--accent); color: var(--text-invert); font-size: 24rpx; font-weight: 700; }
+.selected-save.disabled { opacity: 0.45; pointer-events: none; }
 .selected-chip { display: flex; flex-direction: row; align-items: center; gap: 4rpx; padding: 10rpx 14rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); }
 .selected-emoji { font-size: 22rpx; }
 .selected-text { font-size: 22rpx; font-weight: 600; }
@@ -287,7 +205,6 @@ onMounted(() => load())
 .tag-workspace { flex: 1; min-height: 0; display: flex; flex-direction: row; gap: 14rpx; margin-top: 20rpx; }
 .category-sidebar { width: 160rpx; height: 100%; flex: 0 0 160rpx; padding: 14rpx 0; box-sizing: border-box; border: 1px solid var(--line); border-radius: 14rpx; background: var(--surface); }
 .category-side-item { position: relative; min-height: 84rpx; margin-bottom: 8rpx; display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 8rpx 12rpx; box-sizing: border-box; color: var(--muted); }
-.category-side-item.category-hidden { display: none; }
 .category-side-item.active { color: var(--ink); background: var(--accent-bg); }
 .category-side-mark { width: 5rpx; height: 34rpx; flex-shrink: 0; border-radius: 999rpx; background: transparent; }
 .category-side-item.active .category-side-mark { background: var(--accent); }

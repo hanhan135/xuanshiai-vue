@@ -27,6 +27,8 @@
 				</view>
 				<text v-if="realnameStatus == 2" class="status passed">已通过</text>
 				<text v-else-if="realnameStatus == 1" class="status reviewing">审核中</text>
+				<text v-else-if="realnameStatus == 4" class="status reviewing">人工复核</text>
+				<text v-else-if="realnameStatus == 5" class="status rejected">已撤销</text>
 				<view v-else class="action-pill" @tap="openStep('realname')"><text>去认证</text></view>
 			</view>
 		</view>
@@ -44,7 +46,7 @@
 
 		<view v-if="activeStep == 'realname' && realnameStatus != 2" class="section-card form-card">
 			<text class="section-title">实名认证</text>
-			<text v-if="realnameStatus == 1" class="review-tip">资料已提交，正在审核。审核通过后即可申请。</text>
+			<text v-if="realnameStatus == 1 || realnameStatus == 4" class="review-tip">资料已提交，正在审核。审核通过后即可申请。</text>
 			<template v-else>
 				<text class="section-note">请填写本人真实姓名和有效身份证号</text>
 				<input class="field-input" maxlength="64" placeholder="真实姓名" :value="realName" @input="onRealNameInput" />
@@ -81,6 +83,8 @@ const realnameDescription = computed(() => {
 	if (realnameStatus.value == 2) return '已通过平台实名认证'
 	if (realnameStatus.value == 1) return '资料正在审核，请耐心等待'
 	if (realnameStatus.value == 3) return '认证未通过，请重新提交'
+	if (realnameStatus.value == 4) return '当前正在人工复核，请耐心等待'
+	if (realnameStatus.value == 5) return '实名认证已撤销，请重新提交'
 	return '填写本人真实身份信息后提交审核'
 })
 
@@ -187,7 +191,7 @@ onShow(() => { refreshStatus() })
 .cert-text-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4rpx; }
 .cert-label { font-size: 28rpx; font-weight: 600; color: #1A1A1A; }
 .cert-desc { font-size: 22rpx; color: #A0B0A2; }
-.status { font-size: 24rpx; font-weight: 600; white-space: nowrap; }.passed { color: #5BAF80; }.reviewing { color: #D89B4A; }
+.status { font-size: 24rpx; font-weight: 600; white-space: nowrap; }.passed { color: #5BAF80; }.reviewing { color: #D89B4A; }.rejected { color: #D85E78; }
 .action-pill, .code-button { padding: 12rpx 22rpx; border-radius: 24rpx; background-color: #FCECEF; color: #D85E78; font-size: 24rpx; flex-shrink: 0; }
 .form-card { gap: 22rpx; }.field-input { height: 84rpx; padding: 0 24rpx; border-radius: 16rpx; background-color: #FAF8F5; color: #1A1A1A; font-size: 27rpx; box-sizing: border-box; }
 .code-row { display: flex; flex-direction: row; gap: 16rpx; align-items: center; }.code-input { flex: 1; }.code-button { min-width: 168rpx; text-align: center; }.disabled { opacity: 0.5; }

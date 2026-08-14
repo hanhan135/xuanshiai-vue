@@ -67,7 +67,18 @@
 			</view>
 			<!-- 推荐 Tab -->
 			<scroll-view v-if="currentTab === 0" scroll-y class="content-scroll" enhanced show-scrollbar="false" @touchstart="onTouchStart" @touchend="onTouchEnd">
-				<view class="profile-card">
+				<view v-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
+					<view class="completion-gate-mark"><text>{{ profileCompletion }}%</text></view>
+					<text class="completion-gate-title">完善资料后，遇见更合适的人</text>
+					<text class="completion-gate-copy">请先将个人资料完善至 100%，完成后即可查看平台上的真实用户。</text>
+					<view class="completion-gate-progress"><view class="completion-gate-fill" :style="{ width: profileCompletion + '%' }"></view></view>
+					<navigator class="completion-gate-button" url="/pagesSub/userExtra/user/edit" hover-class="none"><text>去完善资料</text></navigator>
+				</view>
+				<view v-else-if="profileCompletionLoaded && recommendUsers.length === 0" class="completion-gate">
+					<text class="completion-gate-title">暂时没有新的推荐</text>
+					<text class="completion-gate-copy">你的资料已完整，我们正在为你寻找合适的真实用户，请稍后再来看看。</text>
+				</view>
+				<view v-else-if="profileCompletionLoaded" class="profile-card">
 					<view class="cover-wrap">
 						<image class="cover-img" :src="recommendBackground" mode="aspectFill"></image>
 					</view>
@@ -251,7 +262,7 @@
 				</view>
 
 				<!-- 屏蔽/举报行 -->
-				<view class="block-row">
+				<view v-if="canShowRecommendUsers" class="block-row">
 					<view class="block-action" @tap="openReportPage"><text class="block-text">举报Ta</text></view><text class="block-divider">|</text><view class="block-action" @tap="handleBlockUser"><text class="block-text">拉黑Ta</text></view>
 				</view>
 				<view class="scroll-bottom-spacer"></view>
@@ -634,7 +645,7 @@
 			</scroll-view>
 
 			<!-- 底部操作栏（仅推荐页显示） -->
-			<view v-if="currentTab === 0" class="bottom-bar">
+			<view v-if="currentTab === 0 && canShowRecommendUsers" class="bottom-bar">
 				<view class="share-btn" @click="shareProfile">
 					<text class="ic ic-sys ic-fenxiang share-icon"></text>
 				</view>
@@ -648,7 +659,7 @@
 			</view>
 
 			<!-- AI悬浮按钮（仅推荐页显示） -->
-			<view v-if="currentTab === 0" class="ai-float-btn" @click="showAiScore">
+			<view v-if="currentTab === 0 && canShowRecommendUsers" class="ai-float-btn" @click="showAiScore">
 				<text class="ic ic-home ic-star ai-icon"></text>
 			</view>
 		</view>
@@ -732,7 +743,7 @@
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
 	import { likeUser, blockUser, unblockUser } from '@/api'
-	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail } from '@/api'
+	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
 	import {
@@ -821,6 +832,8 @@
 
 	// ========== 推荐页过滤 + 配额 ==========
 	const recommendUsers = ref<any[]>([])
+	const profileCompletion = ref(0)
+	const profileCompletionLoaded = ref(false)
 	const squareUsers = ref<any[]>([])
 	const squareTotal = ref(0)
 	const membershipPlans = ref<any[]>([])
@@ -840,6 +853,7 @@
 		return spots
 	})
 	const filteredRecommendUsers = computed(() => recommendUsers.value)
+	const canShowRecommendUsers = computed(() => profileCompletionLoaded.value && profileCompletion.value >= 100 && recommendUsers.value.length > 0)
 	const currentRecommendIndex = ref(0)
 	const recommendBackground = ref('')
 	const currentRecommendUser = computed(() => {
@@ -857,7 +871,21 @@
 		const profile = detail.profile != null ? detail.profile : detail
 		recommendBackground.value = resolveMediaUrl(profile.background_wall)
 	}
+	const loadProfileCompletion = async () => {
+		const response = await getProfileCompletion()
+		if (response.success && response.data != null) {
+			const data = response.data as any
+			profileCompletion.value = Math.max(0, Math.min(100, Number(data.score != null ? data.score : data.completion_score || 0)))
+		}
+		profileCompletionLoaded.value = true
+	}
 	const loadHomeDiscovery = async () => {
+		await loadProfileCompletion()
+		if (profileCompletion.value < 100) {
+			recommendUsers.value = []
+			recommendBackground.value = ''
+			return
+		}
 		const recommendRes = await getDiscoveryRecommendations({ page: 1, page_size: 20 })
 		if (recommendRes.success && recommendRes.data != null) {
 			recommendUsers.value = recommendRes.data.items as any[]
@@ -1066,6 +1094,7 @@
 			uni.removeStorageSync('xsa_skip_welcome_once')
 			welcomeVisible.value = false
 		}
+		if (!welcomeVisible.value) loadHomeDiscovery()
 	})
 </script>
 
@@ -1412,6 +1441,13 @@
 /* 固定头部 */
 .sticky-header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; max-width: 750rpx; margin: 0 auto; background-color: var(--bg-primary); }
 .content-scroll { flex: 1; padding: 254rpx 32rpx 0 32rpx; }
+.completion-gate { margin-top: 28rpx; padding: 64rpx 40rpx; display: flex; flex-direction: column; align-items: center; border-radius: 32rpx; background-color: var(--bg-card); box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); text-align: center; }
+.completion-gate-mark { width: 128rpx; height: 128rpx; display: flex; align-items: center; justify-content: center; border: 10rpx solid var(--accent); border-radius: 50%; color: var(--accent-dark); font-size: 30rpx; font-weight: 800; box-sizing: border-box; }
+.completion-gate-title { margin-top: 32rpx; color: var(--text-primary); font-size: 32rpx; font-weight: 700; }
+.completion-gate-copy { margin-top: 18rpx; color: var(--text-secondary); font-size: 25rpx; line-height: 1.7; }
+.completion-gate-progress { width: 100%; height: 12rpx; margin-top: 36rpx; overflow: hidden; border-radius: 6rpx; background-color: var(--bg-card-soft); }
+.completion-gate-fill { height: 100%; border-radius: 6rpx; background-color: var(--accent); }
+.completion-gate-button { width: 100%; height: 88rpx; margin-top: 36rpx; display: flex; align-items: center; justify-content: center; border-radius: 44rpx; background-color: var(--accent); color: var(--text-inverse); font-size: 28rpx; font-weight: 700; }
 /* 屏蔽/举报行 */
 .block-row { display: flex; flex-direction: row; justify-content: center; align-items: center; width: 100%; padding: 16rpx 0 8rpx 0; }
 .block-action { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 10rpx 18rpx; }

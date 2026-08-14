@@ -147,7 +147,7 @@
 
 <script setup lang="uts">
 import XsaTabBar from '@/components/XsaTabBar.uvue'
-import { getProfileOverview } from '@/api'
+import { getProfileOverview, getProfileCompletion } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 
 const systemInfo = uni.getSystemInfoSync()
@@ -182,7 +182,17 @@ const loadOverview = async () => {
 	user.value.nickname = nickname != null && nickname != '' ? '' + nickname : '未设置昵称'
 	const avatar = data.avatar != null && data.avatar != '' ? data.avatar : (profile.avatar != null && profile.avatar != '' ? profile.avatar : account.avatar)
 	user.value.avatar = resolveMediaUrl(avatar)
-	user.value.vipProgress = data.completion_score != null ? Math.round(Number(data.completion_score)) : 0
+	user.value.vipProgress = 0
+	try {
+		const completion = await getProfileCompletion()
+		if (completion.success && completion.data != null) {
+			const completionData = completion.data as any
+			const score = completionData.score != null ? completionData.score : completionData.completion_score
+			if (score != null) user.value.vipProgress = Math.round(Number(score))
+		}
+	} catch (error) {
+		console.error('[Profile] completion refresh failed', error)
+	}
 	user.value.isVip = membership.is_vip == true
 	const incoming = data.incoming_application_count != null ? Number(data.incoming_application_count) : 0
 	const outgoing = data.outgoing_application_count != null ? Number(data.outgoing_application_count) : 0
@@ -338,7 +348,7 @@ const bottomMenuItems = [
 	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '安全中心', url: '/pagesSub/profileExtra/security', action: onSecurity },
 ]
 
-onMounted(() => { loadOverview() })
+onShow(() => { loadOverview() })
 </script>
 
 <style>

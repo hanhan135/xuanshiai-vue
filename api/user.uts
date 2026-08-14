@@ -72,24 +72,6 @@ function normalizeProfileMedia(raw: any): any {
 
 const CHAT_FEATURE_UNLOCK_STORAGE_KEY = 'xsa_chat_feature_unlocks_v1'
 
-const defaultMockPreferences: any = {
-  user_id: 1,
-  age_min: null,
-  age_max: null,
-  height_min: null,
-  height_max: null,
-  education_min: null,
-  income_min: null,
-  marriage_status: 0,
-  preferred_province_code: null,
-  preferred_city_codes: [],
-  accept_long_distance: true,
-  accept_cross_province: true,
-  housing_requirement: 0,
-  smoking_requirement: 0,
-  drinking_requirement: 0,
-  extra_requirement: null
-}
 export const CHAT_FEATURE_UNLOCK_COST = 80
 let chatFeatureUnlocksLoaded = false
 const chatFeatureUnlocks: any = {
@@ -343,6 +325,10 @@ export async function updateOwnProfile(data: any) {
   return request({ url: '/users/me/profile', method: 'PATCH', data })
 }
 
+export async function getProfileTagOptions() {
+  return request({ url: '/profile/tag-options', method: 'GET', skipAuth: true })
+}
+
 export async function updateOwnNickname(nickname: string) {
 	const value = nickname != null ? nickname.trim() : ''
 	if (value == '') return { success: false, data: null, code: 422, message: '昵称不能为空' }
@@ -352,21 +338,15 @@ export async function updateOwnNickname(nickname: string) {
 export async function getOwnPreferences() {
   return request({
     url: '/users/me/preferences',
-    method: 'GET',
-    mockData: defaultMockPreferences
+    method: 'GET'
   })
 }
 
 export async function updateOwnPreferences(data: any) {
-  const keys = Object.keys(data != null ? data : {})
-  for (let i = 0; i < keys.length; i++) {
-    defaultMockPreferences[keys[i]] = data[keys[i]]
-  }
   return request({
     url: '/users/me/preferences',
     method: 'PUT',
-    data,
-    mockData: defaultMockPreferences
+    data
   })
 }
 
@@ -463,8 +443,10 @@ export async function getMeProfile() {
     realNameStatus = 'passed'
   } else if (status == 1 || status == 4) {
     realNameStatus = 'reviewing'
-  } else if (status == 3 || status == 5) {
+  } else if (status == 3) {
     realNameStatus = 'rejected'
+  } else if (status == 5) {
+    realNameStatus = 'revoked'
   }
   return okRes({
     ...raw,

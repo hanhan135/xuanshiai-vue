@@ -128,12 +128,12 @@
 				<text v-if="!completionPassed('personality')" class="completion-warning">性格标签：少于 3 个</text>
 			</view>
 
-			<view class="section-card preference-card" @tap="openPreferenceEditor">
+			<navigator class="section-card preference-card" url="/pagesSub/userExtra/user/preference" hover-class="none">
 				<view class="section-heading"><text class="section-title">择偶标准{{ completionSuffix('preference', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">设置你期待的年龄、身高、学历和距离范围</text>
 				<view class="preference-summary"><text>{{ preferencePreview }}</text></view>
 				<text v-if="!completionPassed('preference')" class="completion-warning">择偶要求：未看到有效年龄范围</text>
-			</view>
+			</navigator>
 
 			<view class="section-card qa-card">
 				<text class="section-title">关于我</text>
@@ -170,7 +170,7 @@
 			<view class="sheet-panel" @click.stop>
 				<view class="sheet-handle"></view>
 				<view class="sheet-nav">
-					<text class="sheet-title">{{ editSheetMode == 'preference' ? '择偶标准' : '编辑资料' }}</text>
+					<text class="sheet-title">编辑资料</text>
 					<text class="sheet-close" @tap="detailSheetVisible = false">✕</text>
 				</view>
 				<scroll-view class="sheet-body" scroll-y enhanced show-scrollbar="false">
@@ -247,48 +247,6 @@
 						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" /><text class="sheet-row-arrow">›</text>
 					</view>
 					</view>
-					<view v-if="editSheetMode == 'preference'">
-					<view class="sheet-section-label">择偶要求</view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">年龄下限</text>
-						<input class="sheet-input" type="number" :value="formData.ageMin" placeholder="不限" @input="onInput('ageMin', $event)" /><text class="sheet-row-arrow">›</text>
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">年龄上限</text>
-						<input class="sheet-input" type="number" :value="formData.ageMax" placeholder="不限" @input="onInput('ageMax', $event)" /><text class="sheet-row-arrow">›</text>
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">身高下限</text>
-						<input class="sheet-input" type="number" :value="formData.heightMin" placeholder="不限" @input="onInput('heightMin', $event)" /><text class="sheet-row-arrow">›</text>
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">身高上限</text>
-						<input class="sheet-input" type="number" :value="formData.heightMax" placeholder="不限" @input="onInput('heightMax', $event)" /><text class="sheet-row-arrow">›</text>
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">最低学历</text>
-						<input class="sheet-input" type="number" :value="formData.educationMin" placeholder="不限" @input="onInput('educationMin', $event)" /><text class="sheet-row-arrow">›</text>
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">接受异地</text>
-						<switch :checked="formData.acceptLongDistance" color="var(--accent)" @change="onSwitchChange('acceptLongDistance', $event)" />
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row">
-						<text class="sheet-row-label">接受跨省</text>
-						<switch :checked="formData.acceptCrossProvince" color="var(--accent)" @change="onSwitchChange('acceptCrossProvince', $event)" />
-					</view>
-					<view class="sheet-divider"></view>
-					<view class="sheet-row column-row">
-						<text class="sheet-row-label">其他要求</text>
-						<textarea class="sheet-textarea" :value="formData.extraRequirement" maxlength="255" placeholder="填写希望对方了解的边界" @input="onInput('extraRequirement', $event)"></textarea>
-					</view>
-					</view>
 					<view class="sheet-bottom-spacer"></view>
 				</scroll-view>
 				<view class="sheet-footer">
@@ -317,8 +275,7 @@
 </template>
 
 <script setup lang="uts">
-	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, updateOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile, getProfileCompletion, getAgreementVersions, acceptAgreement } from '@/api'
-	import { TAG_CATEGORIES, findTagCategoryId } from '@/utils/tag-catalog.uts'
+	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile, getProfileCompletion, getAgreementVersions, acceptAgreement } from '@/api'
 	import { resolveMediaUrl } from '@/api/config.uts'
 	import locationJson from '@/static/location.json'
 
@@ -569,7 +526,6 @@
 			} catch (meError) {
 				console.error('[EditProfile] auth profile unavailable', meError)
 			}
-			syncLocalTagDraft()
 			await refreshCompletion()
 		} catch (e) {
 			loadError.value = '网络不可用，请重试'
@@ -592,6 +548,8 @@
 		return false
 	}
 	const completionPassed = (key: string): boolean => {
+		if (key == 'interest') return interestDisplayTags.value.length >= 3
+		if (key == 'personality') return personalityDisplayTags.value.length >= 3
 		const item = completionItems.value[key]
 		return item != null ? item.completed == true : fallbackCompletion(key)
 	}
@@ -675,8 +633,15 @@
 		return age + ' · ' + height + ' · ' + education
 	})
 	const preferenceHasContent = computed(() => hasPreferenceValues())
+	const realNameDescription = computed(() => {
+		if (realNameStatus.value == 'passed') return '已通过平台实名认证'
+		if (realNameStatus.value == 'reviewing') return '认证资料正在审核或人工复核'
+		if (realNameStatus.value == 'rejected') return '实名认证未通过，请重新认证'
+		if (realNameStatus.value == 'revoked') return '实名认证已撤销，请重新认证'
+		return '需通过平台实名认证'
+	})
 	const certifications = computed(() => [
-		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameStatus.value == 'passed' ? '已通过平台实名认证' : '需通过平台实名认证' },
+		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameDescription.value },
 		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
 		{ key: 'avatar', label: '头像认证', icon: '像', passed: false, desc: '上传真实本人照片' },
 		{ key: 'single_pledge', label: '单身承诺', icon: '誓', passed: singlePledgePassed.value, desc: singlePledgePassed.value ? '已签署单身承诺' : '确认当前为单身状态' }
@@ -685,8 +650,7 @@
 	onMounted(() => load())
 	onShow(() => {
 		if (!loading.value) {
-			syncLocalTagDraft()
-			refreshCompletion()
+			load()
 		}
 	})
 
@@ -974,53 +938,25 @@
 			saving.value = false
 		}
 	}
-	const goTagsEdit = (type: string = 'all') => uni.navigateTo({ url: '/pagesSub/userExtra/mytags/edit?type=' + type })
-	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
-
-	const syncLocalTagDraft = () => {
-		try {
-			const savedMap = uni.getStorageSync('xsa_my_tag_selections')
-			if (savedMap != null && typeof savedMap === 'object') {
-				formData.value.tagSelections = savedMap
-				const personality: string[] = []
-				const interest: string[] = []
-				for (const category of TAG_CATEGORIES) {
-					const values = Array.isArray(savedMap[category.id]) ? savedMap[category.id] as string[] : []
-					for (const value of values) {
-						if (category.id == 'personality') personality.push(value)
-						else interest.push(value)
-					}
-				}
-				formData.value.personalityTags = personality.slice(0, 5)
-				formData.value.interestTags = interest.slice(0, 5)
-				return
+	const goTagsEdit = (type: string = 'all') => uni.navigateTo({
+		url: '/pagesSub/userExtra/mytags/edit?type=' + type,
+		events: {
+			tagsSaved: (payload: any) => {
+				if (payload == null || !Array.isArray(payload.tags)) return
+				const tags = (payload.tags as string[]).slice(0, 5)
+				if (payload.type == 'personality') formData.value.personalityTags = tags
+				else formData.value.interestTags = tags
+				refreshCompletion()
 			}
-			const savedTags = uni.getStorageSync('xsa_my_tags')
-			if (Array.isArray(savedTags)) {
-				const next: any = {}
-				for (const category of TAG_CATEGORIES) next[category.id] = []
-				for (const rawTag of savedTags as any[]) {
-					if (typeof rawTag != 'string') continue
-					const categoryId = findTagCategoryId(rawTag)
-					const values = next[categoryId] as string[]
-					if (values.indexOf(rawTag) < 0) values.push(rawTag)
-				}
-				formData.value.tagSelections = next
-			}
-		} catch (e) {
-			// 本地草稿不可用时继续使用接口数据。
 		}
-	}
+	})
+	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
 
 	const onCancel = () => {
 		uni.navigateBack({ delta: 1 })
 	}
 	const openBasicEditor = () => {
 		editSheetMode.value = 'basic'
-		detailSheetVisible.value = true
-	}
-	const openPreferenceEditor = () => {
-		editSheetMode.value = 'preference'
 		detailSheetVisible.value = true
 	}
 	const cancelDetailEdit = () => {
@@ -1060,17 +996,6 @@
 		}
 		return payload
 	}
-
-	const buildPreferencePayload = () => ({
-		age_min: optionalNumber(formData.value.ageMin),
-		age_max: optionalNumber(formData.value.ageMax),
-		height_min: optionalNumber(formData.value.heightMin),
-		height_max: optionalNumber(formData.value.heightMax),
-		education_min: optionalNumber(formData.value.educationMin),
-		accept_long_distance: formData.value.acceptLongDistance,
-		accept_cross_province: formData.value.acceptCrossProvince,
-		extra_requirement: textValue(formData.value.extraRequirement) || null
-	})
 
 	const saveNickname = async () => {
 		if (saving.value || uploadingMedia.value) return
@@ -1116,11 +1041,6 @@
 			const profileRes = await updateOwnProfile(buildProfilePayload())
 			if (!profileRes.success) {
 				uni.showToast({ title: profileRes.message != null ? '' + profileRes.message : '基础资料保存失败', icon: 'none' })
-				return
-			}
-			const preferenceRes = await updateOwnPreferences(buildPreferencePayload())
-			if (!preferenceRes.success) {
-				uni.showToast({ title: preferenceRes.message != null ? '' + preferenceRes.message : '择偶要求保存失败', icon: 'none' })
 				return
 			}
 			await refreshCompletion()

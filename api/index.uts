@@ -25,6 +25,7 @@ export {
   getUserDetail,
   getMeProfile,
   getOwnProfile,
+  getProfileTagOptions,
   updateOwnProfile,
   updateOwnNickname,
   getOwnPreferences,

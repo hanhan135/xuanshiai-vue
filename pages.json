@@ -402,6 +402,13 @@
           }
         },
         {
+          "path": "user/preference",
+          "style": {
+            "navigationBarTitleText": "择偶标准",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "mytags/edit",
           "style": {
             "navigationBarTitleText": "编辑标签",
