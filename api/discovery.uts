@@ -46,7 +46,7 @@ function mapCard(row: any): any {
     mbti: card.mbti != null ? '' + card.mbti : '',
     interestTags: tags,
     certificationTags: certifications,
-    isVip: card.isVip === true || card.is_vip === true || certifications.indexOf('VIP') >= 0 || certifications.indexOf('会员') >= 0,
+    isVip: card.isVip === true || card.is_vip === true,
     isFavorite: card.is_favorite == true,
     matchScore: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : 0),
     viewCount: card.view_count != null ? Number(card.view_count) : 0,
@@ -105,6 +105,10 @@ export async function getBrowseHistory(page: number = 1, pageSize: number = 20) 
 
 export async function getVisitors(page: number = 1, pageSize: number = 20) {
   return request({ url: '/discovery/visitors', method: 'GET', data: { page, page_size: pageSize } })
+}
+
+export async function getUserVisitorCount(userId: number) {
+  return request({ url: '/users/' + userId + '/visitor-count', method: 'GET' })
 }
 
 export async function getDiscoveryFavorites(page: number = 1, pageSize: number = 20) {

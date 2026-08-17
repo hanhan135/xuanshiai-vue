@@ -17,7 +17,7 @@
 		<scroll-view v-else scroll-y class="detail-scroll" enhanced show-scrollbar="false">
 			<view v-if="!isLockedView" class="vip-detail-page">
 				<view class="vip-cover-area">
-					<image class="vip-cover-img" :src="user.photos.length > 0 ? user.photos[0] : user.avatar" mode="aspectFill"></image>
+					<image class="vip-cover-img" :src="user.cover != '' ? user.cover : user.avatar" mode="aspectFill"></image>
 					<view class="vip-avatar-circle"><image class="vip-avatar" :src="user.avatar" mode="aspectFill"></image></view>
 				</view>
 
@@ -27,6 +27,7 @@
 						<view v-if="user.isVIP" class="vip-badge vip-badge-large"><text class="vip-crown">♛</text><text class="vip-badge-text">VIP会员</text></view>
 					</view>
 					<text class="vip-meta">{{ user.job }} · {{ user.edu }}　{{ user.city }}　<text class="online-text">{{ user.online }}</text></text>
+					<text v-if="visitorCount != null" class="visitor-count-text">已有 {{ visitorCount }} 人看过 Ta</text>
 					<view v-if="user.tags.length > 0" class="tag-row"><view v-for="tag in user.tags" :key="tag" class="profile-tag"><text class="profile-tag-text">{{ tag }}</text></view></view>
 					<text v-if="user.bio != ''" class="vip-bio">{{ user.bio }}</text>
 				</view>
@@ -65,7 +66,7 @@
 
 			<view v-else class="locked-detail-page">
 				<view class="locked-cover-area">
-					<image class="locked-cover-img" :src="user.photos[0]" mode="aspectFill"></image>
+					<image class="locked-cover-img" :src="user.cover != '' ? user.cover : user.avatar" mode="aspectFill"></image>
 					<view class="locked-avatar-circle"><image class="locked-avatar" :src="user.avatar" mode="aspectFill"></image></view>
 				</view>
 
@@ -121,21 +122,6 @@
 						</view>
 					</view>
 
-													<view v-if="visitors.length > 0" class="locked-section-card spotlight-section">
-						<view class="spot-heading"><view class="spot-heading-left"><text class="spot-light-icon">💡</text><text class="locked-section-title">爆灯嘉宾</text><text class="spot-count">32人</text></view><text class="spot-more">查看全部 ›</text></view>
-						<view class="visitor-row">
-							<view v-for="visitor in visitors" :key="visitor.name" class="visitor-avatar"><image class="visitor-img" :src="visitor.avatar" mode="aspectFill"></image></view>
-							<text class="visitor-more">+26人</text>
-						</view>
-						<text class="spot-desc">非常中意Ta？爆灯后系统将立即短信通知对方，您的头像将显示在此处，让Ta第一时间注意到你！</text>
-						<view class="spot-benefits">
-							<view class="spot-benefit"><text class="spot-benefit-icon">▣</text><text class="spot-benefit-title">快速触达</text><text class="spot-benefit-desc">即时短信通知</text></view>
-							<view class="spot-benefit"><text class="spot-benefit-icon">♙</text><text class="spot-benefit-title">展示曝光</text><text class="spot-benefit-desc">头像展示在爆灯栏</text></view>
-							<view class="spot-benefit"><text class="spot-benefit-icon">♥</text><text class="spot-benefit-title">增加好感</text><text class="spot-benefit-desc">更容易被留意</text></view>
-						</view>
-						<view class="spot-price"><text class="spot-price-label">单次爆灯</text><text class="spot-price-value">¥9.9</text><text class="spot-price-unit">/次</text></view>
-						<view class="spotlight-button" @tap="onSpotlight"><text class="spotlight-button-text">💡 我要爆灯</text></view>
-					</view>
 				</view>
 			</view>
 
@@ -162,7 +148,7 @@ import { ref } from 'vue'
 import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
-import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, saveAiAvatarProfileSnapshot } from '@/api'
+import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, getUserVisitorCount, saveAiAvatarProfileSnapshot } from '@/api'
 import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
 import locationJson from '@/static/location.json'
 import { SPOTLIGHT_AMOUNT, paySpotlight } from '@/api/spotlight.uts'
@@ -181,13 +167,14 @@ const spotlightPaymentVisible = ref(false)
 const spotlightSuccessVisible = ref(false)
 const spotlightPaying = ref(false)
 const spotlightTarget = ref({ id: 0, name: '', avatar: '', meta: '' })
+const visitorCount = ref<number | null>(null)
 
 const user = ref({
 	id: 0,
 	detailLocked: false,
 	name: '', age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
 	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
-	photos: [], lifePhotos: [], expect: [], basicInfo: []
+	cover: '', photos: [], lifePhotos: [], expect: [], basicInfo: []
 })
 
 const certs = ref([
@@ -195,13 +182,6 @@ const certs = ref([
 	{ icon: '学', shortLabel: '学历', label: '学历认证', desc: '学历信息已核验' },
 	{ icon: '像', shortLabel: '头像', label: '头像认证', desc: '头像为本人真实照片' },
 	{ icon: '房', shortLabel: '房产', label: '房产认证', desc: '房产信息已认证' }
-])
-
-const visitors = ref([
-	{ name: '张伟', avatar: '/static/portraits/profile-woman-alt.jpg' },
-	{ name: '李明', avatar: '/static/portraits/profile-man-light.jpg' },
-	{ name: '王强', avatar: '/static/portraits/profile-man-sea.jpg' },
-	{ name: '刘洋', avatar: '/static/portraits/profile-woman-community.jpg' }
 ])
 
 const dynamics = ref([
@@ -282,7 +262,7 @@ const locationTextByCityCode = (rawCode: any): string => {
 }
 
 const formatDimension = (raw: any, unit: string): string => {
-	if (raw == null || raw === '') return '未填写'
+	if (raw == null || raw === '' || Number(raw) <= 0) return '未填写'
 	const output = '' + raw
 	return output.endsWith(unit) ? output : output + unit
 }
@@ -301,9 +281,8 @@ const formatIncome = (raw: any): string => {
 user.value = {
 	id: 0, name: '', detailLocked: false, age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
 	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
-	photos: [], lifePhotos: [], expect: [], basicInfo: []
+	cover: '', photos: [], lifePhotos: [], expect: [], basicInfo: []
 }
-visitors.value = []
 dynamics.value = []
 certs.value = []
 
@@ -321,20 +300,25 @@ const mapDetailUser = (raw: any, id: number) => {
 	const age = value(card.age, profile.age, missing)
 	const educationLabel = (level: any): string => {
 		const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
-		const index = level != null ? Number(level) : 0
-		return index > 0 && index < labels.length ? labels[index] : ''
+		if (level == null || level === '') return ''
+		const text = '' + level
+		const index = Number(text)
+		if (!isNaN(index) && text.trim() != '') return index > 0 && index < labels.length ? labels[index] : ''
+		return text
 	}
-	const edu = value(card.education, profile.education, value(card.edu, educationLabel(card.education_level != null ? card.education_level : profile.education_level), missing))
+	const educationValue = firstField(card, ['education', 'education_level', 'edu']) || firstField(profile, ['education', 'education_level', 'edu'])
+	const edu = educationLabel(educationValue) == '' ? missing : educationLabel(educationValue)
 	const job = value(card.occupation, profile.occupation, value(card.job, profile.job, missing))
-	const residenceText = locationTextByCodes(profile, 'residence_province_code', 'residence_city_code', 'residence_district_code') || locationTextByPrefix(profile, 'residence') || locationTextByPrefix(envelope, 'residence') || locationTextByCityCode(card.city_code)
-	const hometownText = locationTextByCodes(profile, 'hometown_province_code', 'hometown_city_code', 'hometown_district_code') || locationTextByPrefix(profile, 'hometown') || locationTextByPrefix(envelope, 'hometown')
-	const city = value(card.residence, profile.residence, value(card.city, profile.city, residenceText == '' ? missing : residenceText))
+	const residenceText = value(profile.residence_display, card.residence_display, value(envelope.residence_display, '', locationTextByCodes(profile, 'residence_province_code', 'residence_city_code', 'residence_district_code') || locationTextByPrefix(profile, 'residence') || locationTextByPrefix(envelope, 'residence') || locationTextByCityCode(card.city_code)))
+	const hometownText = value(profile.hometown_display, card.hometown_display, value(envelope.hometown_display, '', locationTextByCodes(profile, 'hometown_province_code', 'hometown_city_code', 'hometown_district_code') || locationTextByPrefix(profile, 'hometown') || locationTextByPrefix(envelope, 'hometown')))
+	const city = value(residenceText, card.residence, value(profile.residence, value(card.city, profile.city, missing), missing))
 	const height = formatDimension(card.height != null ? card.height : profile.height, 'cm')
 	const weight = formatDimension(card.weight != null ? card.weight : profile.weight, 'kg')
 	const birthday = firstField(card, ['birthday', 'birth_date', 'date_of_birth']) || firstField(profile, ['birthday', 'birth_date', 'date_of_birth']) || firstField(envelope, ['birthday', 'birth_date', 'date_of_birth'])
 	const constellation = value(card.constellation, profile.constellation, constellationFromBirthday(birthday) == '' ? missing : constellationFromBirthday(birthday))
-	const hometown = value(card.hometown, profile.hometown, hometownText == '' ? missing : hometownText)
-	const income = formatIncome(card.income != null ? card.income : (profile.income != null ? profile.income : card.salary))
+	const hometown = value(hometownText, card.hometown, value(profile.hometown, missing, missing))
+	const incomeValue = firstField(profile, ['income_display', 'income', 'salary']) || firstField(card, ['income_display', 'income', 'salary']) || firstField(envelope, ['income_display', 'income', 'salary'])
+	const income = formatIncome(incomeValue)
 	const marriageStatus = card.is_married != null ? card.is_married : profile.is_married
 	const marriage = value(card.marriage, marriageStatus == 1 ? '未婚' : marriageStatus == 2 ? '离异' : marriageStatus == 3 ? '丧偶' : null, '未填写')
 	const mbti = value(card.mbti, profile.mbti, '未填写')
@@ -348,9 +332,7 @@ const mapDetailUser = (raw: any, id: number) => {
 	const photos = Array.isArray(rawPhotos)
 		? (rawPhotos as any[]).map((photo: any) => photo != null && typeof photo === 'object' ? resolveMediaUrl(value(photo.url, photo.file_url, avatar)) : resolveMediaUrl(photo))
 		: []
-	const lifePhotos = Array.isArray(card.lifePhotos) && card.lifePhotos.length >= 3
-		? card.lifePhotos as string[]
-		: photos.length >= 3 ? photos.slice(0, 3) : []
+	const lifePhotos = photos
 	const tags = Array.isArray(card.interest_tags) ? card.interest_tags as string[] : Array.isArray(card.tags) ? card.tags as string[] : Array.isArray(profile.interest_tags) ? profile.interest_tags as string[] : []
 	const expectations = profile.tag_selections != null && Array.isArray(profile.tag_selections.relationship_expectation)
 		? profile.tag_selections.relationship_expectation as string[]
@@ -378,7 +360,8 @@ const mapDetailUser = (raw: any, id: number) => {
 		match: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : 0),
 		tags,
 		bio: value(card.intro, profile.self_intro, value(card.introduction, profile.introduction, '')),
-		photos: photos.length > 0 ? photos : (background != '' ? [background] : []),
+		cover: background != '' ? background : (photos.length > 0 ? photos[0] : avatar),
+		photos,
 		lifePhotos,
 		expect: expectations,
 		basicInfo: mappedInfo
@@ -390,6 +373,7 @@ const load = async () => {
 	detailLoading.value = true
 	detailError.value = ''
 	detailQuotaExhausted.value = false
+	visitorCount.value = null
 	try {
 		let res: any = null
 		if (isOwnProfile.value) {
@@ -399,6 +383,13 @@ const load = async () => {
 		}
 		if (res != null && res.success === true && res.data != null) {
 			mapDetailUser(res, user.value.id)
+			if (!isOwnProfile.value && !isPreview.value && user.value.id > 0) {
+				const visitorRes = await getUserVisitorCount(user.value.id)
+				if (visitorRes != null && visitorRes.success === true && visitorRes.data != null) {
+					const count = Number((visitorRes.data as any).visitor_count)
+					if (!isNaN(count) && count >= 0) visitorCount.value = count
+				}
+			}
 			if (isOwnProfile.value) {
 				const postsRes = await getMyPosts({ page: 1, pageSize: 3 })
 				if (postsRes.success && postsRes.data != null) {
@@ -606,6 +597,7 @@ const onLike = async () => {
 .vip-name { max-width: 380rpx; overflow: hidden; color: var(--ink); font-family: var(--serif); font-size: 42rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .vip-age { flex-shrink: 0; color: var(--ink2); font-size: 28rpx; }
 .vip-meta { color: var(--ink2); font-size: 24rpx; line-height: 1.5; }
+.visitor-count-text { color: var(--ink3); font-size: 22rpx; line-height: 1.4; }
 .vip-bio { color: var(--ink2); font-size: 25rpx; line-height: 1.65; }
 .vip-detail-content { display: flex; flex-direction: column; gap: 24rpx; padding: 24rpx 32rpx 36rpx; }
 .vip-section-card { display: flex; flex-direction: column; gap: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: var(--surface); box-shadow: var(--shadow-sm); }

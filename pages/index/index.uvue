@@ -67,7 +67,12 @@
 			</view>
 			<!-- 推荐 Tab -->
 			<scroll-view v-if="currentTab === 0" scroll-y class="content-scroll" enhanced show-scrollbar="false" @touchstart="onTouchStart" @touchend="onTouchEnd">
-				<view v-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
+				<view v-if="profileCompletionError != ''" class="completion-gate">
+					<text class="completion-gate-title">资料状态暂时无法读取</text>
+					<text class="completion-gate-copy">{{ profileCompletionError }}</text>
+					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
+				</view>
+				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
 					<view class="completion-gate-mark"><text>{{ profileCompletion }}%</text></view>
 					<text class="completion-gate-title">完善资料后，遇见更合适的人</text>
 					<text class="completion-gate-copy">请先将个人资料完善至 100%，完成后即可查看平台上的真实用户。</text>
@@ -80,7 +85,7 @@
 				</view>
 				<view v-else-if="profileCompletionLoaded" class="profile-card">
 					<view class="cover-wrap">
-						<image class="cover-img" :src="recommendBackground" mode="aspectFill"></image>
+						<image class="cover-img" :src="recommendBackground != '' ? recommendBackground : currentRecommendUser.avatar" mode="aspectFill"></image>
 					</view>
 
 					<!-- 头像在 profile-card 下独立定位，不被 card-body 盖住 -->
@@ -101,7 +106,7 @@
 								<view class="dot-sep"></view>
 								<text class="basic-text">{{ currentRecommendUser.job }}</text>
 								<view class="dot-sep"></view>
-								<text class="basic-text">{{ currentRecommendUser.city }}</text>
+								<text class="basic-text">{{ locationTextByCityCode(currentRecommendUser.city) }}</text>
 							</view>
 							<view class="online-row">
 								<view class="online-dot"></view>
@@ -695,13 +700,11 @@
 
 <!-- 每日查看配额用尽弹窗 -->
 		<XsaModal
-			:visible="quotaExhaustedVisible"
+			:visible="quotaExhaustedVisible && !welcomeVisible"
 			title="今日查看次数已用完"
-			:show-cancel="true"
-			cancel-text="积分兑换"
-			confirm-text="升级VIP"
+			:show-cancel="false"
+			confirm-text="开通会员"
 			@close="quotaExhaustedVisible = false"
-			@cancel="quotaExhaustedVisible = false"
 			@confirm="handleQuotaUpgrade"
 		>
 			<view class="apply-body">
@@ -723,9 +726,10 @@
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
 	import { likeUser, blockUser, unblockUser } from '@/api'
-	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getProfileCompletion } from '@/api'
+	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
+	import locationJson from '@/static/location.json'
 	import {
 		recordProfileView,
 		resetDailyIfNeeded,
@@ -780,21 +784,64 @@
 	}
 
 	// ========== 推荐页数据 ==========
+	const formatIncomeDisplay = (raw: any): string => {
+		if (raw == null || raw === '') return '未填写'
+		const text = '' + raw
+		const amount = Number(text)
+		if (!isNaN(amount) && text.trim() != '') {
+			const wan = Math.round(amount / 1000) / 10
+			return (wan % 1 == 0 ? '' + Math.round(wan) : '' + wan) + 'w'
+		}
+		return text.replace(/万/g, 'w')
+	}
+	const educationText = (raw: any): string => {
+		const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+		if (raw == null || raw === '') return '未填写'
+		const text = '' + raw
+		const level = Number(text)
+		if (!isNaN(level) && text.trim() != '') return level > 0 && level < labels.length ? labels[level] : '未填写'
+		return text
+	}
+	const dimensionText = (raw: any, unit: string): string => {
+		if (raw == null || raw === '' || Number(raw) <= 0) return '未填写'
+		const text = '' + raw
+		return text.endsWith(unit) ? text : text + unit
+	}
+	const zodiacFromBirthday = (birthday: any): string => {
+		const value = birthday != null ? '' + birthday : ''
+		if (value.length < 10) return ''
+		const month = Number(value.substring(5, 7))
+		const day = Number(value.substring(8, 10))
+		const signs = ['摩羯座', '水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座']
+		const cutoffs = [20, 19, 21, 21, 21, 22, 23, 23, 23, 23, 22, 22]
+		if (month < 1 || month > 12 || day < 1 || day > 31) return ''
+		return signs[(day < cutoffs[month - 1] ? month - 1 : month) % 12]
+	}
+	const locationTextByCityCode = (rawCode: any): string => {
+		const cityCode = rawCode != null ? '' + rawCode : ''
+		if (cityCode == '') return '未填写'
+		const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const province of provinces) {
+			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			for (const city of cities) if ('' + city.code == cityCode) return province.name + ' ' + city.name
+		}
+		return cityCode
+	}
 	const basicInfoRows = computed(() => [
 		[
 			{ label: '年龄', value: currentRecommendUser.value.age != null ? '' + currentRecommendUser.value.age + '岁' : '' },
-			{ label: '身高', value: currentRecommendUser.value.height != null ? '' + currentRecommendUser.value.height + 'cm' : '' },
-			{ label: '体重', value: currentRecommendUser.value.weight != null ? '' + currentRecommendUser.value.weight + 'kg' : '' }
+			{ label: '身高', value: dimensionText(currentRecommendUser.value.height, 'cm') },
+			{ label: '体重', value: dimensionText(currentRecommendUser.value.weight, 'kg') }
 		],
 		[
 			{ label: '星座', value: currentRecommendUser.value.zodiac || '' },
-			{ label: '学历', value: currentRecommendUser.value.education || '' },
+			{ label: '学历', value: educationText(currentRecommendUser.value.education) },
 			{ label: '职业', value: currentRecommendUser.value.job || '' }
 		],
 		[
-			{ label: '现居', value: currentRecommendUser.value.city || '' },
-			{ label: '家乡', value: currentRecommendUser.value.hometown || '' },
-			{ label: '收入', value: currentRecommendUser.value.income || '' }
+			{ label: '现居', value: locationTextByCityCode(currentRecommendUser.value.city) },
+			{ label: '家乡', value: currentRecommendUser.value.hometown || '未填写' },
+			{ label: '收入', value: formatIncomeDisplay(currentRecommendUser.value.income) }
 		]
 	])
 
@@ -806,6 +853,7 @@
 	const recommendUsers = ref<any[]>([])
 	const profileCompletion = ref(0)
 	const profileCompletionLoaded = ref(false)
+	const profileCompletionError = ref('')
 	const squareUsers = ref<any[]>([])
 	const squareTotal = ref(0)
 	const membershipPlans = ref<any[]>([])
@@ -842,21 +890,65 @@
 		recommendBackground.value = ''
 		if (userId <= 0) return
 		const res = await getUserDetail(userId)
-		if (!res.success || res.data == null) return
+		if (!res.success || res.data == null) {
+			if (Number(res.code) == 429) showQuotaExhausted(res.message != null ? '' + res.message : '')
+			return
+		}
+		if (Number(currentRecommendUser.value.id || 0) != userId) return
 		const detail = res.data as any
 		const profile = detail.profile != null ? detail.profile : detail
+		const current = currentRecommendUser.value as any
+		const rawPhotos = profile.photos != null && Array.isArray(profile.photos) ? profile.photos as any[] : []
+		const photos = rawPhotos.map((photo: any) => {
+			if (photo != null && typeof photo === 'object') return resolveMediaUrl(photo.file_url != null ? photo.file_url : photo.url)
+			return resolveMediaUrl(photo)
+		}).filter((photo: string) => photo != '')
+		const enriched = {
+			...current,
+			avatar: profile.avatar != null && profile.avatar != '' ? resolveMediaUrl(profile.avatar) : current.avatar,
+			photos,
+			height: profile.height != null ? Number(profile.height) : current.height,
+			weight: profile.weight != null ? Number(profile.weight) : current.weight,
+			education: educationText(profile.education_level != null ? profile.education_level : current.education),
+			job: profile.occupation != null && profile.occupation != '' ? '' + profile.occupation : current.job,
+			city: profile.residence_display != null && profile.residence_display != '' ? '' + profile.residence_display : locationTextByCityCode(current.city),
+			hometown: profile.hometown_display != null && profile.hometown_display != '' ? '' + profile.hometown_display : (current.hometown != null && current.hometown != '' ? current.hometown : '未填写'),
+			income: formatIncomeDisplay(profile.income_display != null && profile.income_display != '' ? profile.income_display : (profile.income != null ? profile.income : current.income)),
+			zodiac: zodiacFromBirthday(profile.birthday) != '' ? zodiacFromBirthday(profile.birthday) : current.zodiac,
+			bio: profile.self_intro != null && profile.self_intro != '' ? '' + profile.self_intro : current.bio
+		}
+		const currentIndex = currentRecommendIndex.value % recommendUsers.value.length
+		if (currentIndex >= 0) recommendUsers.value.splice(currentIndex, 1, enriched)
 		recommendBackground.value = resolveMediaUrl(profile.background_wall)
 	}
-	const loadProfileCompletion = async () => {
+	const loadProfileCompletion = async (): Promise<boolean> => {
+		profileCompletionLoaded.value = false
+		profileCompletionError.value = ''
 		const response = await getProfileCompletion()
 		if (response.success && response.data != null) {
 			const data = response.data as any
-			profileCompletion.value = Math.max(0, Math.min(100, Number(data.score != null ? data.score : data.completion_score || 0)))
+			const score = Number(data.score != null ? data.score : data.completion_score)
+			if (!isNaN(score)) {
+				profileCompletion.value = Math.max(0, Math.min(100, score))
+				profileCompletionLoaded.value = true
+				return true
+			}
 		}
-		profileCompletionLoaded.value = true
+		const profileRes = await getOwnProfile()
+		if (profileRes.success && profileRes.data != null) {
+			const score = Number((profileRes.data as any).completion_score)
+			if (!isNaN(score)) {
+				profileCompletion.value = Math.max(0, Math.min(100, score))
+				profileCompletionLoaded.value = true
+				return true
+			}
+		}
+		profileCompletionError.value = '请检查登录状态和网络后重试'
+		return false
 	}
 	const loadHomeDiscovery = async () => {
-		await loadProfileCompletion()
+		const completionReady = await loadProfileCompletion()
+		if (!completionReady) return
 		if (profileCompletion.value < 100) {
 			recommendUsers.value = []
 			recommendBackground.value = ''
@@ -887,13 +979,11 @@
 	}
 	const quotaExhaustedVisible = ref(false)
 	const quotaExhaustedMessage = ref('')
-	const showQuotaExhausted = () => {
-		const quota = getDailyViewQuota()
-		if (quota.isVip) {
-			quotaExhaustedMessage.value = '今日免费查看次数已用完（' + quota.total + '/' + quota.total + '），可使用积分兑换'
-} else {
-			quotaExhaustedMessage.value = '今日免费查看次数已用完（' + quota.total + '/' + quota.total + '），升级VIP享每日20次查看，或积分兑换'
-}
+	const showQuotaExhausted = (serverMessage: string = '') => {
+		const message = serverMessage.trim()
+		quotaExhaustedMessage.value = message != ''
+			? message + '。开通会员可增加每日浏览额度。'
+			: '今日完整浏览额度已用完，开通会员可增加每日浏览额度。'
 		quotaExhaustedVisible.value = true
 	}
 	const handleQuotaUpgrade = () => { quotaExhaustedVisible.value = false; uni.navigateTo({ url: '/pagesSub/profileExtra/vip' }) }
