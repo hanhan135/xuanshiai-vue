@@ -74,7 +74,7 @@
 			</view>
 
 			<!-- VIP 会员卡 -->
-			<view class="vip-card" @tap="onOpenVIP">
+			<view v-if="!user.isVip" class="vip-card" @tap="onOpenVIP">
 				<view class="vip-crown-wrap">
 					<text class="ic ic-vip ic-huiyuan vip-crown"></text>
 				</view>
@@ -147,7 +147,7 @@
 
 <script setup lang="uts">
 import XsaTabBar from '@/components/XsaTabBar.uvue'
-import { getProfileOverview, getProfileCompletion } from '@/api'
+import { getProfileOverview, getProfileCompletion, getMembershipStatus } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 
 const systemInfo = uni.getSystemInfoSync()
@@ -170,12 +170,19 @@ const stats = ref([
 ])
 
 const loadOverview = async () => {
+	try {
+		const membershipRes = await getMembershipStatus()
+		if (membershipRes.success && membershipRes.data != null) {
+			user.value.isVip = (membershipRes.data as any).is_vip === true
+		}
+	} catch (error) {
+		console.error('[Profile] membership refresh failed', error)
+	}
 	const res = await getProfileOverview()
 	if (!res.success || res.data == null) return
 	const data = res.data as any
 	const profile = data.profile != null && typeof data.profile === 'object' ? data.profile : {}
 	const account = data.user != null && typeof data.user === 'object' ? data.user : {}
-	const membership = data.membership != null ? data.membership : {}
 	const nickname = data.nickname != null && data.nickname != ''
 		? data.nickname
 		: (profile.nickname != null && profile.nickname != '' ? profile.nickname : account.nickname)
@@ -193,7 +200,6 @@ const loadOverview = async () => {
 	} catch (error) {
 		console.error('[Profile] completion refresh failed', error)
 	}
-	user.value.isVip = membership.is_vip == true
 	const incoming = data.incoming_application_count != null ? Number(data.incoming_application_count) : 0
 	const outgoing = data.outgoing_application_count != null ? Number(data.outgoing_application_count) : 0
 	stats.value[0].value = '' + (incoming + outgoing)

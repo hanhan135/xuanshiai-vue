@@ -286,7 +286,7 @@
 					<view v-if="squareUsers.length > 0" class="square-user-card" @tap="goUserDetail(squareAt(0).id)">
 						<view class="sq-photo-wrap">
 							<image class="sq-photo" :src="squareAt(0).avatar" mode="aspectFill"></image>
-							<view class="vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+							<view v-if="squareAt(0).is_vip === true || squareAt(0).isVip === true" class="vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
@@ -328,42 +328,42 @@
 						</view>
 					</view>
 
-					<view class="sq-section">
+					<view v-if="vipSquareUsers.length > 0" class="sq-section">
 						<view class="sq-section-header">
 							<view class="sq-section-title-group">
 								<text class="ic ic-vip ic-huiyuan sq-section-icon"></text>
 								<text class="sq-section-title">会员专区</text>
-						<text class="sq-section-count">{{ squareTotal > 0 ? squareTotal + '位' : '' }}</text>
+						<text class="sq-section-count">{{ vipSquareUsers.length + '位' }}</text>
 							</view>
 							<text class="sq-section-more">查看全部 ›</text>
 						</view>
 						<view class="sq-vip-row">
-							<view v-if="squareUsers.length > 2" class="sq-vip-mini" @tap="goUserDetail(squareAt(2).id)">
+							<view v-if="vipSquareUsers.length > 0" class="sq-vip-mini" @tap="goUserDetail(vipSquareAt(0).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" :src="squareAt(2).avatar" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="vipSquareAt(0).avatar" mode="aspectFill"></image>
+									<view v-if="vipSquareAt(0).is_vip === true || vipSquareAt(0).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-										<text class="sq-vip-name">{{ squareAt(2).name }}</text>
-										<text class="sq-vip-detail">{{ squareAt(2).age }}岁 · {{ squareAt(2).height }}cm</text>
+										<text class="sq-vip-name">{{ vipSquareAt(0).name }}</text>
+										<text class="sq-vip-detail">{{ vipSquareAt(0).age }}岁 · {{ vipSquareAt(0).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(squareAt(2).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(0).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
-							<view v-if="squareUsers.length > 3" class="sq-vip-mini" @tap="goUserDetail(squareAt(3).id)">
+							<view v-if="vipSquareUsers.length > 1" class="sq-vip-mini" @tap="goUserDetail(vipSquareAt(1).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" :src="squareAt(3).avatar" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="vipSquareAt(1).avatar" mode="aspectFill"></image>
+									<view v-if="vipSquareAt(1).is_vip === true || vipSquareAt(1).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-										<text class="sq-vip-name">{{ squareAt(3).name }}</text>
-										<text class="sq-vip-detail">{{ squareAt(3).age }}岁 · {{ squareAt(3).height }}cm</text>
+										<text class="sq-vip-name">{{ vipSquareAt(1).name }}</text>
+										<text class="sq-vip-detail">{{ vipSquareAt(1).age }}岁 · {{ vipSquareAt(1).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(squareAt(3).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(1).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
 						</view>
-						<text v-if="squareUsers.length < 3" class="sq-section-empty">暂无会员专区资料</text>
+						<text v-if="vipSquareUsers.length === 0" class="sq-section-empty">暂无会员专区资料</text>
 					</view>
 
 					<view v-if="squareUsers.length > 4" class="square-user-card" @tap="goUserDetail(squareAt(4).id)">
@@ -423,7 +423,7 @@
 							<view v-if="squareUsers.length > 6" class="sq-vip-mini" @tap="goUserDetail(squareAt(6).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(6).avatar" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<view v-if="squareAt(6).is_vip === true || squareAt(6).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
 											<text class="sq-vip-name">{{ squareAt(6).name }}</text>
@@ -435,7 +435,7 @@
 							<view v-if="squareUsers.length > 7" class="sq-vip-mini" @tap="goUserDetail(squareAt(7).id)">
 								<view class="sq-vip-content">
 									<image class="sq-vip-photo" :src="squareAt(7).avatar" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<view v-if="squareAt(7).is_vip === true || squareAt(7).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
 											<text class="sq-vip-name">{{ squareAt(7).name }}</text>
@@ -533,23 +533,17 @@
 				</view>
 
 				<view class="vip-cat-tabs">
-					<view class="vip-cat-tab" v-for="(cat, ci) in vipCategories" :key="cat" @click="switchVipCat(ci)">
-						<text :class="['vip-cat-tab-text', vipCatIndex === ci ? 'active' : '']">{{ cat }}</text>
-						<view v-if="vipCatIndex === ci" class="vip-cat-indicator"></view>
-					</view>
+					<view class="vip-cat-tab" @tap="switchVipCat(0)"><text :class="['vip-cat-tab-text', vipCatIndex === 0 ? 'active' : '']">高颜值专区</text><view v-if="vipCatIndex === 0" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(1)"><text :class="['vip-cat-tab-text', vipCatIndex === 1 ? 'active' : '']">高收入专区</text><view v-if="vipCatIndex === 1" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(2)"><text :class="['vip-cat-tab-text', vipCatIndex === 2 ? 'active' : '']">高学历专区</text><view v-if="vipCatIndex === 2" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(3)"><text :class="['vip-cat-tab-text', vipCatIndex === 3 ? 'active' : '']">95后专区</text><view v-if="vipCatIndex === 3" class="vip-cat-indicator"></view></view>
 				</view>
 
-				<view class="vip-filter-row">
-					<text class="vip-result-count">{{ squareTotal > 0 ? '共' + squareTotal + '位嘉宾' : '' }}</text>
-					<view class="vip-filter-right">
-						<view class="vip-accelerate-btn" @click="onSearch">
-							<text class="ic ic-home ic-star vip-accel-icon"></text>
-							<text class="vip-accel-text">加速匹配</text>
-						</view>
-					</view>
+				<view v-if="vipCardRows.length > 0" class="vip-filter-row">
+					<text class="vip-result-count">{{ '共' + vipCardTotal + '位会员' }}</text>
 				</view>
 
-				<view class="vip-card-grid">
+				<view v-if="vipCardRows.length > 0" class="vip-card-grid">
 					<view class="vip-card-row" v-for="(row, ri) in vipCardRows" :key="ri">
 						<view class="vip-card-item" v-for="(card, ci) in row" :key="card.id + '-' + ci">
 							<view class="vip-card-content" @tap="goUserDetail(card.id)">
@@ -572,6 +566,7 @@
 						</view>
 					</view>
 				</view>
+				<view v-else class="square-empty-state"><text>暂无会员专区资料</text></view>
 
 				<view class="vip-privilege-section">
 					<view class="vip-priv-header">
@@ -582,37 +577,22 @@
 						</view>
 					</view>
 					<view class="vip-priv-row">
-						<view class="vip-priv-card" v-for="priv in vipPrivileges" :key="priv.title">
+						<view class="vip-priv-card">
 							<view class="vip-priv-icon-circle">
-								<text :class="priv.iconClass + ' vip-priv-icon-text'"></text>
+								<text class="ic ic-social ic-paishe vip-priv-icon-text"></text>
 							</view>
-							<text class="vip-priv-card-title">{{ priv.title }}</text>
-							<text class="vip-priv-card-desc">{{ priv.desc }}</text>
+							<text class="vip-priv-card-title">资料解锁</text>
+							<text class="vip-priv-card-desc">查看完整资料</text>
 						</view>
-					</view>
-				</view>
-
-				<view class="divider"></view>
-
-				<view class="vip-spotlight">
-					<view class="vip-spot-header">
-						<view class="vip-spot-title-group">
-							<text class="ic ic-home ic-star vip-spot-icon"></text>
-							<text class="vip-spot-title">人气爆灯嘉宾</text>
-							<text class="vip-spot-count">{{ vipSpots.length > 0 ? vipSpots.length + '人' : '' }}</text>
+						<view class="vip-priv-card">
+							<view class="vip-priv-icon-circle"><text class="ic ic-social ic-pinglun vip-priv-icon-text"></text></view>
+							<text class="vip-priv-card-title">深度了解</text>
+							<text class="vip-priv-card-desc">查看问答与期待</text>
 						</view>
-						<text class="vip-spot-more">查看全部 ›</text>
-					</view>
-					<text class="vip-spot-desc">爆灯后系统将短信通知对方，头像将显示在对方爆灯栏中</text>
-					<view class="vip-spot-row">
-						<view class="vip-spot-card" v-for="spot in vipSpots" :key="spot.name">
-							<view class="vip-spot-photo">
-								<text class="ic ic-social ic-touxiang vip-spot-photo-icon"></text>
-							</view>
-							<view class="vip-spot-info">
-								<text class="vip-spot-name">{{ spot.name }}</text>
-								<text class="vip-spot-age">{{ spot.age }} · {{ spot.job }}</text>
-							</view>
+						<view class="vip-priv-card">
+							<view class="vip-priv-icon-circle"><text class="ic ic-home ic-star vip-priv-icon-text"></text></view>
+							<text class="vip-priv-card-title">优先匹配</text>
+							<text class="vip-priv-card-desc">获得更多推荐机会</text>
 						</view>
 					</view>
 				</view>
@@ -820,14 +800,6 @@
 
 	// ========== 会员专区数据 ==========
 	const vipCatIndex = ref(0)
-	const vipCategories = ['高颜值专区', '高收入专区', '高学历专区', '95后专区']
-
-	const vipPrivileges = [
-		{ iconClass: 'ic ic-social ic-paishe', title: 'Ta的瞬间', desc: '查看精彩生活瞬间' },
-		{ iconClass: 'ic ic-social ic-pinglun', title: 'Ta的问答怎么样', desc: '了解TA的真实想法' },
-		{ iconClass: 'ic ic-home ic-star', title: '爆灯特权', desc: '短信即时通知TA' }
-	]
-
 	const switchVipCat = (index: number) => { vipCatIndex.value = index }
 
 	// ========== 推荐页过滤 + 配额 ==========
@@ -839,19 +811,23 @@
 	const membershipPlans = ref<any[]>([])
 	const planAt = (index: number): any => membershipPlans.value.length > index ? membershipPlans.value[index] : { duration: '', price: '' }
 	const squareAt = (index: number): any => squareUsers.value.length > index ? squareUsers.value[index] : {}
+	const vipSquareUsers = computed(() => squareUsers.value.filter((user: any) => user != null && (user.is_vip === true || user.isVip === true)))
+	const vipSquareAt = (index: number): any => vipSquareUsers.value.length > index ? vipSquareUsers.value[index] : {}
+	const vipUsersForCategory = computed(() => {
+		if (vipCatIndex.value === 1) return vipSquareUsers.value.filter((user: any) => Number(user.income || 0) >= 300000)
+		if (vipCatIndex.value === 2) return vipSquareUsers.value.filter((user: any) => Number(user.education_level || 0) > 0 && Number(user.education_level) <= 2)
+		if (vipCatIndex.value === 3) return vipSquareUsers.value.filter((user: any) => Number(user.age || 0) >= 27 && Number(user.age || 0) <= 31)
+		return vipSquareUsers.value
+	})
 	const toVipCard = (user: any): any => ({ id: Number(user.id || 0), name: user.name != null ? '' + user.name : '', age: user.age != null ? '' + user.age + '岁' : '', height: user.height != null ? '' + user.height + 'cm' : '', gender: user.gender != null ? '' + user.gender : '', photo: user.avatar != null ? '' + user.avatar : '' })
 	const vipCardRows = computed(() => {
 		const cards: any[] = []
-		for (let i = 0; i < squareUsers.value.length && i < 9; i++) cards.push(toVipCard(squareUsers.value[i]))
+		for (let i = 0; i < vipUsersForCategory.value.length && i < 9; i++) cards.push(toVipCard(vipUsersForCategory.value[i]))
 		const rows: any[][] = []
 		for (let i = 0; i < cards.length; i += 3) rows.push(cards.slice(i, Math.min(i + 3, cards.length)))
 		return rows
 	})
-	const vipSpots = computed(() => {
-		const spots: any[] = []
-		for (let i = 0; i < squareUsers.value.length && i < 3; i++) { const user = squareUsers.value[i]; spots.push({ name: user.name, age: user.age != null ? '' + user.age + '岁' : '', job: user.job != null ? user.job : '' }) }
-		return spots
-	})
+	const vipCardTotal = computed(() => vipUsersForCategory.value.length)
 	const filteredRecommendUsers = computed(() => recommendUsers.value)
 	const canShowRecommendUsers = computed(() => profileCompletionLoaded.value && profileCompletion.value >= 100 && recommendUsers.value.length > 0)
 	const currentRecommendIndex = ref(0)
@@ -1390,7 +1366,8 @@
 .vip-spot-desc { font-size: 24rpx; color: var(--text-muted); line-height: 1.5; }
 .vip-spot-row { display: flex; flex-direction: row; gap: 20rpx; }
 .vip-spot-card { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
-.vip-spot-photo { width: 100%; height: 200rpx; background-color: var(--bg-card-soft); display: flex; align-items: center; justify-content: center; }
+.vip-spot-photo { width: 100%; height: 200rpx; overflow: hidden; background-color: var(--bg-card-soft); display: flex; align-items: center; justify-content: center; }
+.vip-spot-photo-img { width: 100%; height: 100%; }
 .vip-spot-photo-icon { font-size: 64rpx; color: var(--text-muted); }
 .vip-spot-info { display: flex; flex-direction: column; gap: 4rpx; padding: 20rpx; }
 .vip-spot-name { font-size: 26rpx; font-weight: 600; color: var(--text-primary); }
