@@ -1,0 +1,89 @@
+<template>
+	<!-- AI 画像状态屏:功能禁用 / 授权引导 / 加载 / 空 -->
+	<view class="pss-state">
+		<!-- 功能禁用 -->
+		<view v-if="type == 'disabled'" class="pss-block">
+			<view class="pss-icon-wrap pss-icon-disabled">
+				<text class="pss-icon-glyph">⏸</text>
+			</view>
+			<text class="pss-title">AI 画像功能当前不可用</text>
+			<text class="pss-copy">你可以先通过普通编辑完善资料,稍后再使用 AI 画像</text>
+			<view class="pss-btn" @tap="emit('action')">
+				<text class="pss-btn-text">去编辑资料</text>
+			</view>
+		</view>
+
+		<!-- 授权引导 -->
+		<view v-else-if="type == 'consent'" class="pss-block">
+			<view class="pss-icon-wrap pss-icon-consent">
+				<text class="pss-icon-glyph">⊙</text>
+			</view>
+			<text class="pss-title">需要授权后才能使用画像功能</text>
+			<text class="pss-copy">{{ message }}</text>
+			<view class="pss-btn" @tap="emit('action')">
+				<text class="pss-btn-text">重新尝试</text>
+			</view>
+		</view>
+
+		<!-- 加载 -->
+		<view v-else-if="type == 'loading'" class="pss-block">
+			<view class="pss-spinner"></view>
+			<text class="pss-title">正在读取画像数据</text>
+		</view>
+
+		<!-- 空 -->
+		<view v-else-if="type == 'empty'" class="pss-block">
+			<view class="pss-icon-wrap pss-icon-empty">
+				<text class="pss-icon-glyph">◌</text>
+			</view>
+			<text class="pss-title">还没有画像数据</text>
+			<text class="pss-copy">选择对话模式开始,AI 会帮你整理画像</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+/**
+ * PortraitStateScreen - AI 画像状态屏。
+ * 统一 disabled/consent/loading/empty 四态视觉,替换原页内零散 pp-state。
+ * loading 态用旋转 spinner 替代原裸文字,空态带引导文案。
+ */
+interface Props {
+	type: 'disabled' | 'consent' | 'loading' | 'empty'
+	message?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+	message: ''
+})
+const emit = defineEmits<{
+	action: []
+}>()
+</script>
+
+<style scoped>
+.pss-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; }
+.pss-block { display: flex; flex-direction: column; align-items: center; }
+
+/* 图标圆:用 --accent/--sage 等 Token,不用 emoji */
+.pss-icon-wrap {
+	width: 56px; height: 56px; border-radius: 50%;
+	display: flex; align-items: center; justify-content: center;
+	margin-bottom: 16px;
+}
+.pss-icon-disabled { background: var(--warm); }
+.pss-icon-consent { background: rgba(56, 152, 141, 0.12); }
+.pss-icon-empty { background: var(--warm); }
+.pss-icon-glyph { font-size: 26px; color: var(--accent2); font-weight: 700; }
+
+.pss-title { font-size: 16px; font-weight: 700; color: var(--ink); text-align: center; }
+.pss-copy { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; line-height: 1.6; max-width: 280px; }
+
+.pss-btn { margin-top: 20px; padding: 10px 24px; background: var(--accent); border-radius: 10px; }
+.pss-btn:active { transform: scale(0.98); }
+.pss-btn-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+
+/* 加载 spinner:复用 VoiceRecorder 同款样式 */
+.pss-spinner { width: 28px; height: 28px; border: 2.5px solid var(--warm); border-top-color: var(--accent); border-radius: 50%; animation: pss-spin 0.7s linear infinite; margin-bottom: 16px; }
+@keyframes pss-spin { to { transform: rotate(360deg); } }
+</style>

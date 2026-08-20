@@ -1,0 +1,723 @@
+/**
+ * M04 AI 画像本地演示数据。
+ * 模拟会话、草稿、抽取结果、历史版本和任务轮询。
+ * 只用于 USE_MOCK=true 时的前端演示,不涉及真实 AI。
+ */
+
+const STORAGE_PREFIX = 'xsa-profile-mock-v1-'
+const TASK_PREFIX = 'xsa-profile-task-v1-'
+
+/** 问题库:按字段 key 映射,与后端 _PROFILE_QUESTION_BANK 对齐 */
+export const QUESTION_BANK: Map<string, any> = new Map()
+QUESTION_BANK.set('interest_tags', { id: 'interest_lifestyle_v1', text: '最近让你投入的事情是什么？' })
+QUESTION_BANK.set('city_code', { id: 'city_residence_v1', text: '你现在生活在哪座城市？' })
+QUESTION_BANK.set('marriage_status', { id: 'marriage_status_v1', text: '你目前的婚姻状态是？' })
+QUESTION_BANK.set('education_level', { id: 'education_v1', text: '你的最高学历是？' })
+QUESTION_BANK.set('height_cm', { id: 'height_v1', text: '你的身高是多少？' })
+QUESTION_BANK.set('income_band', { id: 'income_v1', text: '你的收入大概在什么范围？' })
+QUESTION_BANK.set('occupation_group', { id: 'occupation_v1', text: '你从事什么职业？' })
+QUESTION_BANK.set('lifestyle_tags', { id: 'lifestyle_v1', text: '你平时的生活方式有什么特点？' })
+QUESTION_BANK.set('relationship_goal', { id: 'relationship_goal_v1', text: '你对这段关系的期待是什么？' })
+QUESTION_BANK.set('age', { id: 'age_v1', text: '你今年多大了？' })
+
+/** 字段顺序:决定追问顺序 */
+export const FIELD_ORDER: string[] = [
+  'age', 'city_code', 'marriage_status', 'education_level', 'height_cm',
+  'income_band', 'occupation_group', 'interest_tags', 'lifestyle_tags', 'relationship_goal'
+]
+
+function success(data: any = null, message: string = 'success'): any {
+  return { success: true, data: data, code: 0, message: message }
+}
+
+function failure(message: string, code: any = -1): any {
+  return { success: false, data: null, code: code, message: message }
+}
+
+function genId(prefix: string): string {
+  return prefix + Date.now() + '-' + Math.floor(Math.random() * 1000000)
+}
+
+function sessionKey(subject: string): string {
+  return STORAGE_PREFIX + 'session-' + subject
+}
+
+function draftKey(subject: string): string {
+  return STORAGE_PREFIX + 'draft-' + subject
+}
+
+function revisionsKey(subject: string): string {
+  return STORAGE_PREFIX + 'revisions-' + subject
+}
+
+function taskKey(taskId: string): string {
+  return TASK_PREFIX + taskId
+}
+
+function readJson(key: string): any {
+  try {
+    const value = uni.getStorageSync(key)
+    if (value != null && typeof value == 'object') return value
+    return null
+  } catch (e) {
+    return null
+  }
+}
+
+function writeJson(key: string, value: any) {
+  try { uni.setStorageSync(key, value) } catch (e) { console.error('[Mock Profile] write failed', e) }
+}
+
+function removeKey(key: string) {
+  try { uni.removeStorageSync(key) } catch (e) {}
+}
+
+/** 计算已确认字段覆盖率 */
+function calcProgress(fields: any[]): number {
+  if (fields.length == 0) return 0
+  const confirmed = fields.filter((f: any) => f.confirmation_status == 'confirmed').length
+  const totalFields = FIELD_ORDER.length
+  return Math.min(1.0, confirmed / totalFields)
+}
+
+/** 找到下一个缺失字段的问题 */
+function nextQuestion(fields: any[]): any {
+  const existingKeys = new Set<string>()
+  for (let i = 0; i < fields.length; i++) {
+    const status = String(fields[i].confirmation_status)
+    if (status == 'suggested' || status == 'confirmed') {
+      existingKeys.add(String(fields[i].field_key))
+    }
+  }
+  for (let i = 0; i < FIELD_ORDER.length; i++) {
+    const key = FIELD_ORDER[i]
+    if (!existingKeys.has(key)) {
+      const q = QUESTION_BANK.get(key)
+      if (q != null) return q
+    }
+  }
+  return null
+}
+
+/** 模拟 AI 从用户回答中抽取字段 */
+function mockExtractFields(answerText: string, currentQuestionId: string): any[] {
+  const text = answerText.toLowerCase()
+  const fields: any[] = []
+
+  // 简单关键字匹配
+  if (currentQuestionId == 'age_v1' || currentQuestionId == 'age') {
+    const match = answerText.match(/[0-9]{2,3}/)
+    if (match != null) {
+      fields.push({
+        field_key: 'age',
+        subject: 'personal',
+        value: Number(match[0]),
+        display_value: match[0] + '岁',
+        source_type: 'ai_extract',
+        source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+        confidence: 0.9,
+        confirmation_status: 'suggested'
+      })
+    }
+  }
+
+  if (currentQuestionId == 'city_residence_v1' || currentQuestionId.indexOf('city') >= 0) {
+    const cities = ['北京', '上海', '广州', '深圳', '杭州', '成都', '武汉', '南京']
+    for (let i = 0; i < cities.length; i++) {
+      if (text.indexOf(cities[i].toLowerCase()) >= 0) {
+        fields.push({
+          field_key: 'city_code',
+          subject: 'personal',
+          value: cities[i],
+          display_value: cities[i],
+          source_type: 'ai_extract',
+          source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+          confidence: 0.85,
+          confirmation_status: 'suggested'
+        })
+        break
+      }
+    }
+  }
+
+  if (currentQuestionId == 'interest_lifestyle_v1' || currentQuestionId.indexOf('interest') >= 0) {
+    const tags = ['摄影', '旅行', '读书', '运动', '电影', '美食', '音乐', '徒步', '咖啡', '编程']
+    const matched: string[] = []
+    for (let i = 0; i < tags.length; i++) {
+      if (text.indexOf(tags[i].toLowerCase()) >= 0) matched.push(tags[i])
+    }
+    if (matched.length > 0) {
+      fields.push({
+        field_key: 'interest_tags',
+        subject: 'personal',
+        value: matched,
+        display_value: matched.join('、'),
+        source_type: 'ai_extract',
+        source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+        confidence: 0.8,
+        confirmation_status: 'suggested'
+      })
+    }
+  }
+
+  if (currentQuestionId == 'occupation_v1' || currentQuestionId.indexOf('occupation') >= 0) {
+    const jobs = ['设计师', '工程师', '教师', '医生', '律师', '产品经理', '运营', '销售', '财务']
+    for (let i = 0; i < jobs.length; i++) {
+      if (text.indexOf(jobs[i].toLowerCase()) >= 0) {
+        fields.push({
+          field_key: 'occupation_group',
+          subject: 'personal',
+          value: jobs[i],
+          display_value: jobs[i],
+          source_type: 'ai_extract',
+          source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+          confidence: 0.85,
+          confirmation_status: 'suggested'
+        })
+        break
+      }
+    }
+  }
+
+  if (currentQuestionId == 'height_v1' || currentQuestionId.indexOf('height') >= 0) {
+    const match = answerText.match(/[0-9]{3}/)
+    if (match != null && Number(match[0]) >= 140 && Number(match[0]) <= 220) {
+      fields.push({
+        field_key: 'height_cm',
+        subject: 'personal',
+        value: Number(match[0]),
+        display_value: match[0] + 'cm',
+        source_type: 'ai_extract',
+        source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+        confidence: 0.9,
+        confirmation_status: 'suggested'
+      })
+    }
+  }
+
+  if (currentQuestionId == 'relationship_goal_v1' || currentQuestionId.indexOf('relationship') >= 0) {
+    fields.push({
+      field_key: 'relationship_goal',
+      subject: 'personal',
+      value: answerText.substring(0, Math.min(200, answerText.length)),
+      display_value: answerText.substring(0, Math.min(50, answerText.length)),
+      source_type: 'ai_extract',
+      source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+      confidence: 0.75,
+      confirmation_status: 'suggested'
+    })
+  }
+
+  // 通用:如果没匹配到具体字段,仍然返回一个 relationship_goal
+  if (fields.length == 0 && answerText.length > 5) {
+    fields.push({
+      field_key: 'lifestyle_tags',
+      subject: 'personal',
+      value: [answerText.substring(0, Math.min(20, answerText.length))],
+      display_value: answerText.substring(0, Math.min(30, answerText.length)),
+      source_type: 'ai_extract',
+      source_quote: answerText.substring(0, Math.min(100, answerText.length)),
+      confidence: 0.6,
+      confirmation_status: 'suggested'
+    })
+  }
+
+  return fields
+}
+
+/** 创建或复用画像会话 */
+export function mockCreateProfileSession(subject: string, consentVersion: string): any {
+  const key = sessionKey(subject)
+  let session = readJson(key)
+  if (session != null && (session.status == 'draft' || session.status == 'published')) {
+    return success(session)
+  }
+
+  const sessionId = genId('session-')
+  const draftId = genId('draft-')
+  const firstField = FIELD_ORDER[0]
+  const q = QUESTION_BANK.get(firstField)
+
+  session = {
+    session_id: sessionId,
+    subject: subject,
+    status: 'draft',
+    input_mode: 'text',
+    progress: { basis: 'confirmed_field_coverage', value: 0 },
+    current_question: q != null ? { id: q.id, text: q.text, field_key: firstField } : null,
+    profile_revision: 0,
+    preference_revision: 0,
+    draft_id: draftId,
+    turns: [] as any[],
+    expires_at: null,
+    created_at: new Date().toISOString()
+  }
+  writeJson(key, session)
+
+  const draft = {
+    draft_id: draftId,
+    subject: subject,
+    status: 'draft',
+    expected_revision: 0,
+    policy_revision: 'ai-policy-2026-08-07-v1',
+    schema_version: 'profile-extract-v1',
+    fields: [] as any[],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+  writeJson(draftKey(subject), draft)
+
+  return success(session)
+}
+
+/** 查询会话 */
+export function mockGetProfileSession(sessionId: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const session = readJson(sessionKey(subjects[i]))
+    if (session != null && session.session_id == sessionId) {
+      return success(session)
+    }
+  }
+  return failure('画像会话不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 提交回答,创建抽取任务 */
+export function mockSubmitProfileTurn(sessionId: string, answerText: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  let session: any = null
+  let subject = ''
+  for (let i = 0; i < subjects.length; i++) {
+    const s = readJson(sessionKey(subjects[i]))
+    if (s != null && s.session_id == sessionId) { session = s; subject = subjects[i]; break }
+  }
+  if (session == null) return failure('画像会话不存在', 'PROFILE_SESSION_NOT_FOUND')
+  if (session.status != 'draft') return failure('会话已结束,请重新创建', 'PROFILE_SESSION_STALE')
+
+  const turnId = genId('turn-')
+  const turnNo = session.turns != null ? session.turns.length + 1 : 1
+  const currentQuestion = session.current_question != null ? session.current_question : null
+  const questionId = currentQuestion != null ? String(currentQuestion.id) : ''
+  const questionFieldKey = currentQuestion != null && currentQuestion.field_key != null ? String(currentQuestion.field_key) : ''
+
+  const turn = {
+    turn_id: turnId,
+    session_id: sessionId,
+    client_turn_id: genId('client-'),
+    turn_no: turnNo,
+    role: 'user',
+    answer_text: answerText,
+    status: 'saved',
+    question_id: questionId,
+    question_field_key: questionFieldKey,
+    created_at: new Date().toISOString()
+  }
+  if (!Array.isArray(session.turns)) session.turns = [] as any[]
+  session.turns.push(turn)
+
+  // 立即抽取(mock 无延迟)
+  const extractedFields = mockExtractFields(answerText, questionId)
+  const draft = readJson(draftKey(subject))
+  if (draft != null) {
+    // 合并新字段:跳过已有的 field_key
+    const existingKeys = new Set<string>()
+    for (let i = 0; i < draft.fields.length; i++) {
+      existingKeys.add(String(draft.fields[i].field_key))
+    }
+    for (let i = 0; i < extractedFields.length; i++) {
+      if (!existingKeys.has(String(extractedFields[i].field_key))) {
+        draft.fields.push(extractedFields[i])
+      }
+    }
+    draft.expected_revision++
+    draft.updated_at = new Date().toISOString()
+    writeJson(draftKey(subject), draft)
+    session.draft_id = draft.draft_id
+  }
+
+  // 更新 current_question
+  session.current_question = nextQuestion(draft != null ? draft.fields : [])
+  session.progress = { basis: 'confirmed_field_coverage', value: calcProgress(draft != null ? draft.fields : []) }
+  writeJson(sessionKey(subject), session)
+
+  const taskId = genId('task-')
+  const task = {
+    task_id: taskId,
+    status: 'queued',
+    stage: 'extracting',
+    poll_after_ms: 500,
+    result_ref: draft != null ? draft.draft_id : '',
+    created_at: new Date().toISOString()
+  }
+  writeJson(taskKey(taskId), task)
+
+  return success({
+    turn_id: turnId,
+    session_id: sessionId,
+    client_turn_id: turn.client_turn_id,
+    turn_no: turnNo,
+    role: 'user',
+    status: 'saved',
+    replayed: false,
+    task_id: taskId,
+    task_status: 'queued',
+    stage: 'extracting',
+    poll_after_ms: 500,
+    expires_at: null
+  })
+}
+
+/** 删除会话 */
+export function mockDeleteProfileSession(sessionId: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const session = readJson(sessionKey(subjects[i]))
+    if (session != null && session.session_id == sessionId) {
+      session.status = 'cancelled'
+      writeJson(sessionKey(subjects[i]), session)
+      return success({ task_id: genId('cleanup-'), status: 'queued', cleanup_requested: true })
+    }
+  }
+  return failure('画像会话不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 暂停画像会话(draft → paused) */
+export function mockPauseProfileSession(sessionId: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const session = readJson(sessionKey(subjects[i]))
+    if (session != null && session.session_id == sessionId) {
+      if (session.status == 'paused') return success(session)
+      session.status = 'paused'
+      session.paused_at = new Date().toISOString()
+      writeJson(sessionKey(subjects[i]), session)
+      return success(session)
+    }
+  }
+  return failure('画像会话不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 恢复画像会话(paused → draft) */
+export function mockResumeProfileSession(sessionId: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const session = readJson(sessionKey(subjects[i]))
+    if (session != null && session.session_id == sessionId) {
+      if (session.status != 'paused') return success(session)
+      session.status = 'draft'
+      session.resumed_at = new Date().toISOString()
+      writeJson(sessionKey(subjects[i]), session)
+      return success(session)
+    }
+  }
+  return failure('画像会话不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 查询草稿 */
+export function mockGetProfileDraft(draftId: string): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const draft = readJson(draftKey(subjects[i]))
+    if (draft != null && draft.draft_id == draftId) {
+      return success(draft)
+    }
+  }
+  return failure('草稿不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 逐项确认/修改/拒绝/删除草稿字段 */
+export function mockPatchProfileDraft(draftId: string, actions: any[], expectedRevision: number): any {
+  const subjects = ['personal', 'ideal_partner']
+  let draft: any = null
+  let subject = ''
+  for (let i = 0; i < subjects.length; i++) {
+    const d = readJson(draftKey(subjects[i]))
+    if (d != null && d.draft_id == draftId) { draft = d; subject = subjects[i]; break }
+  }
+  if (draft == null) return failure('草稿不存在', 'PROFILE_SESSION_NOT_FOUND')
+  if (draft.expected_revision != expectedRevision) return failure('草稿已被更新,请刷新后合并', 'DRAFT_VERSION_CONFLICT')
+
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i]
+    const fieldKey = String(action.field_key)
+    const act = String(action.action)
+
+    let field = null
+    for (let j = 0; j < draft.fields.length; j++) {
+      if (String(draft.fields[j].field_key) == fieldKey) { field = draft.fields[j]; break }
+    }
+
+    if (field == null && act != 'delete') {
+      // 新字段(replace 到不存在字段时创建)
+      if (act == 'replace' && action.value != null) {
+        draft.fields.push({
+          field_key: fieldKey,
+          subject: subject,
+          value: action.value,
+          display_value: typeof action.value == 'string' ? action.value : (Array.isArray(action.value) ? action.value.join('、') : String(action.value)),
+          source_type: 'user_input',
+          source_quote: '',
+          confidence: 1.0,
+          confirmation_status: 'confirmed'
+        })
+      }
+      continue
+    }
+
+    if (field == null) continue
+
+    if (act == 'confirm') {
+      field.confirmation_status = 'confirmed'
+    } else if (act == 'replace') {
+      field.value = action.value
+      field.display_value = typeof action.value == 'string' ? action.value : (Array.isArray(action.value) ? action.value.join('、') : String(action.value))
+      field.confirmation_status = 'confirmed'
+      field.source_type = 'user_edited'
+    } else if (act == 'reject') {
+      field.confirmation_status = 'rejected'
+    } else if (act == 'delete') {
+      field.confirmation_status = 'deleted'
+    }
+  }
+
+  // 清理 deleted 字段
+  draft.fields = draft.fields.filter((f: any) => f.confirmation_status != 'deleted')
+  draft.expected_revision++
+  draft.updated_at = new Date().toISOString()
+  writeJson(draftKey(subject), draft)
+
+  // 更新 session 进度
+  const session = readJson(sessionKey(subject))
+  if (session != null) {
+    session.progress = { basis: 'confirmed_field_coverage', value: calcProgress(draft.fields) }
+    session.current_question = nextQuestion(draft.fields)
+    writeJson(sessionKey(subject), session)
+  }
+
+  return success(draft)
+}
+
+/** 发布已确认字段 */
+export function mockPublishProfileDraft(draftId: string, expectedRevision: number): any {
+  const subjects = ['personal', 'ideal_partner']
+  let draft: any = null
+  let subject = ''
+  for (let i = 0; i < subjects.length; i++) {
+    const d = readJson(draftKey(subjects[i]))
+    if (d != null && d.draft_id == draftId) { draft = d; subject = subjects[i]; break }
+  }
+  if (draft == null) return failure('草稿不存在', 'PROFILE_SESSION_NOT_FOUND')
+  if (draft.expected_revision != expectedRevision) return failure('草稿已被更新,请刷新后合并', 'DRAFT_VERSION_CONFLICT')
+
+  const confirmedFields = draft.fields.filter((f: any) => f.confirmation_status == 'confirmed')
+  if (confirmedFields.length == 0) return failure('至少确认一个字段后才能发布', 'AI_INPUT_INVALID')
+
+  // 创建不可变版本
+  const revisions = readJson(revisionsKey(subject))
+  const revisionList = revisions != null && Array.isArray(revisions.items) ? revisions.items : []
+  const revisionNo = revisionList.length + 1
+  const revisionId = Date.now()
+  revisionList.unshift({
+    revision_id: revisionId,
+    subject: subject,
+    revision_no: revisionNo,
+    policy_revision: draft.policy_revision,
+    field_count: confirmedFields.length,
+    published_at: new Date().toISOString(),
+    fields: confirmedFields.map((f: any) => ({
+      field_key: f.field_key,
+      subject: f.subject,
+      value: f.value,
+      confidence: f.confidence,
+      content_hash: ''
+    }))
+  })
+  writeJson(revisionsKey(subject), { items: revisionList })
+
+  // 更新 session
+  const session = readJson(sessionKey(subject))
+  if (session != null) {
+    session.status = 'published'
+    if (subject == 'personal') session.profile_revision = revisionNo
+    else session.preference_revision = revisionNo
+    writeJson(sessionKey(subject), session)
+  }
+
+  return success({
+    task_id: genId('task-'),
+    status: 'succeeded',
+    stage: null,
+    poll_after_ms: 0,
+    expires_at: null,
+    replayed: false,
+    revision_id: revisionId,
+    revision_no: revisionNo,
+    subject: subject,
+    field_count: confirmedFields.length
+  })
+}
+
+/** 查询发布版本历史 */
+export function mockListProfileRevisions(cursor: string, limit: number): any {
+  const allRevisions: any[] = []
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const revisions = readJson(revisionsKey(subjects[i]))
+    if (revisions != null && Array.isArray(revisions.items)) {
+      for (let j = 0; j < revisions.items.length; j++) {
+        allRevisions.push(revisions.items[j])
+      }
+    }
+  }
+  allRevisions.sort((a: any, b: any) => b.revision_id - a.revision_id)
+  const start = cursor != '' ? Number(cursor) : 0
+  const end = Math.min(start + limit, allRevisions.length)
+  const page = allRevisions.slice(start, end)
+  const nextCursor = end < allRevisions.length ? String(end) : null
+  return success({ items: page, next_cursor: nextCursor })
+}
+
+/** 从历史版本恢复为新草稿 */
+export function mockRestoreProfileRevision(revisionId: number): any {
+  const subjects = ['personal', 'ideal_partner']
+  for (let i = 0; i < subjects.length; i++) {
+    const revisions = readJson(revisionsKey(subjects[i]))
+    if (revisions != null && Array.isArray(revisions.items)) {
+      for (let j = 0; j < revisions.items.length; j++) {
+        if (revisions.items[j].revision_id == revisionId) {
+          const oldRevision = revisions.items[j]
+          const draftId = genId('draft-')
+          const restoredFields = oldRevision.fields.map((f: any) => ({
+            field_key: f.field_key,
+            subject: f.subject,
+            value: f.value,
+            display_value: typeof f.value == 'string' ? f.value : (Array.isArray(f.value) ? f.value.join('、') : String(f.value)),
+            source_type: 'restored',
+            source_quote: '',
+            confidence: f.confidence != null ? f.confidence : 0.8,
+            confirmation_status: 'suggested'
+          }))
+          const draft = {
+            draft_id: draftId,
+            subject: subjects[i],
+            status: 'draft',
+            expected_revision: 0,
+            policy_revision: oldRevision.policy_revision,
+            schema_version: 'profile-extract-v1',
+            fields: restoredFields,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+          writeJson(draftKey(subjects[i]), draft)
+
+          // 更新 session
+          const session = readJson(sessionKey(subjects[i]))
+          if (session != null) {
+            session.status = 'draft'
+            session.draft_id = draftId
+            session.current_question = nextQuestion(restoredFields)
+            session.progress = { basis: 'confirmed_field_coverage', value: 0 }
+            writeJson(sessionKey(subjects[i]), session)
+          }
+
+          return success(draft)
+        }
+      }
+    }
+  }
+  return failure('版本不存在', 'PROFILE_SESSION_NOT_FOUND')
+}
+
+/** 删除整个画像 */
+export function mockDeleteAiProfile(subject: string): any {
+  removeKey(sessionKey(subject))
+  removeKey(draftKey(subject))
+  // 历史版本保留(只读)
+  return success({ task_id: genId('cleanup-'), status: 'queued', cleanup_requested: true })
+}
+
+/** 删除画像单个字段 */
+export function mockDeleteAiProfileField(subject: string, fieldKey: string): any {
+  const draft = readJson(draftKey(subject))
+  if (draft != null && Array.isArray(draft.fields)) {
+    draft.fields = draft.fields.filter((f: any) => String(f.field_key) != fieldKey)
+    draft.expected_revision++
+    writeJson(draftKey(subject), draft)
+  }
+  return success({ task_id: genId('cleanup-'), status: 'queued', cleanup_requested: true })
+}
+
+/** 轮询任务状态 */
+export function mockPollTask(taskId: string): any {
+  const task = readJson(taskKey(taskId))
+  if (task == null) return failure('任务不存在', 'TASK_NOT_FOUND')
+
+  // 模拟异步:第一次 queued,第二次 succeeded
+  if (task.status == 'queued' || task.status == 'leased' || task.status == 'running') {
+    task.status = 'succeeded'
+    task.finished_at = new Date().toISOString()
+    writeJson(taskKey(taskId), task)
+  }
+
+  return success(task)
+}
+
+/**
+ * 画像叙事层 mock(后端待交付)。
+ * 返回统一结构:persona_title / persona_tags / insight / dimensions / ideal_weights / recent_change / history_observations
+ * 文案遵守红线:不承诺关系结果,不制造焦虑。
+ */
+export function mockGetPortraitNarrative(subject: string): any {
+  if (subject == 'ideal_partner') {
+    return success({
+      persona_title: '温柔稳定且拥有自己世界的人',
+      persona_tags: ['真诚', '稳定', '有目标', '边界感', '愿意沟通'],
+      insight: '你更看重对方在重要时刻的回应,而不是日常的高频陪伴。',
+      dimensions: [
+        { key: 'relationship', icon: '♡', title: '感情观', summary: '希望建立稳定、长期,但彼此保留个人空间的关系。' },
+        { key: 'personality', icon: '☀', title: '性格', summary: '期待对方情绪稳定,熟悉以后愿意表达。' },
+        { key: 'lifestyle', icon: '⌂', title: '生活方式', summary: '希望对方有相对规律、安静、有自己节奏的生活。' },
+        { key: 'future', icon: '↗', title: '人生规划', summary: '希望另一半也拥有自己的目标与方向。' }
+      ],
+      ideal_weights: [
+        { key: 'values', label: '价值观', percent: 92 },
+        { key: 'communication', label: '沟通方式', percent: 88 },
+        { key: 'emotion', label: '情绪稳定', percent: 84 },
+        { key: 'lifestyle', label: '生活节奏', percent: 73 },
+        { key: 'appearance', label: '外在条件', percent: 41 }
+      ],
+      recent_change: {
+        direction: 'up',
+        summary: '比三个月前,你现在更看重「稳定」',
+        observation: '过去你更容易被有趣吸引,现在你开始更加关注长期相处是否舒服。'
+      },
+      history_observations: [
+        { revision_id: 0, keywords: ['稳定', '长期主义', '边界感'], observation: '你现在比以前更加确定自己想要怎样的关系。' },
+        { revision_id: 0, keywords: ['探索', '自由', '社交'], observation: '这个阶段你更希望通过新的关系认识自己。' },
+        { revision_id: 0, keywords: ['慢热', '谨慎', '独立'], observation: '你在这个阶段更习惯先观察再靠近。' }
+      ]
+    })
+  }
+  return success({
+    persona_title: '慢热但真诚的长期主义者',
+    persona_tags: ['慢热', '真诚', '边界感', '长期主义'],
+    insight: '你看起来并不依赖高频陪伴,但对于重要的人,你希望彼此能够真正回应。',
+    dimensions: [
+      { key: 'relationship', icon: '♡', title: '感情观', summary: '希望建立稳定、长期,但彼此保留个人空间的关系。' },
+      { key: 'personality', icon: '☀', title: '性格', summary: '慢热,熟悉以后表达欲明显增加。' },
+      { key: 'lifestyle', icon: '⌂', title: '生活方式', summary: '喜欢相对规律、安静、有自己节奏的生活。' },
+      { key: 'future', icon: '↗', title: '人生规划', summary: '对未来有比较明确的方向,希望另一半也拥有自己的目标。' }
+    ],
+    ideal_weights: [],
+    recent_change: {
+      direction: 'up',
+      summary: '比三个月前,你现在更看重「稳定」',
+      observation: '过去你更容易被有趣吸引,现在你开始更加关注长期相处是否舒服。'
+    },
+    history_observations: [
+      { revision_id: 0, keywords: ['稳定', '长期主义', '边界感'], observation: '你现在比以前更加确定自己想要怎样的关系。' },
+      { revision_id: 0, keywords: ['探索', '自由', '社交'], observation: '这个阶段你更希望通过新的关系认识自己。' },
+      { revision_id: 0, keywords: ['慢热', '谨慎', '独立'], observation: '你在这个阶段更习惯先观察再靠近。' }
+    ]
+  })
+}

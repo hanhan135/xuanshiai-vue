@@ -1,0 +1,1224 @@
+<template>
+	<view class="portrait-page">
+		<!-- 导航栏 -->
+		<view class="pp-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="pp-nav-side" @tap="back">
+				<text class="pp-back">‹</text>
+			</view>
+			<text class="pp-nav-title">AI 画像</text>
+			<view class="pp-nav-side" @tap="openHistory">
+				<text class="pp-nav-history">历史</text>
+			</view>
+		</view>
+
+		<!-- 主体 Tab -->
+		<view class="pp-tabs">
+			<view class="pp-tab" :class="{ 'pp-tab-active': subject == 'personal' }" @tap="switchSubject('personal')">
+				<text class="pp-tab-text" :class="{ 'pp-tab-text-active': subject == 'personal' }">关于我</text>
+			</view>
+			<view class="pp-tab" :class="{ 'pp-tab-active': subject == 'ideal_partner' }" @tap="switchSubject('ideal_partner')">
+				<text class="pp-tab-text" :class="{ 'pp-tab-text-active': subject == 'ideal_partner' }">关于对方</text>
+			</view>
+		</view>
+
+		<!-- 进度条 -->
+		<view class="pp-progress-bar">
+			<view class="pp-progress-row">
+				<view class="pp-progress-track">
+					<view class="pp-progress-fill" :style="{ width: progressPercent + '%' }"></view>
+				</view>
+				<view v-if="session != null && !showModeSelect" class="pp-pause-btn" @tap="togglePause">
+					<text class="pp-pause-text">{{ paused ? '继续' : '暂停' }}</text>
+				</view>
+			</view>
+			<text class="pp-progress-text">{{ progressPercent }}% · {{ progressGuide }}</text>
+		</view>
+
+		<!-- 顶部 AI Orb(仅主内容态展示) -->
+		<view v-if="!featureDisabled && !consentRequired && !loading && !showModeSelect" class="pp-orb-zone">
+			<PortraitOrb size="small" :breathing="true" />
+			<text class="pp-orb-status">{{ orbStatusText }}</text>
+		</view>
+
+		<!-- 功能禁用态 -->
+		<view v-if="featureDisabled" class="pp-state">
+			<text class="pp-state-title">AI 画像功能当前不可用</text>
+			<text class="pp-state-copy">你可以先通过普通编辑完善资料,稍后再使用 AI 画像</text>
+			<view class="pp-state-btn" @tap="goEditProfile">
+				<text class="pp-state-btn-text">去编辑资料</text>
+			</view>
+		</view>
+
+		<!-- 授权引导态 -->
+		<view v-else-if="consentRequired" class="pp-state">
+			<text class="pp-state-title">需要授权后才能使用画像功能</text>
+			<text class="pp-state-copy">{{ consentMessage }}</text>
+			<view class="pp-state-btn" @tap="loadSession">
+				<text class="pp-state-btn-text">重新尝试</text>
+			</view>
+		</view>
+
+		<!-- 加载态 -->
+		<view v-else-if="loading" class="pp-state">
+			<text class="pp-state-title">正在读取画像数据</text>
+		</view>
+
+		<!-- 主内容区 -->
+		<view v-else class="pp-body">
+			<!-- 生成过渡屏(首次发布时) -->
+			<view v-if="showGenerating" class="pp-generating">
+				<PortraitOrb size="large" :breathing="true" />
+				<text class="pp-generating-title">正在整理 {{ confirmedCount }} 条信息</text>
+				<view class="pp-generating-steps">
+					<view v-for="(step, si) in generatingSteps" :key="si" class="pp-gen-step">
+						<text class="pp-gen-check">✓</text>
+						<text class="pp-gen-step-text">{{ step }}</text>
+					</view>
+				</view>
+				<text v-if="narrative != null && narrative.insight != null" class="pp-generating-summary">
+					{{ narrative.insight }}
+				</text>
+			</view>
+
+			<!-- 模式选择(仅首次进入时展示) -->
+			<view v-else-if="showModeSelect" class="pp-mode-select">
+				<text class="pp-mode-title">选择对话模式</text>
+				<text class="pp-mode-sub">用对话替代填表,AI 帮你整理结构化画像</text>
+				<view class="pp-mode-actions">
+					<view class="pp-mode-btn pp-mode-text-btn" @tap="startTextSession">
+						<text class="pp-mode-btn-icon">📝</text>
+						<text class="pp-mode-btn-name">文字模式</text>
+						<text class="pp-mode-btn-desc">用文字回答问题</text>
+					</view>
+					<view class="pp-mode-btn pp-mode-voice-btn" @tap="startVoiceSession">
+						<text class="pp-mode-btn-icon">🎤</text>
+						<text class="pp-mode-btn-name">语音模式</text>
+						<text class="pp-mode-btn-desc">长按说话,更自然</text>
+					</view>
+				</view>
+			</view>
+
+			<!-- 对话流 -->
+			<scroll-view v-else scroll-y class="pp-chat-flow" enhanced show-scrollbar="false" :scroll-into-view="scrollAnchor">
+				<view v-if="messages.length == 0 && session == null" class="pp-empty">
+					<text class="pp-empty-title">还没有画像数据</text>
+					<text class="pp-empty-sub">点击上方按钮开始对话,AI 会帮你整理画像</text>
+				</view>
+
+				<view v-for="(msg, idx) in messages" :key="msg.id" :id="'msg-' + msg.id">
+					<!-- AI 问题气泡(左) -->
+					<view v-if="msg.type == 'question'" class="pp-msg pp-msg-left">
+						<view class="pp-bubble pp-bubble-ai">
+							<text class="pp-bubble-text">{{ msg.text }}</text>
+							<!-- 枚举字段选项按钮 -->
+							<view v-if="msg.options != null && msg.options.length > 0" class="pp-options">
+								<view
+									v-for="opt in msg.options"
+									:key="opt"
+									class="pp-option-chip"
+									:class="{ selected: answerText == opt }"
+									@tap="answerText = opt"
+								>
+									<text class="pp-option-chip-text">{{ opt }}</text>
+								</view>
+							</view>
+						</view>
+					</view>
+
+					<!-- 用户回答气泡(右) -->
+					<view v-if="msg.type == 'answer'" class="pp-msg pp-msg-right">
+						<view class="pp-bubble pp-bubble-user">
+							<text class="pp-bubble-text">{{ msg.text }}</text>
+						</view>
+					</view>
+
+					<!-- 打字指示器 -->
+					<view v-if="msg.type == 'typing'" class="pp-msg pp-msg-left">
+						<view class="pp-bubble pp-bubble-ai pp-typing">
+							<view class="pp-dot"></view>
+							<view class="pp-dot"></view>
+							<view class="pp-dot"></view>
+							<text class="pp-typing-text">{{ msg.text }}</text>
+						</view>
+					</view>
+
+					<!-- 系统提示 -->
+					<view v-if="msg.type == 'system'" class="pp-msg pp-msg-system">
+						<text class="pp-system-text">{{ msg.text }}</text>
+					</view>
+
+					<!-- 字段卡片(内嵌) -->
+					<view v-if="msg.type == 'field'" class="pp-msg pp-msg-field">
+						<XsaPortraitField
+							:field="msg.field"
+							:fieldLabel="msg.label"
+							@confirm="onFieldConfirm"
+							@edit="onFieldEdit"
+							@reject="onFieldReject"
+							@delete="onFieldDelete"
+						/>
+					</view>
+
+					<!-- 发布成功提示 -->
+					<view v-if="msg.type == 'published'" class="pp-msg pp-msg-system">
+						<text class="pp-system-text">✓ 画像已发布 · 版本 {{ msg.revision }} · {{ msg.fieldCount }} 个字段</text>
+					</view>
+				</view>
+				<view class="pp-chat-spacer"></view>
+			</scroll-view>
+
+			<!-- 叙事层区块(后端待交付,mock 占位) -->
+			<scroll-view v-if="!showModeSelect && !showGenerating" scroll-y class="pp-narrative-scroll">
+				<!-- AI 洞察 -->
+				<view v-if="showInsight" class="pp-insight">
+					<text class="pp-insight-label">AI 对你的理解</text>
+					<text class="pp-insight-text">{{ narrative.insight }}</text>
+					<view class="pp-insight-more" @tap="showInsightDetail">
+						<text class="pp-insight-more-text">查看完整分析 →</text>
+					</view>
+				</view>
+
+				<!-- 维度卡片 -->
+				<view v-if="showDimensions" class="pp-dimensions">
+					<view
+						v-for="dim in narrative.dimensions"
+						:key="dim.key"
+						class="pp-dim-card"
+						@tap="showDimensionDetail(dim.title)"
+					>
+						<text class="pp-dim-icon">{{ dim.icon }}</text>
+						<view class="pp-dim-main">
+							<text class="pp-dim-title">{{ dim.title }}</text>
+							<text class="pp-dim-summary">{{ dim.summary }}</text>
+						</view>
+						<text class="pp-dim-arrow">›</text>
+					</view>
+				</view>
+
+				<!-- 理想型百分比(关于对方) -->
+				<view v-if="showIdealWeights" class="pp-weights">
+					<text class="pp-weights-title">你更看重</text>
+					<view
+						v-for="w in narrative.ideal_weights"
+						:key="w.key"
+						class="pp-weight-row"
+					>
+						<text class="pp-weight-label">{{ w.label }}</text>
+						<view class="pp-weight-track">
+							<view class="pp-weight-fill" :style="{ width: w.percent + '%' }"></view>
+						</view>
+						<text class="pp-weight-percent">{{ w.percent }}%</text>
+					</view>
+				</view>
+
+				<!-- 最近的变化 -->
+				<view v-if="showRecentChange" class="pp-change">
+					<text class="pp-change-title">最近的变化</text>
+					<text class="pp-change-summary">{{ narrative.recent_change.direction == 'up' ? '↑' : '↓' }} {{ narrative.recent_change.summary }}</text>
+					<text class="pp-change-obs">{{ narrative.recent_change.observation }}</text>
+					<view class="pp-change-more" @tap="openHistory">
+						<text class="pp-change-more-text">查看画像变化 →</text>
+					</view>
+				</view>
+			</scroll-view>
+
+			<!-- 底部操作栏 -->
+			<view v-if="!showModeSelect && !featureDisabled && !consentRequired" class="pp-input-bar">
+				<!-- 转写确认态(语音模式) -->
+				<view v-if="voiceMode && transcribeText != ''" class="pp-input-row pp-transcribe-row">
+					<view class="pp-transcribe-card">
+						<text class="pp-transcribe-label">语音转写结果</text>
+						<textarea
+							class="pp-transcribe-input"
+							:value="transcribeText"
+							@input="onTranscribeInput"
+							maxlength="2000"
+							:show-confirm-bar="false"
+							:disable-default-padding="true"
+							:cursor-spacing="16"
+						/>
+						<view class="pp-transcribe-foot">
+							<view class="pp-transcribe-retry" @tap="retryVoice">
+								<text class="pp-transcribe-retry-text">重新录音</text>
+							</view>
+							<view class="pp-transcribe-confirm" @tap="confirmTranscribe">
+								<text class="pp-transcribe-confirm-text">确认回答</text>
+							</view>
+						</view>
+					</view>
+				</view>
+
+				<!-- 语音输入态 -->
+				<view v-else-if="voiceMode && currentQuestion != null && !extracting && !publishing" class="pp-voice-area">
+					<VoiceRecorder
+						ref="voiceRecorderRef"
+						:questionText="currentQuestionText"
+						:questionFieldKey="currentQuestionFieldKey"
+						:autoSpeak="true"
+						@transcribed="onTranscribed"
+						@cancelled="onVoiceCancelled"
+					/>
+					<view class="pp-mode-switch" @tap="switchToText">
+						<text class="pp-mode-switch-text">切换为文字模式</text>
+					</view>
+				</view>
+
+				<!-- 文字输入态 -->
+				<view v-else-if="!voiceMode && currentQuestion != null && !extracting && !publishing" class="pp-input-row">
+					<input
+						class="pp-input"
+						:value="answerText"
+						@input="onAnswerInput"
+						:placeholder="inputPlaceholder"
+						placeholder-class="pp-ph"
+						maxlength="2000"
+						:cursor-spacing="16"
+					/>
+					<view
+						class="pp-send-btn"
+						:class="{ 'pp-send-ready': answerText.trim().length > 0 }"
+						@tap="submitAnswer"
+					>
+						<text class="pp-send-text">发送</text>
+					</view>
+					<view class="pp-mode-switch pp-mode-switch-inline" @tap="switchToVoice" v-if="!voiceMode">
+						<text class="pp-mode-switch-text">🎤</text>
+					</view>
+				</view>
+
+				<!-- 抽取中态 -->
+				<view v-if="extracting" class="pp-input-row">
+					<view class="pp-bar-status">
+						<text class="pp-bar-status-text">AI 正在整理你的回答...</text>
+					</view>
+				</view>
+
+				<!-- 发布态 -->
+				<view v-if="confirmedCount > 0 && !extracting" class="pp-input-row pp-publish-row">
+					<text class="pp-publish-info">已确认 {{ confirmedCount }} 个字段</text>
+					<view
+						class="pp-publish-btn"
+						:class="{ 'pp-publish-ready': !publishing }"
+						@tap="publishDraft"
+					>
+						<text class="pp-publish-text">{{ publishing ? '发布中...' : '发布画像' }}</text>
+					</view>
+				</view>
+			</view>
+		</view>
+
+		<!-- 历史版本弹窗(升级为时间线叙事) -->
+		<PortraitHistorySheet
+			:visible="historyVisible"
+			:loading="historyLoading"
+			:items="historyItems"
+			:subject="subject"
+			:observations="historyObservations"
+			@close="closeHistory"
+			@restore="restoreRevision"
+		/>
+	</view>
+</template>
+
+<script setup lang="uts">
+import {
+	createProfileSession,
+	getProfileSession,
+	submitProfileTurn,
+	getProfileDraft,
+	patchProfileDraft,
+	publishProfileDraft,
+	listProfileRevisions,
+	restoreProfileRevision,
+	pauseProfileSession,
+	resumeProfileSession,
+	getPortraitNarrative,
+	pollExtractionAndLoadDraft,
+	fieldAction,
+	fieldLabel,
+	mapProfileError,
+	ENUM_FIELDS,
+	ENUM_OPTIONS
+} from '@/api/ai-profile.uts'
+import VoiceRecorder from '@/components/VoiceRecorder.uvue'
+import XsaPortraitField from '@/components/XsaPortraitField.uvue'
+import PortraitOrb from '@/components/PortraitOrb.uvue'
+import PortraitHistorySheet from '@/components/PortraitHistorySheet.uvue'
+
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+
+const subject = ref('personal')
+const loading = ref(true)
+const featureDisabled = ref(false)
+const consentRequired = ref(false)
+const consentMessage = ref('')
+const showModeSelect = ref(true)
+const session = ref<any>(null)
+const draft = ref<any>(null)
+const messages = ref<any[]>([])
+const answerText = ref('')
+const currentQuestion = ref<any>(null)
+const extracting = ref(false)
+const publishing = ref(false)
+const scrollAnchor = ref('')
+const historyVisible = ref(false)
+const historyLoading = ref(false)
+const historyItems = ref<any[]>([])
+const voiceMode = ref(false)
+const transcribeText = ref('')
+const voiceRecorderRef = ref<any>(null)
+const narrative = ref<any>(null)
+const paused = ref(false)
+const showGenerating = ref(false)
+const generatingSteps = ref<string[]>([])
+const historyObservations = ref<any[]>([])
+
+const currentQuestionText = computed(() => {
+	const q = currentQuestion.value
+	if (q != null && q.text != null) return String(q.text)
+	return ''
+})
+
+const currentQuestionFieldKey = computed(() => {
+	const q = currentQuestion.value
+	if (q != null && q.field_key != null) return String(q.field_key)
+	return ''
+})
+
+const inputPlaceholder = computed(() => {
+	const q = currentQuestion.value
+	if (q != null && q.text != null) return '回答: ' + String(q.text)
+	return '输入你的回答'
+})
+
+const confirmedCount = computed(() => {
+	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
+	return draft.value.fields.filter((f: any) => f.confirmation_status == 'confirmed').length
+})
+
+const progressValue = computed(() => {
+	if (session.value != null && session.value.progress != null && session.value.progress.value != null) {
+		return Number(session.value.progress.value)
+	}
+	return 0
+})
+
+const progressPercent = computed(() => Math.round(progressValue.value * 100))
+
+const progressGuide = computed(() => {
+	const count = confirmedCount.value
+	if (count == 0) return '回答几个问题,让 AI 帮你整理画像'
+	if (progressValue.value >= 0.67) return '已可生成草稿,确认后即可发布画像'
+	if (count > 5) return '已收集 ' + count + ' 个字段,继续说说你的生活'
+	return '已收集 ' + count + ' 个字段,继续说说你的生活'
+})
+
+const orbStatusText = computed(() => {
+	const fk = currentQuestionFieldKey.value
+	if (fk == 'interest_tags' || fk == 'lifestyle_tags') return '正在理解你的生活方式'
+	if (fk == 'occupation_group') return '正在理解你的生活节奏'
+	if (fk == 'relationship_goal' || fk == 'marriage_status') return '正在理解你的关系观'
+	if (fk == 'age' || fk == 'education_level' || fk == 'height_cm' || fk == 'income_band') return '正在理解你的基本信息'
+	if (fk == 'city_code') return '正在理解你的生活圈'
+	return '正在理解你'
+})
+
+const showInsight = computed(() => {
+	return draft.value != null && confirmedCount.value >= 2 && narrative.value != null
+})
+
+const showDimensions = computed(() => {
+	return draft.value != null && confirmedCount.value >= 3 && narrative.value != null && narrative.value.dimensions != null
+})
+
+const showIdealWeights = computed(() => {
+	return subject.value == 'ideal_partner' && narrative.value != null && narrative.value.ideal_weights != null && narrative.value.ideal_weights.length > 0
+})
+
+const showRecentChange = computed(() => {
+	return narrative.value != null && narrative.value.recent_change != null
+})
+
+const back = () => { uni.navigateBack({ delta: 1 }) }
+
+const switchSubject = (newSubject: string) => {
+	if (subject.value == newSubject) return
+	subject.value = newSubject
+	messages.value = []
+	session.value = null
+	draft.value = null
+	narrative.value = null
+	paused.value = false
+	currentQuestion.value = null
+	answerText.value = ''
+	transcribeText.value = ''
+	voiceMode.value = false
+	showModeSelect.value = true
+	loading.value = false
+	loadSession()
+}
+
+const loadNarrative = async () => {
+	try {
+		const res = await getPortraitNarrative(subject.value)
+		if (res.success && res.data != null) {
+			narrative.value = res.data
+			if (res.data.history_observations != null && Array.isArray(res.data.history_observations)) {
+				historyObservations.value = res.data.history_observations
+			}
+		}
+	} catch (e) {
+		// 叙事层为 mock 占位(后端待交付),失败不阻断主流程
+		console.error('[Portrait] loadNarrative failed', e)
+	}
+}
+
+const togglePause = async () => {
+	if (session.value == null) return
+	const sid = String(session.value.session_id)
+	try {
+		if (paused.value) {
+			const res = await resumeProfileSession(sid)
+			if (res.success && res.data != null) {
+				session.value = res.data
+				paused.value = false
+			}
+		} else {
+			const res = await pauseProfileSession(sid)
+			if (res.success && res.data != null) {
+				session.value = res.data
+				paused.value = true
+			}
+		}
+	} catch (e) {
+		uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+	}
+}
+
+const runGeneratingTransition = (revisionNo: number, fieldCount: number) => {
+	// 首次发布生成过渡(mock 驱动,叙事层后端待交付)
+	showGenerating.value = true
+	generatingSteps.value = []
+	const steps = ['性格倾向', '情感需求', '生活节奏', '价值观', '未来规划']
+	let i = 0
+	const tick = () => {
+		if (i < steps.length) {
+			generatingSteps.value.push(steps[i])
+			i++
+			setTimeout(tick, 350)
+		} else {
+			setTimeout(() => {
+				showGenerating.value = false
+				messages.value.push({
+					id: 'published-' + Date.now(),
+					type: 'published',
+					revision: revisionNo,
+					fieldCount: fieldCount
+				})
+				scrollToBottom()
+				uni.showToast({ title: '画像发布成功', icon: 'success' })
+			}, 800)
+		}
+	}
+	setTimeout(tick, 400)
+}
+
+const loadSession = async () => {
+	loading.value = true
+	featureDisabled.value = false
+	consentRequired.value = false
+	try {
+		const res = await createProfileSession(subject.value)
+		if (!res.success || res.data == null) {
+			const code = String(res.code != null ? res.code : '')
+			if (code == 'AI_FEATURE_DISABLED' || res.code == 503) {
+				featureDisabled.value = true
+			} else if (code == 'AI_CONSENT_REQUIRED' || res.code == 403) {
+				consentRequired.value = true
+				consentMessage.value = mapProfileError(code, String(res.message))
+			} else {
+				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+				showModeSelect.value = true
+			}
+			loading.value = false
+			return
+		}
+		session.value = res.data
+		const status = String(res.data.status != null ? res.data.status : '')
+		paused.value = (status == 'paused')
+		await loadNarrative()
+		if (status == 'draft' && res.data.current_question != null) {
+			await loadDraftAndRebuildFlow()
+		} else if (status == 'published') {
+			if (res.data.draft_id != null && res.data.draft_id != '') {
+				await loadDraftAndRebuildFlow()
+			} else {
+				addSystemMessage('画像已发布,可点击「历史」查看或恢复')
+			}
+		}
+	} catch (e) {
+		uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+	} finally {
+		loading.value = false
+	}
+}
+
+const loadDraftAndRebuildFlow = async () => {
+	if (session.value == null) return
+	const draftId = session.value.draft_id
+	if (draftId == null || draftId == '') {
+		// 无 draft,只有对话
+		if (session.value.current_question != null) {
+			currentQuestion.value = session.value.current_question
+			addQuestionMessage(session.value.current_question)
+		}
+		return
+	}
+
+	try {
+		const draftRes = await getProfileDraft(String(draftId))
+		if (draftRes.success && draftRes.data != null) {
+			draft.value = draftRes.data
+			rebuildMessageFlow()
+		}
+	} catch (e) {
+		console.error('[Portrait] loadDraft failed', e)
+	}
+
+	if (session.value.current_question != null) {
+		currentQuestion.value = session.value.current_question
+		addQuestionMessage(session.value.current_question)
+	}
+}
+
+const rebuildMessageFlow = () => {
+	messages.value = []
+	if (draft.value == null || !Array.isArray(draft.value.fields)) return
+	const fields = draft.value.fields
+	for (let i = 0; i < fields.length; i++) {
+		const f = fields[i]
+		if (f.confirmation_status == 'deleted') continue
+		messages.value.push({
+			id: 'field-' + String(f.field_key) + '-' + i,
+			type: 'field',
+			field: f,
+			label: fieldLabel(String(f.field_key))
+		})
+	}
+	scrollToBottom()
+}
+
+const startTextSession = async () => {
+	voiceMode.value = false
+	showModeSelect.value = false
+	if (session.value == null) {
+		await loadSession()
+		return
+	}
+	if (session.value.current_question != null) {
+		currentQuestion.value = session.value.current_question
+		addTypingMessage('正在思考...', 600, () => {
+			addQuestionMessage(session.value.current_question)
+		})
+	}
+}
+
+const startVoiceSession = async () => {
+	voiceMode.value = true
+	showModeSelect.value = false
+	if (session.value == null) {
+		await loadSession()
+		return
+	}
+	if (session.value.current_question != null) {
+		currentQuestion.value = session.value.current_question
+		addQuestionMessage(session.value.current_question)
+	}
+}
+
+const switchToText = () => {
+	if (voiceRecorderRef.value != null) voiceRecorderRef.value.reset()
+	voiceMode.value = false
+	transcribeText.value = ''
+}
+
+const switchToVoice = () => {
+	voiceMode.value = true
+	transcribeText.value = ''
+	if (voiceRecorderRef.value != null && currentQuestion.value != null) {
+		voiceRecorderRef.value.startSpeaking()
+	}
+}
+
+const onTranscribed = (text: string) => {
+	transcribeText.value = text
+}
+
+const onVoiceCancelled = () => {
+	transcribeText.value = ''
+}
+
+const onTranscribeInput = (e: any) => {
+	transcribeText.value = e.detail.value
+}
+
+const retryVoice = () => {
+	transcribeText.value = ''
+	if (voiceRecorderRef.value != null) {
+		voiceRecorderRef.value.reset()
+	}
+}
+
+const confirmTranscribe = async () => {
+	const text = transcribeText.value.trim()
+	if (text == '') {
+		uni.showToast({ title: '转写内容为空,请重新录音', icon: 'none' })
+		return
+	}
+	answerText.value = text
+	transcribeText.value = ''
+
+	// 枚举字段:转写文本匹配选项值后直接 PATCH confirm,跳过 AI 抽取
+	const fieldKey = currentQuestion.value != null && currentQuestion.value.field_key != null
+		? String(currentQuestion.value.field_key) : ''
+	if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
+		const options = ENUM_OPTIONS.get(fieldKey)
+		if (options != null) {
+			let matchedValue = ''
+			for (let i = 0; i < options.length; i++) {
+				if (text.indexOf(options[i]) >= 0) { matchedValue = options[i]; break }
+			}
+			if (matchedValue != '') {
+				if (draft.value != null) {
+					const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
+					const act = fieldAction(fieldKey, 'replace', matchedValue, expectedRev)
+					try {
+						const res = await patchProfileDraft(String(draft.value.draft_id), [act], expectedRev)
+						if (res.success && res.data != null) {
+							draft.value = res.data
+							rebuildMessageFlow()
+						}
+					} catch (e) {
+						console.error('[Portrait] enum voice confirm failed', e)
+					}
+				}
+				addAnswerMessage(text)
+				await advanceToNextQuestion()
+				return
+			}
+		}
+	}
+
+	await submitAnswer()
+}
+
+const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
+
+const submitAnswer = async () => {
+	const text = answerText.value.trim()
+	if (text == '') {
+		uni.showToast({ title: '请输入回答', icon: 'none' })
+		return
+	}
+	if (session.value == null) return
+
+	addAnswerMessage(text)
+	answerText.value = ''
+	extracting.value = true
+
+	const typingId = addTypingMessage('正在整理你的回答...', 0)
+
+	try {
+		const turnRes = await submitProfileTurn(String(session.value.session_id), text)
+		if (!turnRes.success || turnRes.data == null) {
+			extracting.value = false
+			removeMessage(typingId)
+			const code = String(turnRes.code != null ? turnRes.code : '')
+			uni.showToast({ title: mapProfileError(code, String(turnRes.message)), icon: 'none' })
+			return
+		}
+
+		const taskId = String(turnRes.data.task_id != null ? turnRes.data.task_id : '')
+		const draftId = String(session.value.draft_id != null ? session.value.draft_id : '')
+
+		const result = await pollExtractionAndLoadDraft(taskId, draftId)
+		extracting.value = false
+		removeMessage(typingId)
+
+		if (!result.success) {
+			uni.showToast({ title: result.error, icon: 'none' })
+			return
+		}
+
+		draft.value = result.draft
+		rebuildMessageFlow()
+
+		// 更新 session 的 current_question
+		const sessionRes = await getProfileSession(String(session.value.session_id))
+		if (sessionRes.success && sessionRes.data != null) {
+			session.value = sessionRes.data
+			if (sessionRes.data.current_question != null) {
+				currentQuestion.value = sessionRes.data.current_question
+				if (voiceMode.value) {
+					addQuestionMessage(sessionRes.data.current_question)
+				} else {
+					addTypingMessage('正在思考...', 600, () => {
+						addQuestionMessage(sessionRes.data.current_question)
+					})
+				}
+			} else {
+				currentQuestion.value = null
+				addSystemMessage('所有问题已回答完毕,确认字段后即可发布画像')
+			}
+		}
+	} catch (e) {
+		extracting.value = false
+		removeMessage(typingId)
+		uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+	}
+}
+
+const advanceToNextQuestion = async () => {
+	if (session.value == null) return
+	const sessionRes = await getProfileSession(String(session.value.session_id))
+	if (sessionRes.success && sessionRes.data != null) {
+		session.value = sessionRes.data
+		if (sessionRes.data.current_question != null) {
+			currentQuestion.value = sessionRes.data.current_question
+			if (voiceMode.value) {
+				addQuestionMessage(sessionRes.data.current_question)
+			} else {
+				addTypingMessage('正在思考...', 600, () => {
+					addQuestionMessage(sessionRes.data.current_question)
+				})
+			}
+		} else {
+			currentQuestion.value = null
+			addSystemMessage('所有问题已回答完毕,确认字段后即可发布画像')
+		}
+	}
+}
+
+const onFieldConfirm = async (fieldKey: string) => {
+	await patchField(fieldKey, 'confirm', null)
+}
+
+const onFieldEdit = async (fieldKey: string, value: any) => {
+	await patchField(fieldKey, 'replace', value)
+}
+
+const onFieldReject = async (fieldKey: string) => {
+	await patchField(fieldKey, 'reject', null)
+}
+
+const onFieldDelete = async (fieldKey: string) => {
+	await patchField(fieldKey, 'delete', null)
+}
+
+const patchField = async (fieldKey: string, action: string, value: any) => {
+	if (draft.value == null) return
+	const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
+	const act = fieldAction(fieldKey, action, value, expectedRev)
+	try {
+		const res = await patchProfileDraft(String(draft.value.draft_id), [act], expectedRev)
+		if (!res.success || res.data == null) {
+			const code = String(res.code != null ? res.code : '')
+			uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+			if (code == 'DRAFT_VERSION_CONFLICT') {
+				const draftRes = await getProfileDraft(String(draft.value.draft_id))
+				if (draftRes.success && draftRes.data != null) {
+					draft.value = draftRes.data
+					rebuildMessageFlow()
+				}
+			}
+			return
+		}
+		draft.value = res.data
+		rebuildMessageFlow()
+	} catch (e) {
+		uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+	}
+}
+
+const publishDraft = async () => {
+	if (draft.value == null || publishing.value) return
+	if (confirmedCount.value == 0) {
+		uni.showToast({ title: '至少确认一个字段后才能发布', icon: 'none' })
+		return
+	}
+	publishing.value = true
+	const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
+	try {
+		const res = await publishProfileDraft(String(draft.value.draft_id), expectedRev)
+		publishing.value = false
+		if (!res.success || res.data == null) {
+			const code = String(res.code != null ? res.code : '')
+			uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+			return
+		}
+		const revisionNo = res.data.revision_no != null ? Number(res.data.revision_no) : 0
+		const fieldCount = res.data.field_count != null ? Number(res.data.field_count) : confirmedCount.value
+		runGeneratingTransition(revisionNo, fieldCount)
+	} catch (e) {
+		publishing.value = false
+		uni.showToast({ title: '发布失败,请重试', icon: 'none' })
+	}
+}
+
+const openHistory = async () => {
+	historyVisible.value = true
+	historyLoading.value = true
+	if (narrative.value == null) {
+		await loadNarrative()
+	}
+	try {
+		const res = await listProfileRevisions('', 20)
+		if (res.success && res.data != null && Array.isArray(res.data.items)) {
+			historyItems.value = res.data.items
+		} else {
+			historyItems.value = []
+		}
+	} catch (e) {
+		historyItems.value = []
+	} finally {
+		historyLoading.value = false
+	}
+}
+
+const closeHistory = () => { historyVisible.value = false }
+
+const restoreRevision = async (revisionId: number) => {
+	uni.showModal({
+		title: '恢复历史版本',
+		content: '将从该版本生成新的草稿,你可以在草稿中修改后再发布。旧版本不会被修改。',
+		confirmText: '恢复',
+		success: async (modalRes) => {
+			if (!modalRes.confirm) return
+			uni.showLoading({ title: '恢复中...' })
+			try {
+				const res = await restoreProfileRevision(revisionId)
+				uni.hideLoading()
+				if (!res.success || res.data == null) {
+					uni.showToast({ title: '恢复失败,请重试', icon: 'none' })
+					return
+				}
+				draft.value = res.data
+				if (session.value != null) {
+					const sessionRes = await getProfileSession(String(session.value.session_id))
+					if (sessionRes.success && sessionRes.data != null) {
+						session.value = sessionRes.data
+					}
+				}
+				historyVisible.value = false
+				showModeSelect.value = false
+				messages.value = []
+				rebuildMessageFlow()
+				if (session.value != null && session.value.current_question != null) {
+					currentQuestion.value = session.value.current_question
+					addQuestionMessage(session.value.current_question)
+				}
+				uni.showToast({ title: '已恢复,请确认后发布', icon: 'success' })
+			} catch (e) {
+				uni.hideLoading()
+				uni.showToast({ title: '恢复失败,请重试', icon: 'none' })
+			}
+		}
+	})
+}
+
+const showInsightDetail = () => {
+	// TODO(后端待交付):完整分析端点就绪后跳转
+	uni.showToast({ title: '完整分析即将上线', icon: 'none' })
+}
+
+const showDimensionDetail = (title: string) => {
+	// TODO(后端待交付):维度详情端点就绪后跳转
+	uni.showToast({ title: title + '详情即将上线', icon: 'none' })
+}
+
+const goEditProfile = () => {
+	uni.navigateTo({
+		url: '/pagesSub/userExtra/user/edit',
+		fail: () => { uni.showToast({ title: '页面打开失败', icon: 'none' }) }
+	})
+}
+
+// ===== 消息流辅助 =====
+
+function addQuestionMessage(question: any) {
+	if (question == null) return
+	const qId = String(question.id != null ? question.id : '')
+	const qText = String(question.text != null ? question.text : '')
+	const fieldKey = question.field_key != null ? String(question.field_key) : ''
+
+	let options: string[] = []
+	if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
+		const opts = ENUM_OPTIONS.get(fieldKey)
+		if (opts != null) options = opts
+	}
+
+	messages.value.push({
+		id: 'q-' + qId + '-' + Date.now(),
+		type: 'question',
+		text: qText,
+		options: options
+	})
+	scrollToBottom()
+}
+
+function addAnswerMessage(text: string) {
+	messages.value.push({
+		id: 'a-' + Date.now(),
+		type: 'answer',
+		text: text
+	})
+	scrollToBottom()
+}
+
+function addTypingMessage(text: string, durationMs: number, onTimeout: (() => void) | null = null): string {
+	const id = 'typing-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+	messages.value.push({
+		id: id,
+		type: 'typing',
+		text: text
+	})
+	scrollToBottom()
+	if (durationMs > 0) {
+		setTimeout(() => {
+			removeMessage(id)
+			if (onTimeout != null) onTimeout()
+		}, durationMs)
+	}
+	return id
+}
+
+function addSystemMessage(text: string) {
+	messages.value.push({
+		id: 'sys-' + Date.now(),
+		type: 'system',
+		text: text
+	})
+	scrollToBottom()
+}
+
+function removeMessage(id: string) {
+	messages.value = messages.value.filter((m: any) => m.id != id)
+}
+
+function scrollToBottom() {
+	nextTick(() => {
+		if (messages.value.length > 0) {
+			scrollAnchor.value = 'msg-' + messages.value[messages.value.length - 1].id
+		}
+	})
+}
+
+function formatTime(iso: string): string {
+	if (iso == '' || iso == null) return ''
+	try {
+		const d = new Date(iso)
+		const month = d.getMonth() + 1
+		const day = d.getDate()
+		const hour = d.getHours()
+		const min = d.getMinutes()
+		return month + '/' + day + ' ' + (hour < 10 ? '0' + hour : hour) + ':' + (min < 10 ? '0' + min : min)
+	} catch (e) {
+		return ''
+	}
+}
+
+// 初始化
+loadSession()
+</script>
+
+<style scoped>
+.portrait-page {
+	min-height: 100vh;
+	background: var(--canvas);
+	display: flex;
+	flex-direction: column;
+}
+
+/* 导航栏 */
+.pp-nav {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 16px;
+	height: 44px;
+	background: var(--paper);
+	border-bottom: 1px solid var(--line);
+}
+.pp-nav-side { width: 44px; display: flex; align-items: center; justify-content: center; }
+.pp-back { font-size: 28px; color: var(--ink); }
+.pp-nav-title { font-size: 17px; font-weight: 700; color: var(--ink); font-family: var(--serif); }
+.pp-nav-history { font-size: 14px; color: var(--accent2); }
+
+/* 主体 Tab */
+.pp-tabs {
+	display: flex;
+	flex-direction: row;
+	background: var(--paper);
+	padding: 0 16px;
+	border-bottom: 1px solid var(--line);
+}
+.pp-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px 0; position: relative; }
+.pp-tab-text { font-size: 14px; color: var(--muted); font-weight: 600; }
+.pp-tab-text-active { color: var(--accent2); font-weight: 700; }
+.pp-tab-active { border-bottom: 2px solid var(--accent); }
+
+/* 进度条 */
+.pp-progress-bar { padding: 12px 16px; background: var(--paper); }
+.pp-progress-row { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.pp-progress-track { flex: 1; height: 4px; background: var(--warm); border-radius: 999px; overflow: hidden; }
+.pp-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease-out; }
+.pp-pause-btn { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.pp-pause-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+.pp-progress-text { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* 顶部 AI Orb */
+.pp-orb-zone { display: flex; flex-direction: column; align-items: center; padding: 16px 0 8px; background: var(--paper); }
+.pp-orb-status { font-size: 12px; color: var(--muted); margin-top: 10px; letter-spacing: 0.06em; }
+
+/* 生成过渡屏 */
+.pp-generating { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
+.pp-generating-title { font-size: 16px; font-weight: 600; color: var(--ink2); margin-top: 20px; }
+.pp-generating-steps { display: flex; flex-direction: column; align-items: flex-start; margin-top: 24px; gap: 10px; }
+.pp-gen-step { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.pp-gen-check { font-size: 13px; color: var(--accent); font-weight: 700; }
+.pp-gen-step-text { font-size: 13px; color: var(--ink2); }
+.pp-generating-summary { font-size: 14px; color: var(--ink); line-height: 1.7; text-align: center; margin-top: 28px; font-family: var(--serif); padding: 0 20px; }
+
+/* 叙事层滚动区 */
+.pp-narrative-scroll { max-height: 280px; padding: 0 16px; }
+
+/* AI 洞察 */
+.pp-insight { padding: 18px 16px; margin: 12px 0; border-radius: 14px; background: linear-gradient(135deg, var(--canvas), var(--paper)); }
+.pp-insight-label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
+.pp-insight-text { font-size: 14px; color: var(--ink); line-height: 1.7; margin-top: 8px; font-family: var(--serif); }
+.pp-insight-more { margin-top: 12px; }
+.pp-insight-more-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+
+/* 维度卡片 */
+.pp-dimensions { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.pp-dim-card { display: flex; flex-direction: row; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.pp-dim-card:active { background: var(--canvas); }
+.pp-dim-icon { font-size: 20px; color: var(--accent); width: 32px; }
+.pp-dim-main { flex: 1; display: flex; flex-direction: column; }
+.pp-dim-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.pp-dim-summary { font-size: 12px; color: var(--ink2); line-height: 1.5; margin-top: 4px; }
+.pp-dim-arrow { font-size: 18px; color: var(--muted); }
+
+/* 理想型百分比 */
+.pp-weights { padding: 14px 16px; margin: 12px 0; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.pp-weights-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+.pp-weight-row { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 5px 0; }
+.pp-weight-label { width: 72px; font-size: 12px; color: var(--ink2); }
+.pp-weight-track { flex: 1; height: 4px; background: var(--warm); border-radius: 999px; overflow: hidden; }
+.pp-weight-fill { height: 100%; background: var(--sage); border-radius: 999px; transition: width 0.3s ease-out; }
+.pp-weight-percent { width: 36px; text-align: right; font-size: 12px; color: var(--muted); }
+
+/* 最近的变化 */
+.pp-change { padding: 16px; margin: 12px 0; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.pp-change-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.pp-change-summary { font-size: 14px; color: var(--accent2); font-weight: 600; margin-top: 8px; line-height: 1.5; }
+.pp-change-obs { font-size: 13px; color: var(--ink2); line-height: 1.6; margin-top: 6px; }
+.pp-change-more { margin-top: 10px; display: flex; justify-content: flex-end; }
+.pp-change-more-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+
+/* 状态页 */
+.pp-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; }
+.pp-state-title { font-size: 16px; font-weight: 700; color: var(--ink); text-align: center; }
+.pp-state-copy { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; line-height: 1.6; }
+.pp-state-btn { margin-top: 20px; padding: 10px 24px; background: var(--accent); border-radius: 8px; }
+.pp-state-btn-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+
+/* 模式选择 */
+.pp-mode-select { padding: 32px 16px; }
+.pp-mode-title { font-size: 20px; font-weight: 700; color: var(--ink); font-family: var(--serif); }
+.pp-mode-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.pp-mode-actions { display: flex; flex-direction: row; gap: 12px; margin-top: 24px; }
+.pp-mode-btn { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 20px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.pp-mode-text-btn { border-color: var(--accent); }
+.pp-mode-voice-btn { border-color: var(--accent); }
+.pp-mode-btn-icon { font-size: 32px; }
+.pp-mode-btn-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 8px; }
+.pp-mode-btn-desc { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* 对话流 */
+.pp-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.pp-chat-flow { flex: 1; padding: 12px 16px; }
+.pp-chat-spacer { height: 100px; }
+
+.pp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
+.pp-empty-title { font-size: 15px; font-weight: 700; color: var(--muted); }
+.pp-empty-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.pp-msg { margin-bottom: 10px; }
+.pp-msg-left { display: flex; flex-direction: row; justify-content: flex-start; }
+.pp-msg-right { display: flex; flex-direction: row; justify-content: flex-end; }
+.pp-msg-system { display: flex; flex-direction: row; justify-content: center; }
+.pp-msg-field { margin: 4px 0; }
+
+.pp-bubble { max-width: 78%; padding: 10px 14px; border-radius: 12px; }
+.pp-bubble-ai { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.pp-bubble-user { background: var(--accent); border-bottom-right-radius: 4px; }
+.pp-bubble-text { font-size: 14px; line-height: 1.6; }
+.pp-bubble-ai .pp-bubble-text { color: var(--ink); }
+.pp-bubble-user .pp-bubble-text { color: var(--text-invert); }
+
+/* 枚举选项 */
+.pp-options { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pp-option-chip { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); }
+.pp-option-chip.selected { background: var(--accent-bg); border-color: var(--accent); }
+.pp-option-chip-text { font-size: 12px; color: var(--ink2); }
+.pp-option-chip.selected .pp-option-chip-text { color: var(--accent2); }
+
+/* 打字指示器 */
+.pp-typing { display: flex; flex-direction: row; align-items: center; gap: 4px; }
+.pp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: pp-bounce 0.6s ease-out infinite alternate; }
+.pp-dot:nth-child(2) { animation-delay: 0.15s; }
+.pp-dot:nth-child(3) { animation-delay: 0.3s; }
+.pp-typing-text { font-size: 12px; color: var(--muted); margin-left: 4px; }
+@keyframes pp-bounce { from { opacity: 0.3; transform: translateY(0); } to { opacity: 1; transform: translateY(-4px); } }
+
+/* 系统提示 */
+.pp-system-text { font-size: 12px; color: var(--muted); text-align: center; }
+
+/* 底部操作栏 */
+.pp-input-bar { padding: 8px 16px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
+.pp-input-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.pp-input { flex: 1; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; color: var(--ink); background: var(--surface); }
+.pp-ph { color: var(--muted); }
+.pp-send-btn { padding: 0 16px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--bg-subtle); }
+.pp-send-ready { background: var(--accent); }
+.pp-send-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+
+.pp-bar-status { flex: 1; display: flex; align-items: center; justify-content: center; height: 38px; }
+.pp-bar-status-text { font-size: 13px; color: var(--muted); }
+
+.pp-publish-row { justify-content: space-between; }
+.pp-publish-info { font-size: 13px; color: var(--ink2); }
+.pp-publish-btn { padding: 0 20px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--bg-subtle); }
+.pp-publish-ready { background: var(--accent); }
+.pp-publish-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+
+/* 语音输入区 */
+.pp-voice-area { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+.pp-mode-switch { margin-top: 8px; padding: 4px 12px; }
+.pp-mode-switch-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+.pp-mode-switch-inline { margin-left: 4px; }
+
+/* 转写确认卡片 */
+.pp-transcribe-row { flex-direction: column; align-items: stretch; }
+.pp-transcribe-card { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 10px; }
+.pp-transcribe-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.pp-transcribe-input { width: 100%; min-height: 48px; font-size: 14px; color: var(--ink); line-height: 1.5; }
+.pp-transcribe-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.pp-transcribe-retry { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); }
+.pp-transcribe-retry-text { font-size: 12px; font-weight: 700; color: var(--muted); }
+.pp-transcribe-confirm { padding: 6px 14px; border-radius: 8px; background: var(--accent); }
+.pp-transcribe-confirm-text { font-size: 12px; font-weight: 700; color: var(--text-invert); }
+</style>

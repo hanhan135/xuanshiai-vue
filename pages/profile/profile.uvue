@@ -225,8 +225,10 @@ const onOpenVIP = () => {
 }
 
 const onPortrait = () => {
-	// TODO(接口占位)：画像功能上线后替换为 uni.navigateTo 跳转画像页
-	uni.showToast({ title: '画像功能正在接入中，敬请期待', icon: 'none' })
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait',
+		fail: () => { uni.showToast({ title: '画像页面打开失败，请重试', icon: 'none' }) }
+	})
 }
 
 const onAiAvatar = () => {

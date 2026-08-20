@@ -1,7 +1,7 @@
 /**
  * 社区相关 API
  * 主 Tab：follow / city / discover；二级 filter：
- * follow=all|following|likedUsers；city=all|hot|latest；discover=all|mbti|alumni|hometown
+ * follow=all|following|likedUsers；city=all|hot|latest；discover=all|mbti|alumni
  * 互动门槛由页面侧 guardRealName 控制（仅实名）
  *
  * USE_MOCK=true 走本地 mock；false 时走 FastAPI `/api/v1`（见 config.uts）
@@ -359,11 +359,6 @@ function schoolKey(raw: any): string {
   return s.trim()
 }
 
-function hometownKey(raw: any): string {
-  if (raw == null) return ''
-  return ('' + raw).trim()
-}
-
 function meProfile(): any {
   return mockMeProfile as any
 }
@@ -487,7 +482,6 @@ function filterDynamics(tab: string, filter: string, city: string): any[] {
 
   const me = meProfile()
   const meSchool = schoolKey(me != null ? me.school : '')
-  const meHometown = hometownKey(me != null ? me.hometown : '')
 
   let filtered: any[] = all
   if (tab == 'follow') {
@@ -550,13 +544,6 @@ function filterDynamics(tab: string, filter: string, city: string): any[] {
         if (d.user == null) return false
         const s = schoolKey(d.user.school)
         return s != '' && meSchool != '' && s == meSchool
-      })
-    } else if (filter == 'hometown') {
-      filtered = filtered.filter((d: any) => {
-        if (d.user == null) return false
-        const h = hometownKey(d.user.hometown)
-        if (h == '' || meHometown == '') return false
-        return h == meHometown || h.indexOf(meHometown) >= 0 || meHometown.indexOf(h) >= 0
       })
     }
   }
@@ -861,7 +848,7 @@ function feedModeFromTab(tab: string, filter: string): any {
   }
   // discover
   let f: any = null
-  if (filter == 'mbti' || filter == 'alumni' || filter == 'hometown') f = filter
+  if (filter == 'mbti' || filter == 'alumni') f = filter
   return { mode: 'latest', filter: f, sort: 'latest', mergeLiked: false }
 }
 

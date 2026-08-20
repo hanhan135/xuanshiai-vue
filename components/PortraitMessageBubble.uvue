@@ -1,0 +1,167 @@
+<template>
+	<!-- 单条对话消息气泡 -->
+	<view class="pmb-msg" :class="rowClass">
+		<!-- AI 提问气泡(左):头像 + 气泡 -->
+		<view v-if="msg.type == 'question'" class="pmb-bubble-wrap pmb-bubble-left">
+			<image class="pmb-avatar" :src="aiAvatarSrc" mode="aspectFill" />
+			<view class="pmb-bubble pmb-bubble-ai">
+				<text class="pmb-bubble-text">{{ msg.text }}</text>
+				<view v-if="msg.options != null && msg.options.length > 0" class="pmb-options">
+					<view
+						v-for="opt in msg.options"
+						:key="opt"
+						class="pmb-option-chip"
+						:class="{ selected: answerText == opt }"
+						@tap="emit('optionTap', opt)"
+					>
+						<text class="pmb-option-chip-text">{{ opt }}</text>
+					</view>
+				</view>
+			</view>
+		</view>
+
+		<!-- 用户回答气泡(右) -->
+		<view v-if="msg.type == 'answer'" class="pmb-bubble-wrap pmb-bubble-right">
+			<view class="pmb-bubble pmb-bubble-user">
+				<text class="pmb-bubble-text">{{ msg.text }}</text>
+			</view>
+		</view>
+
+		<!-- 打字指示器(左) -->
+		<view v-if="msg.type == 'typing'" class="pmb-bubble-wrap pmb-bubble-left">
+			<image class="pmb-avatar" :src="aiAvatarSrc" mode="aspectFill" />
+			<view class="pmb-bubble pmb-bubble-ai pmb-typing">
+				<view class="pmb-dot"></view>
+				<view class="pmb-dot"></view>
+				<view class="pmb-dot"></view>
+				<text class="pmb-typing-text">{{ msg.text }}</text>
+			</view>
+		</view>
+
+		<!-- 系统提示(居中) -->
+		<view v-if="msg.type == 'system'" class="pmb-bubble-wrap pmb-bubble-center">
+			<text class="pmb-system-text">{{ msg.text }}</text>
+		</view>
+
+		<!-- 字段卡片(内嵌) -->
+		<view v-if="msg.type == 'field'" class="pmb-bubble-wrap pmb-bubble-full">
+			<XsaPortraitField
+				:field="msg.field"
+				:fieldLabel="msg.label"
+				@confirm="emit('confirm', $event)"
+				@edit="(k: string, v: any) => emit('edit', k, v)"
+				@reject="emit('reject', $event)"
+				@delete="emit('delete', $event)"
+			/>
+		</view>
+
+		<!-- 发布成功提示(居中) -->
+		<view v-if="msg.type == 'published'" class="pmb-bubble-wrap pmb-bubble-center">
+			<view class="pmb-published">
+				<text class="pmb-published-text">画像已发布 · 版本 {{ msg.revision }} · {{ msg.fieldCount }} 个字段</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+/**
+ * PortraitMessageBubble - AI 画像对话流单条消息。
+ * 对齐牵线 AI 红娘的气泡品质:AI 气泡 surface+shadow-sm 不对称圆角,
+ * 用户气泡 accent+glow 不对称圆角;AI 侧带头像。承接 question/answer/typing/system/field/published 六态。
+ */
+import XsaPortraitField from './XsaPortraitField.uvue'
+
+interface Props {
+	msg: any
+	aiAvatarSrc: string
+	answerText: string
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<{
+	optionTap: [value: string]
+	confirm: [fieldKey: string]
+	edit: [fieldKey: string, value: any]
+	reject: [fieldKey: string]
+	delete: [fieldKey: string]
+}>()
+
+const rowClass = computed(() => {
+	const t = String(props.msg.type)
+	if (t == 'question' || t == 'typing') return 'pmb-msg-left'
+	if (t == 'answer') return 'pmb-msg-right'
+	if (t == 'system' || t == 'published') return 'pmb-msg-center'
+	return 'pmb-msg-field'
+})
+</script>
+
+<style scoped>
+.pmb-msg { margin-bottom: 12px; }
+.pmb-msg-left { display: flex; flex-direction: row; justify-content: flex-start; }
+.pmb-msg-right { display: flex; flex-direction: row; justify-content: flex-end; }
+.pmb-msg-center { display: flex; flex-direction: row; justify-content: center; }
+.pmb-msg-field { margin: 4px 0; }
+
+.pmb-bubble-wrap { display: flex; flex-direction: row; align-items: flex-end; }
+.pmb-bubble-left { max-width: 86%; }
+.pmb-bubble-right { max-width: 86%; }
+.pmb-bubble-center { max-width: 100%; }
+.pmb-bubble-full { width: 100%; }
+
+/* AI 头像:贴合气泡底部,对齐 AI 红娘 24rpx 圆角 */
+.pmb-avatar {
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	flex-shrink: 0;
+	margin-right: 8px;
+	border: 1.5px solid rgba(255, 255, 255, 0.82);
+	background: var(--warm);
+}
+
+/* 气泡:对齐 AI 红娘 —— AI=surface+shadow-sm+左下不对称,用户=accent+glow+右下不对称 */
+.pmb-bubble {
+	padding: 10px 14px;
+	border-radius: 14px;
+}
+.pmb-bubble-ai {
+	background: var(--surface);
+	box-shadow: var(--shadow-sm);
+	border-bottom-left-radius: 4px;
+}
+.pmb-bubble-user {
+	background: var(--accent);
+	box-shadow: 0 6px 16px rgba(56, 152, 141, 0.18);
+	border-bottom-right-radius: 4px;
+}
+.pmb-bubble-text { font-size: 14px; line-height: 1.6; }
+.pmb-bubble-ai .pmb-bubble-text { color: var(--ink); }
+.pmb-bubble-user .pmb-bubble-text { color: var(--text-invert); }
+
+/* 枚举选项 chip */
+.pmb-options { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pmb-option-chip { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); }
+.pmb-option-chip.selected { background: var(--accent-bg); border-color: var(--accent); }
+.pmb-option-chip-text { font-size: 12px; color: var(--ink2); }
+.pmb-option-chip.selected .pmb-option-chip-text { color: var(--accent2); }
+
+/* 打字指示器 */
+.pmb-typing { display: flex; flex-direction: row; align-items: center; gap: 5px; }
+.pmb-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: pmb-bounce 0.6s ease-out infinite alternate; }
+.pmb-dot:nth-child(2) { animation-delay: 0.15s; }
+.pmb-dot:nth-child(3) { animation-delay: 0.3s; }
+.pmb-typing-text { font-size: 12px; color: var(--muted); margin-left: 4px; }
+@keyframes pmb-bounce { from { opacity: 0.3; transform: translateY(0); } to { opacity: 1; transform: translateY(-4px); } }
+
+/* 系统提示 */
+.pmb-system-text { font-size: 12px; color: var(--muted); text-align: center; }
+
+/* 发布成功提示 */
+.pmb-published {
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: rgba(51, 141, 107, 0.1);
+}
+.pmb-published-text { font-size: 12px; color: var(--sage); font-weight: 600; }
+</style>

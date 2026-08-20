@@ -346,6 +346,10 @@
         {
           "path": "my-ai-avatar",
           "style": { "navigationBarTitleText": "我的AI分身", "navigationStyle": "custom" }
+        },
+        {
+          "path": "my-portrait",
+          "style": { "navigationBarTitleText": "AI 画像", "navigationStyle": "custom" }
         }
       ]
     },

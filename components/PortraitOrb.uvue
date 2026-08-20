@@ -1,0 +1,114 @@
+<template>
+	<view class="po-orb" :class="['po-' + size, { 'po-breathing': breathing }]">
+		<view class="po-halo"></view>
+		<view class="po-ring po-ring-outer"></view>
+		<view class="po-ring po-ring-inner"></view>
+		<view class="po-core">
+			<view class="po-core-glow"></view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+interface Props {
+	size?: string
+	status?: string
+	breathing?: boolean
+}
+const props = withDefaults(defineProps<Props>(), {
+	size: 'small',
+	status: '',
+	breathing: true
+})
+</script>
+
+<style scoped>
+.po-orb {
+	position: relative;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+}
+.po-small {
+	width: 64px;
+	height: 64px;
+}
+.po-large {
+	width: 128px;
+	height: 128px;
+}
+.po-halo {
+	position: absolute;
+	top: -20%;
+	left: -20%;
+	width: 140%;
+	height: 140%;
+	border-radius: 999px;
+	background: radial-gradient(circle at 50% 50%, rgba(45, 124, 114, 0.18), rgba(24, 65, 93, 0.08) 60%, transparent 80%);
+	opacity: 0.6;
+}
+.po-ring {
+	position: absolute;
+	border-radius: 999px;
+	opacity: 0.35;
+}
+.po-ring-outer {
+	width: 100%;
+	height: 100%;
+	border: 1px solid var(--accent);
+}
+.po-ring-inner {
+	width: 78%;
+	height: 78%;
+	border: 1px solid var(--navy);
+	border-right-color: transparent;
+}
+.po-core {
+	position: relative;
+	width: 56%;
+	height: 56%;
+	border-radius: 999px;
+	overflow: hidden;
+}
+.po-core-glow {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	border-radius: 999px;
+	background: radial-gradient(circle at 38% 34%, rgba(51, 141, 107, 0.85), rgba(0, 96, 82, 0.55) 55%, rgba(24, 65, 93, 0.35) 100%);
+	box-shadow: 0 0 24px rgba(45, 124, 114, 0.3);
+}
+.po-breathing .po-core-glow {
+	animation: po-breathe 5s ease-in-out infinite;
+}
+.po-breathing .po-ring-outer {
+	animation: po-pulse 4s ease-out infinite;
+}
+.po-breathing .po-ring-inner {
+	animation: po-spin 8s linear infinite;
+}
+.po-breathing .po-halo {
+	animation: po-float 6s ease-in-out infinite;
+}
+@keyframes po-breathe {
+	0%, 100% { transform: scale(1); opacity: 0.85; }
+	50% { transform: scale(1.04); opacity: 1; }
+}
+@keyframes po-pulse {
+	0% { transform: scale(0.92); opacity: 0.4; }
+	70% { transform: scale(1.12); opacity: 0; }
+	100% { transform: scale(1.12); opacity: 0; }
+}
+@keyframes po-spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+@keyframes po-float {
+	0%, 100% { transform: translateY(0); opacity: 0.6; }
+	50% { transform: translateY(-4px); opacity: 0.8; }
+}
+</style>

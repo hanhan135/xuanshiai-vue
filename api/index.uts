@@ -203,3 +203,38 @@ export {
   submitPromoterApplication,
   bookMatchmaker
 } from './matchmaker.uts'
+
+
+// AI 画像相关（M04）
+export {
+  createProfileSession,
+  getProfileSession,
+  submitProfileTurn,
+  deleteProfileSession,
+  pauseProfileSession,
+  resumeProfileSession,
+  getProfileDraft,
+  patchProfileDraft,
+  publishProfileDraft,
+  listProfileRevisions,
+  restoreProfileRevision,
+  deleteAiProfile,
+  deleteAiProfileField,
+  pollTask,
+  pollExtractionAndLoadDraft,
+  mapProfileError,
+  transcribeAudio,
+  getPortraitNarrative,
+  fieldLabel,
+  fieldAction,
+  genIdempotencyKey
+} from './ai-profile.uts'
+
+export {
+  FIELD_KEY_LABELS,
+  ENUM_FIELDS,
+  ENUM_OPTIONS,
+  type ProfileSubject,
+  type FieldConfirmationStatus,
+  type FieldPatchAction
+} from './ai-profile.uts'
