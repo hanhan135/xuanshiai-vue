@@ -1,5 +1,5 @@
 <template>
-	<view class="vr-area">
+	<view class="vr-area" :class="{ 'vr-atelier': theme == 'atelier' }">
 		<!-- AI 提问区(speaking 态展示) -->
 		<view v-if="recorderState == 'speaking'" class="vr-speak-zone">
 			<view class="vr-speak-text">
@@ -65,12 +65,14 @@ interface Props {
 	questionText?: string
 	questionFieldKey?: string
 	autoSpeak?: boolean
+	theme?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
 	questionText: '',
 	questionFieldKey: '',
-	autoSpeak: true
+	autoSpeak: true,
+	theme: 'default'
 })
 
 const emit = defineEmits<{
@@ -333,4 +335,16 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 
 /* 拖拽取消提示 */
 .vr-cancel-hint { font-size: 12px; color: var(--match-coral); margin-top: 8px; font-weight: 600; }
+
+	/* 墨相主题(琥珀色系) */
+.vr-atelier .vr-status-text { color: var(--at-mist, #9A8C77); }
+.vr-atelier .vr-status-active { color: var(--at-amber-deep, #8A5A1D); }
+.vr-atelier .vr-btn { background: var(--at-card, #FFFCF5); border-color: var(--at-line, #E6DAC4); }
+.vr-atelier .vr-btn-listening { background: var(--at-amber, #B4762B); border-color: var(--at-amber, #B4762B); }
+.vr-atelier .vr-btn-reviewing { background: var(--at-fixed, #4E7D5B); border-color: var(--at-fixed, #4E7D5B); }
+.vr-atelier .vr-pulse-ring { border-color: var(--at-amber, #B4762B); }
+.vr-atelier .vr-spinner { border-color: var(--at-line, #E6DAC4); border-top-color: var(--at-amber, #B4762B); }
+.vr-atelier .vr-speak-label { color: var(--at-amber-deep, #8A5A1D); }
+.vr-atelier .vr-skip-text { color: var(--at-amber-deep, #8A5A1D); }
+.vr-atelier .vr-cancel-hint { color: var(--at-danger, #B4543E); }
 </style>

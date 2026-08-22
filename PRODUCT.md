@@ -1,10 +1,10 @@
 # 宣誓爱 — 产品定义
 
-> **版本：** 2.1.0  
-> **更新日期：** 2026-07-22  
-> **当前形态：** UniApp 前端应用（H5 / 微信小程序）  
-> **产品阶段：** 前端主路径与 Mock 联调阶段  
-> **需求状态：** 定版 PRD 已登记；范围与付费边界以决策层为准
+> **版本：** 2.1.0\
+> **更新日期：** 2026-08-21\
+> **当前形态：** UniApp 前端应用（H5 / 微信小程序）\
+> **产品阶段：** 社区 1.0 已接测试服；其它产品域仍处于分模块联调阶段\
+> **需求状态：** 定版 PRD 权威为工作区根 [`../PRODUCT.md`](../PRODUCT.md)；本文件是实现侧镜像
 
 ## Product Summary
 
@@ -23,9 +23,9 @@
 - **register:** `product`
 - **primary:** 微信小程序
 - **secondary:** H5，用于快速预览、结构验证和联调
-- **implementation:** `./`（仓库内即 `xuanshiai-vue/`）
+- **implementation:** 本目录 `xuanshiai-vue/`；定版 PRD 权威为 [`../PRODUCT.md`](../PRODUCT.md)。
 - **framework:** UniApp + Vue 3 + UTS + Sass
-- **prototype-reference:** `../design-demos/final/`（仅视觉与交互参考，非生产入口）
+- **prototype-reference:** 历史交互原型已退出开发链路；视觉与交互参考以 `uni.scss`、`DESIGN.md` 和当前页面源码为准。
 
 所有新增页面、组件、接口、Mock 和联调都在本目录完成。不新建 HTML 演示作为生产主线。
 

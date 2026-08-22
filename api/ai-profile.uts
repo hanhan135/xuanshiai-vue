@@ -5,25 +5,7 @@
  */
 
 import { request } from './request.uts'
-import { USE_MOCK, getAccessToken, buildApiUrl, resolveMediaUrl } from './config.uts'
-import {
-  mockCreateProfileSession,
-  mockGetProfileSession,
-  mockSubmitProfileTurn,
-  mockDeleteProfileSession,
-  mockPauseProfileSession,
-  mockResumeProfileSession,
-  mockGetProfileDraft,
-  mockPatchProfileDraft,
-  mockPublishProfileDraft,
-  mockListProfileRevisions,
-  mockRestoreProfileRevision,
-  mockDeleteAiProfile,
-  mockDeleteAiProfileField,
-  mockPollTask,
-  mockGetPortraitNarrative
-} from '@/mock/ai-profile.uts'
-
+import { getAccessToken, buildApiUrl, resolveMediaUrl } from './config.uts'
 /** 画像主体:关于我 / 关于对方 */
 export type ProfileSubject = 'personal' | 'ideal_partner'
 
@@ -67,7 +49,6 @@ export function fieldLabel(key: string): string {
 
 /** 创建或复用画像会话 */
 export async function createProfileSession(subject: string, consentVersion: string = 'profile-text-v1'): Promise<any> {
-  if (USE_MOCK) return mockCreateProfileSession(subject, consentVersion)
   return request({
     url: '/ai/profile-sessions',
     method: 'POST',
@@ -78,13 +59,11 @@ export async function createProfileSession(subject: string, consentVersion: stri
 
 /** 查询本人的画像会话 */
 export async function getProfileSession(sessionId: string): Promise<any> {
-  if (USE_MOCK) return mockGetProfileSession(sessionId)
   return request({ url: '/ai/profile-sessions/' + sessionId, method: 'GET' })
 }
 
 /** 提交一条文字回答,返回 turn + task */
 export async function submitProfileTurn(sessionId: string, answerText: string): Promise<any> {
-  if (USE_MOCK) return mockSubmitProfileTurn(sessionId, answerText)
   return request({
     url: '/ai/profile-sessions/' + sessionId + '/turns',
     method: 'POST',
@@ -95,7 +74,6 @@ export async function submitProfileTurn(sessionId: string, answerText: string): 
 
 /** 软删除画像会话 */
 export async function deleteProfileSession(sessionId: string): Promise<any> {
-  if (USE_MOCK) return mockDeleteProfileSession(sessionId)
   return request({
     url: '/ai/profile-sessions/' + sessionId,
     method: 'DELETE',
@@ -105,7 +83,6 @@ export async function deleteProfileSession(sessionId: string): Promise<any> {
 
 /** 暂停画像会话(后端已契约 /ai/profile-sessions/{id}/pause) */
 export async function pauseProfileSession(sessionId: string): Promise<any> {
-  if (USE_MOCK) return mockPauseProfileSession(sessionId)
   return request({
     url: '/ai/profile-sessions/' + sessionId + '/pause',
     method: 'POST',
@@ -115,7 +92,6 @@ export async function pauseProfileSession(sessionId: string): Promise<any> {
 
 /** 恢复画像会话(后端已契约 /ai/profile-sessions/{id}/resume) */
 export async function resumeProfileSession(sessionId: string): Promise<any> {
-  if (USE_MOCK) return mockResumeProfileSession(sessionId)
   return request({
     url: '/ai/profile-sessions/' + sessionId + '/resume',
     method: 'POST',
@@ -125,13 +101,11 @@ export async function resumeProfileSession(sessionId: string): Promise<any> {
 
 /** 查询草稿字段 */
 export async function getProfileDraft(draftId: string): Promise<any> {
-  if (USE_MOCK) return mockGetProfileDraft(draftId)
   return request({ url: '/ai/profile-drafts/' + draftId, method: 'GET' })
 }
 
 /** 逐项确认/修改/拒绝/删除草稿字段 */
 export async function patchProfileDraft(draftId: string, actions: any[], expectedRevision: number): Promise<any> {
-  if (USE_MOCK) return mockPatchProfileDraft(draftId, actions, expectedRevision)
   return request({
     url: '/ai/profile-drafts/' + draftId,
     method: 'PATCH',
@@ -147,20 +121,22 @@ export function fieldAction(fieldKey: string, action: string, value: any = null,
   return obj
 }
 
-/** 发布已确认字段 */
+/**
+	 * 发布已确认字段。
+ * 注意:后端契约要求 expected_revision 作为 query 参数传递(非 body),
+ * 缺失会返回 400 AI_INPUT_INVALID。
+ */
 export async function publishProfileDraft(draftId: string, expectedRevision: number): Promise<any> {
-  if (USE_MOCK) return mockPublishProfileDraft(draftId, expectedRevision)
   return request({
-    url: '/ai/profile-drafts/' + draftId + '/publish',
+    url: '/ai/profile-drafts/' + draftId + '/publish?expected_revision=' + expectedRevision,
     method: 'POST',
-    data: { expected_revision: expectedRevision },
+    data: {},
     headers: { 'Idempotency-Key': genIdempotencyKey() }
   })
 }
 
 /** 查询发布版本历史 */
 export async function listProfileRevisions(cursor: string = '', limit: number = 20): Promise<any> {
-  if (USE_MOCK) return mockListProfileRevisions(cursor, limit)
   const params: any = { limit: limit }
   if (cursor != '') params.cursor = cursor
   return request({ url: '/ai/profile-revisions', method: 'GET', data: params })
@@ -168,7 +144,6 @@ export async function listProfileRevisions(cursor: string = '', limit: number = 
 
 /** 从历史版本恢复为新草稿 */
 export async function restoreProfileRevision(revisionId: number): Promise<any> {
-  if (USE_MOCK) return mockRestoreProfileRevision(revisionId)
   return request({
     url: '/ai/profile-revisions/' + revisionId + '/restore',
     method: 'POST',
@@ -178,7 +153,6 @@ export async function restoreProfileRevision(revisionId: number): Promise<any> {
 
 /** 删除整个画像 */
 export async function deleteAiProfile(subject: string): Promise<any> {
-  if (USE_MOCK) return mockDeleteAiProfile(subject)
   return request({
     url: '/ai/profiles/' + subject,
     method: 'DELETE',
@@ -188,7 +162,6 @@ export async function deleteAiProfile(subject: string): Promise<any> {
 
 /** 删除画像单个字段 */
 export async function deleteAiProfileField(subject: string, fieldKey: string): Promise<any> {
-  if (USE_MOCK) return mockDeleteAiProfileField(subject, fieldKey)
   return request({
     url: '/ai/profiles/' + subject + '/fields/' + fieldKey,
     method: 'DELETE',
@@ -198,8 +171,36 @@ export async function deleteAiProfileField(subject: string, fieldKey: string): P
 
 /** 轮询异步任务状态 */
 export async function pollTask(taskId: string): Promise<any> {
-  if (USE_MOCK) return mockPollTask(taskId)
   return request({ url: '/ai/tasks/' + taskId, method: 'GET' })
+}
+
+/**
+ * 通用任务终态轮询:queued/leased/running/retry_wait 按 poll_after_ms 等待,
+ * 直到 succeeded/failed/cancelled/superseded 或超次。
+ * 返回 { done, status, task, error }。
+ */
+export async function pollTaskUntilTerminal(taskId: string, maxAttempts: number = 40): Promise<any> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const taskRes = await pollTask(taskId)
+    if (!taskRes.success || taskRes.data == null) {
+      return { done: false, status: 'unknown', task: null, error: '任务状态查询失败' }
+    }
+    const status = String(taskRes.data.status != null ? taskRes.data.status : '')
+    if (status == 'succeeded' || status == 'failed' || status == 'cancelled' || status == 'superseded') {
+      let err = ''
+      if (status == 'failed') {
+        err = taskRes.data.error_message != null ? String(taskRes.data.error_message) : '任务失败,请重试'
+      } else if (status == 'cancelled') {
+        err = '任务已被取消'
+      } else if (status == 'superseded') {
+        err = '任务已被新任务取代'
+      }
+      return { done: true, status: status, task: taskRes.data, error: err }
+    }
+    const pollAfter = Number(taskRes.data.poll_after_ms != null ? taskRes.data.poll_after_ms : 1000)
+    await sleep(Math.max(pollAfter, 1000))
+  }
+  return { done: false, status: 'timeout', task: null, error: '处理超时,请稍后查看结果' }
 }
 
 /**
@@ -234,14 +235,56 @@ export async function pollExtractionAndLoadDraft(taskId: string, draftId: string
 export function mapProfileError(code: string, fallback: string): string {
   if (code == 'AI_FEATURE_DISABLED') return 'AI 画像功能当前不可用'
   if (code == 'AI_CONSENT_REQUIRED') return '需要授权后才能使用画像功能'
+  if (code == 'AI_CONSENT_VERSION_CONFLICT') return '授权信息已更新,请重试'
   if (code == 'AI_INPUT_INVALID') return '输入内容有误,请检查后重试'
   if (code == 'PROFILE_SESSION_NOT_FOUND') return '画像会话不存在,请重新开始'
   if (code == 'PROFILE_SESSION_STALE') return '资料已更新,请重新创建画像会话'
   if (code == 'DRAFT_VERSION_CONFLICT') return '草稿已被更新,请刷新后合并'
+  if (code == 'RESULT_STALE') return '草稿已发布或已失效,请刷新'
   if (code == 'AI_QUOTA_EXCEEDED') return 'AI 额度已用完,请稍后再试'
   if (code == 'AI_TEMPORARILY_UNAVAILABLE') return 'AI 服务暂时不可用,请稍后重试'
   if (code == 'AI_POLICY_DENIED') return '内容包含敏感信息,请修改后重试'
   return fallback
+}
+
+/**
+ * 查询本人 AI 授权状态。
+ * 返回 { consents: [{scope, version, policy_revision, granted_at}], privacy_revision }。
+ */
+export async function getAiConsents(): Promise<any> {
+  return request({ url: '/ai/consents', method: 'GET' })
+}
+
+/**
+ * 授予画像文字抽取授权(scope=profile_text_extract)。
+ * consent_version / policy_revision 必须匹配服务端冻结值,否则 409。
+ * X-Expected-Privacy-Revision 必须携带 GET /ai/consents 返回的当前 privacy_revision。
+ */
+export async function grantProfileTextConsent(expectedPrivacyRevision: number): Promise<any> {
+  return request({
+    url: '/ai/consents/profile_text_extract',
+    method: 'PUT',
+    data: { consent_version: 'profile-text-v1', policy_revision: 'ai-policy-2026-08-07-v1' },
+    headers: {
+      'Idempotency-Key': genIdempotencyKey(),
+      'X-Expected-Privacy-Revision': '' + expectedPrivacyRevision
+    }
+  })
+}
+
+/**
+ * 撤回画像文字抽取授权(202 异步清理)。
+ * 撤回后画像相关功能将不可用,直到重新授权。
+ */
+export async function revokeProfileTextConsent(expectedPrivacyRevision: number): Promise<any> {
+  return request({
+    url: '/ai/consents/profile_text_extract',
+    method: 'DELETE',
+    headers: {
+      'Idempotency-Key': genIdempotencyKey(),
+      'X-Expected-Privacy-Revision': '' + expectedPrivacyRevision
+    }
+  })
 }
 
 function sleep(ms: number): Promise<void> {
@@ -249,17 +292,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * 语音转写(首期 mock,后期接入真实 ASR 服务)。
- * 参数:音频临时文件路径 + 当前问题文本 + 字段 key(用于 mock 精准匹配)
- * 返回 { success, text, error }
- *
- * 真实分支:上传音频到 /voice/transcribe → 拿 task_id → 轮询 /ai/tasks/{id}
+ * 语音转写:上传音频到 /voice/transcribe → 拿 task_id → 轮询 /ai/tasks/{id}
  * → status=succeeded 时从 result_payload.transcript 取转写文本。
+ * 参数:音频临时文件路径 + 当前问题文本 + 字段 key。返回 { success, text, error }。
  */
 export async function transcribeAudio(audioPath: string, questionText: string = '', questionFieldKey: string = ''): Promise<any> {
-  if (USE_MOCK) {
-    return mockTranscribe(questionText, questionFieldKey)
-  }
   // 真实 ASR:上传音频文件 → 创建转写任务 → 轮询任务结果
   return await transcribeAudioReal(audioPath, questionFieldKey)
 }
@@ -358,48 +395,13 @@ async function uploadAudioForTranscribe(audioPath: string, questionFieldKey: str
   })
 }
 
-function mockTranscribe(questionText: string, fieldKey: string = ''): any {
-  // 优先用 field_key 精准匹配
-  if (fieldKey == 'age') return { success: true, text: '我今年28岁，从事产品设计工作', error: '' }
-  if (fieldKey == 'city_code') return { success: true, text: '我现在生活在上海，在浦东新区工作', error: '' }
-  if (fieldKey == 'marriage_status') return { success: true, text: '我是未婚状态', error: '' }
-  if (fieldKey == 'education_level') return { success: true, text: '我的最高学历是本科，毕业于一所985院校', error: '' }
-  if (fieldKey == 'height_cm') return { success: true, text: '我的身高是178厘米', error: '' }
-  if (fieldKey == 'income_band') return { success: true, text: '我的年收入大概在20到30万之间', error: '' }
-  if (fieldKey == 'occupation_group') return { success: true, text: '我从事产品设计工作，在一家互联网公司', error: '' }
-  if (fieldKey == 'interest_tags') return { success: true, text: '平时喜欢摄影和徒步，周末经常去郊外拍风景', error: '' }
-  if (fieldKey == 'lifestyle_tags') return { success: true, text: '平时生活比较规律，早睡早起，周末喜欢户外活动', error: '' }
-  if (fieldKey == 'relationship_goal') return { success: true, text: '希望找到一个也喜欢户外活动、生活节奏接近的人', error: '' }
-
-  // 回退到问题文本关键字匹配
-  const q = questionText
-  let text = '这个问题我想想，大概是这样一个情况'
-  if (q.indexOf('城市') >= 0 || q.indexOf('生活') >= 0) text = '我现在生活在上海，在浦东新区工作'
-  else if (q.indexOf('岁') >= 0 || q.indexOf('年龄') >= 0) text = '我今年28岁，从事产品设计工作'
-  else if (q.indexOf('兴趣') >= 0 || q.indexOf('投入') >= 0) text = '平时喜欢摄影和徒步，周末经常去郊外拍风景'
-  else if (q.indexOf('关系') >= 0 || q.indexOf('期待') >= 0) text = '希望找到一个也喜欢户外活动、生活节奏接近的人'
-  else if (q.indexOf('学历') >= 0) text = '我的最高学历是本科，毕业于一所985院校'
-  else if (q.indexOf('身高') >= 0) text = '我的身高是178厘米'
-  else if (q.indexOf('收入') >= 0) text = '我的年收入大概在20到30万之间'
-  else if (q.indexOf('婚姻') >= 0) text = '我是未婚状态'
-  else if (q.indexOf('职业') >= 0) text = '我从事产品设计工作，在一家互联网公司'
-  else if (q.indexOf('生活方式') >= 0) text = '平时生活比较规律，早睡早起，周末喜欢户外活动'
-  return { success: true, text: text, error: '' }
-}
-
 /**
  * 语音合成(TTS):将问题文本合成为可播放的音频。
  * 返回 { success, audioUrl, durationMs, error }
  *
- * 真实分支:POST /voice/synthesize { text } → 返回 { audio_url, duration_ms }
- * mock 分支:返回占位 URL,调用方(VoiceRecorder)走计时器模拟播报。
+ * POST /voice/synthesize { text } → 返回 { audio_url, duration_ms },由 VoiceRecorder 播放。
  */
 export async function synthesizeSpeech(text: string): Promise<any> {
-  if (USE_MOCK) {
-    // mock:返回占位 URL,VoiceRecorder 走 setTimeout 模拟播报(向后兼容)
-    const estimatedMs = Math.min(5000, Math.max(2000, text.length * 250))
-    return { success: true, audioUrl: '', durationMs: estimatedMs, error: '' }
-  }
   const res = await request({
     url: '/voice/synthesize',
     method: 'POST',
@@ -425,11 +427,12 @@ export async function synthesizeSpeech(text: string): Promise<any> {
 
 /**
  * 画像叙事层(人格标题/AI洞察/维度卡片/理想型百分比/变化diff/历史观察)。
- * TODO(后端待交付):当前始终走 mock,后端就绪后改为真实端点。
- * 建议端点:GET /ai/profiles/{subject}/narrative
- * 返回统一结构,见 mockGetPortraitNarrative。
+ * 发布后由后端 Worker 异步生成，写入 ai_profile_summary。
+ * 如果尚未发布或 narrative 任务未完成，后端返回 status='pending'。
  */
 export async function getPortraitNarrative(subject: string): Promise<any> {
-  // TODO(后端待交付):接入真实 GET /ai/profiles/{subject}/narrative
-  return mockGetPortraitNarrative(subject)
+  return request({
+    url: '/ai/profiles/' + subject + '/narrative',
+    method: 'GET'
+  })
 }

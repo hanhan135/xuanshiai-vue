@@ -1,235 +1,315 @@
 <template>
-	<view class="portrait-page">
-		<!-- 导航栏 -->
-		<view class="pp-nav" :style="{ paddingTop: statusBarHeight + 'px' }">
-			<view class="pp-nav-side" @tap="back">
-				<text class="pp-back">‹</text>
-			</view>
-			<text class="pp-nav-title">AI 画像</text>
-			<view class="pp-nav-side" @tap="openHistory">
-				<text class="pp-nav-history">历史</text>
-			</view>
-		</view>
-
-		<!-- 主体 Tab -->
-		<view class="pp-tabs">
-			<view class="pp-tab" :class="{ 'pp-tab-active': subject == 'personal' }" @tap="switchSubject('personal')">
-				<text class="pp-tab-text" :class="{ 'pp-tab-text-active': subject == 'personal' }">关于我</text>
-			</view>
-			<view class="pp-tab" :class="{ 'pp-tab-active': subject == 'ideal_partner' }" @tap="switchSubject('ideal_partner')">
-				<text class="pp-tab-text" :class="{ 'pp-tab-text-active': subject == 'ideal_partner' }">关于对方</text>
-			</view>
-		</view>
-
-		<!-- 进度条 -->
-		<view class="pp-progress-bar">
-			<view class="pp-progress-row">
-				<view class="pp-progress-track">
-					<view class="pp-progress-fill" :style="{ width: progressPercent + '%' }"></view>
+	<view class="persona-root">
+			<!-- 顶部导航 -->
+			<view class="at-nav" :style="{ paddingTop: navPadTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+				<view class="at-nav-side at-nav-back" @tap="navBack">
+					<text class="at-back">‹</text>
 				</view>
-				<view v-if="session != null && !showModeSelect" class="pp-pause-btn" @tap="togglePause">
-					<text class="pp-pause-text">{{ paused ? '继续' : '暂停' }}</text>
+				<text class="at-nav-title" :style="{ top: navPadTop + 'px' }">{{ navTitle }}</text>
+				<view class="at-nav-side at-nav-actions">
+					<text v-if="viewMode == 'subject'" class="at-nav-action" @tap="manageVisible = true">⋯</text>
 				</view>
 			</view>
-			<text class="pp-progress-text">{{ progressPercent }}% · {{ progressGuide }}</text>
-		</view>
 
-		<!-- 顶部 AI Orb(仅主内容态展示) -->
-		<view v-if="!featureDisabled && !consentRequired && !loading && !showModeSelect" class="pp-orb-zone">
-			<PortraitOrb size="small" :breathing="true" />
-			<text class="pp-orb-status">{{ orbStatusText }}</text>
-		</view>
-
-		<!-- 功能禁用态 -->
-		<view v-if="featureDisabled" class="pp-state">
-			<text class="pp-state-title">AI 画像功能当前不可用</text>
-			<text class="pp-state-copy">你可以先通过普通编辑完善资料,稍后再使用 AI 画像</text>
-			<view class="pp-state-btn" @tap="goEditProfile">
-				<text class="pp-state-btn-text">去编辑资料</text>
+		<!-- 功能门禁关闭 -->
+		<view v-if="featureDisabled" class="at-state">
+			<view class="at-state-bottle">🕯</view>
+			<text class="at-state-title">墨相暂时不可用</text>
+			<text class="at-state-copy">AI 画像功能当前不可用。你可以先完善资料,稍后再来。</text>
+			<view class="at-state-btn" @tap="goEditProfile">
+				<text class="at-state-btn-text">去编辑资料</text>
 			</view>
 		</view>
 
-		<!-- 授权引导态 -->
-		<view v-else-if="consentRequired" class="pp-state">
-			<text class="pp-state-title">需要授权后才能使用画像功能</text>
-			<text class="pp-state-copy">{{ consentMessage }}</text>
-			<view class="pp-state-btn" @tap="loadSession">
-				<text class="pp-state-btn-text">重新尝试</text>
+		<!-- 授权门槛 -->
+		<view v-else-if="consentRequired" class="at-gate">
+			<text class="at-gate-title">使用前需要授权</text>
+			<text class="at-gate-sub">需要你授权 AI 理解你确认过的话</text>
+			<view class="at-gate-card">
+				<view class="at-gate-row">
+					<text class="at-gate-row-icon">✦</text>
+					<text class="at-gate-row-text">你口述或书写,AI 提出它的理解,并附上你说的原话</text>
+				</view>
+				<view class="at-gate-row">
+					<text class="at-gate-row-icon">✦</text>
+					<text class="at-gate-row-text">每一条由你决定:确认、修改、否定或移出</text>
+				</view>
+				<view class="at-gate-row">
+					<text class="at-gate-row-icon">✦</text>
+					<text class="at-gate-row-text">AI 只能写入十个画像字段,认证信息永远不由 AI 修改</text>
+				</view>
+				<view class="at-gate-row">
+					<text class="at-gate-row-icon">✦</text>
+					<text class="at-gate-row-text">你可以随时删除画像、撤回授权,数据将异步清理</text>
+				</view>
+			</view>
+			<text v-if="consentMessage != ''" class="at-gate-msg">{{ consentMessage }}</text>
+			<view class="at-gate-btn" :class="{ 'at-gate-btn-busy': granting }" @tap="doGrantConsent">
+				<text class="at-gate-btn-text">{{ granting ? '授权中...' : '授权并开始' }}</text>
+			</view>
+			<view class="at-gate-skip" @tap="navBack">
+				<text class="at-gate-skip-text">暂不授权</text>
 			</view>
 		</view>
 
 		<!-- 加载态 -->
-		<view v-else-if="loading" class="pp-state">
-			<text class="pp-state-title">正在读取画像数据</text>
+		<view v-else-if="loading" class="at-state">
+			<view class="at-loading-steam">
+				<view class="at-steam-dot at-steam-dot-1"></view>
+				<view class="at-steam-dot at-steam-dot-2"></view>
+				<view class="at-steam-dot at-steam-dot-3"></view>
+			</view>
+			<text class="at-state-title">正在铺开纸面</text>
 		</view>
 
-		<!-- 主内容区 -->
-		<view v-else class="pp-body">
-			<!-- 生成过渡屏(首次发布时) -->
-			<view v-if="showGenerating" class="pp-generating">
-				<PortraitOrb size="large" :breathing="true" />
-				<text class="pp-generating-title">正在整理 {{ confirmedCount }} 条信息</text>
-				<view class="pp-generating-steps">
-					<view v-for="(step, si) in generatingSteps" :key="si" class="pp-gen-step">
-						<text class="pp-gen-check">✓</text>
-						<text class="pp-gen-step-text">{{ step }}</text>
+		<!-- ===== 墨案(首页) ===== -->
+		<view v-else-if="viewMode == 'shelf'" class="at-shelf">
+			<text class="at-shelf-intro">每个人都有一副自己的样子。</text>
+			<text class="at-shelf-intro2">说说你自己,AI 帮你落成可以确认的一笔。</text>
+
+				<view class="at-bottles">
+					<view class="at-bottle-hit" @tap="enterSubject('personal')">
+						<PersonaBottle
+							:state="bottleState('personal')"
+							variant="me"
+							:fill="bottleFill('personal')"
+							:title="bottleTitle('personal')"
+							:sub="bottleSub('personal')"
+							:hasChange="bottleHasChange('personal')"
+							:active="subject == 'personal'"
+							@select="enterSubject('personal')"
+						/>
+					</view>
+					<view class="at-bottle-hit" @tap="enterSubject('ideal_partner')">
+						<PersonaBottle
+							:state="bottleState('ideal_partner')"
+							variant="ta"
+							:fill="bottleFill('ideal_partner')"
+							:title="bottleTitle('ideal_partner')"
+							:sub="bottleSub('ideal_partner')"
+							:hasChange="bottleHasChange('ideal_partner')"
+							:active="subject == 'ideal_partner'"
+							@select="enterSubject('ideal_partner')"
+						/>
 					</view>
 				</view>
-				<text v-if="narrative != null && narrative.insight != null" class="pp-generating-summary">
-					{{ narrative.insight }}
-				</text>
+
+			<view class="at-shelf-note">
+				<text class="at-shelf-note-text">AI 只整理你确认过的话 · 十个画像字段 · 随时删除</text>
 			</view>
 
-			<!-- 模式选择(仅首次进入时展示) -->
-			<view v-else-if="showModeSelect" class="pp-mode-select">
-				<text class="pp-mode-title">选择对话模式</text>
-				<text class="pp-mode-sub">用对话替代填表,AI 帮你整理结构化画像</text>
-				<view class="pp-mode-actions">
-					<view class="pp-mode-btn pp-mode-text-btn" @tap="startTextSession">
-						<text class="pp-mode-btn-icon">📝</text>
-						<text class="pp-mode-btn-name">文字模式</text>
-						<text class="pp-mode-btn-desc">用文字回答问题</text>
+			<!-- 理解预览 -->
+			<view v-if="insightPreview != ''" class="at-shelf-insight" @tap="openInsightSubject">
+				<text class="at-shelf-insight-label">{{ insightPreviewLabel }} · AI 的理解</text>
+				<text class="at-shelf-insight-text">{{ insightPreview }}</text>
+				<text class="at-shelf-insight-more">查看成稿 ›</text>
+			</view>
+		</view>
+
+		<!-- ===== 主体空间 ===== -->
+		<view v-else class="at-subject">
+			<!-- 主体子导航 -->
+			<view class="at-subject-bar">
+				<view class="at-subject-back" @tap="backToShelf">
+					<text class="at-subject-back-text">‹ 墨案</text>
+				</view>
+				<view class="at-seg">
+					<view class="at-seg-item" :class="{ 'at-seg-active': subjectPane == 'letter' }" @tap="switchPane('letter')">
+						<text class="at-seg-text" :class="{ 'at-seg-text-active': subjectPane == 'letter' }">成稿</text>
 					</view>
-					<view class="pp-mode-btn pp-mode-voice-btn" @tap="startVoiceSession">
-						<text class="pp-mode-btn-icon">🎤</text>
-						<text class="pp-mode-btn-name">语音模式</text>
-						<text class="pp-mode-btn-desc">长按说话,更自然</text>
+					<view class="at-seg-item" :class="{ 'at-seg-active': subjectPane == 'dialog' }" @tap="switchPane('dialog')">
+						<text class="at-seg-text" :class="{ 'at-seg-text-active': subjectPane == 'dialog' }">落笔</text>
 					</view>
 				</view>
+				<view class="at-subject-bar-side"></view>
 			</view>
 
-			<!-- 对话流 -->
-			<scroll-view v-else scroll-y class="pp-chat-flow" enhanced show-scrollbar="false" :scroll-into-view="scrollAnchor">
-				<view v-if="messages.length == 0 && session == null" class="pp-empty">
-					<text class="pp-empty-title">还没有画像数据</text>
-					<text class="pp-empty-sub">点击上方按钮开始对话,AI 会帮你整理画像</text>
-				</view>
+			<!-- ===== 成稿(成品叙事) ===== -->
+			<scroll-view v-if="subjectPane == 'letter'" scroll-y class="at-letter" enhanced :show-scrollbar="false">
+				<view v-if="letterReady" class="at-letter-body">
+					<view class="at-letter-head">
+						<text class="at-letter-title">{{ narrative != null && narrative.persona_title != null ? narrative.persona_title : '' }}</text>
+						<view v-if="letterTags.length > 0" class="at-letter-tags">
+							<text v-for="tag in letterTags" :key="tag" class="at-letter-tag">{{ tag }}</text>
+						</view>
+					</view>
 
-				<view v-for="(msg, idx) in messages" :key="msg.id" :id="'msg-' + msg.id">
-					<!-- AI 问题气泡(左) -->
-					<view v-if="msg.type == 'question'" class="pp-msg pp-msg-left">
-						<view class="pp-bubble pp-bubble-ai">
-							<text class="pp-bubble-text">{{ msg.text }}</text>
-							<!-- 枚举字段选项按钮 -->
-							<view v-if="msg.options != null && msg.options.length > 0" class="pp-options">
-								<view
-									v-for="opt in msg.options"
-									:key="opt"
-									class="pp-option-chip"
-									:class="{ selected: answerText == opt }"
-									@tap="answerText = opt"
-								>
-									<text class="pp-option-chip-text">{{ opt }}</text>
-								</view>
+					<view v-if="letterInsight != ''" class="at-letter-block">
+						<text class="at-block-label">AI 的理解</text>
+						<text class="at-block-serif">{{ letterInsight }}</text>
+					</view>
+
+					<!-- 结构(dimensions) -->
+					<view v-if="letterDimensions.length > 0" class="at-letter-block">
+						<text class="at-block-label">结构</text>
+						<view v-for="dim in letterDimensions" :key="dim.key" class="at-dim-row">
+							<text class="at-dim-icon">{{ dim.icon }}</text>
+							<view class="at-dim-main">
+								<text class="at-dim-title">{{ dim.title }}</text>
+								<text class="at-dim-summary">{{ dim.summary }}</text>
 							</view>
 						</view>
 					</view>
 
-					<!-- 用户回答气泡(右) -->
-					<view v-if="msg.type == 'answer'" class="pp-msg pp-msg-right">
-						<view class="pp-bubble pp-bubble-user">
-							<text class="pp-bubble-text">{{ msg.text }}</text>
+					<!-- 期许配比(ideal_weights,仅愿遇之相) -->
+					<view v-if="letterWeights.length > 0" class="at-letter-block">
+						<text class="at-block-label">你在意的配比</text>
+						<view v-for="w in letterWeights" :key="w.key" class="at-weight-row">
+							<text class="at-weight-label">{{ w.label }}</text>
+							<view class="at-weight-track">
+								<view class="at-weight-fill" :style="{ width: w.percent + '%' }"></view>
+							</view>
+							<text class="at-weight-percent">{{ w.percent }}%</text>
 						</view>
 					</view>
 
-					<!-- 打字指示器 -->
-					<view v-if="msg.type == 'typing'" class="pp-msg pp-msg-left">
-						<view class="pp-bubble pp-bubble-ai pp-typing">
-							<view class="pp-dot"></view>
-							<view class="pp-dot"></view>
-							<view class="pp-dot"></view>
-							<text class="pp-typing-text">{{ msg.text }}</text>
+					<!-- 新的一笔(recent_change) -->
+					<view v-if="letterRecentChange != null" class="at-letter-block at-change-block">
+						<text class="at-block-label">新的一笔</text>
+						<text class="at-change-summary">{{ letterRecentChange.direction == 'up' ? '↑' : '↓' }} {{ letterRecentChange.summary }}</text>
+						<text class="at-change-obs">{{ letterRecentChange.observation }}</text>
+					</view>
+
+					<!-- 收束(conclusion) -->
+					<view v-if="letterConclusion != ''" class="at-letter-block at-conclusion-block">
+						<text class="at-block-label">收束</text>
+						<text class="at-block-serif">{{ letterConclusion }}</text>
+					</view>
+
+					<view class="at-letter-actions">
+						<view class="at-letter-btn at-letter-btn-main" @tap="continueExpressing">
+							<text class="at-letter-btn-main-text">继续说,补全这一幅</text>
+						</view>
+						<view class="at-letter-btn" @tap="openBatch">
+							<text class="at-letter-btn-text">往稿</text>
 						</view>
 					</view>
-
-					<!-- 系统提示 -->
-					<view v-if="msg.type == 'system'" class="pp-msg pp-msg-system">
-						<text class="pp-system-text">{{ msg.text }}</text>
-					</view>
-
-					<!-- 字段卡片(内嵌) -->
-					<view v-if="msg.type == 'field'" class="pp-msg pp-msg-field">
-						<XsaPortraitField
-							:field="msg.field"
-							:fieldLabel="msg.label"
-							@confirm="onFieldConfirm"
-							@edit="onFieldEdit"
-							@reject="onFieldReject"
-							@delete="onFieldDelete"
-						/>
-					</view>
-
-					<!-- 发布成功提示 -->
-					<view v-if="msg.type == 'published'" class="pp-msg pp-msg-system">
-						<text class="pp-system-text">✓ 画像已发布 · 版本 {{ msg.revision }} · {{ msg.fieldCount }} 个字段</text>
-					</view>
-				</view>
-				<view class="pp-chat-spacer"></view>
-			</scroll-view>
-
-			<!-- 叙事层区块(后端待交付,mock 占位) -->
-			<scroll-view v-if="!showModeSelect && !showGenerating" scroll-y class="pp-narrative-scroll">
-				<!-- AI 洞察 -->
-				<view v-if="showInsight" class="pp-insight">
-					<text class="pp-insight-label">AI 对你的理解</text>
-					<text class="pp-insight-text">{{ narrative.insight }}</text>
-					<view class="pp-insight-more" @tap="showInsightDetail">
-						<text class="pp-insight-more-text">查看完整分析 →</text>
-					</view>
+					<view class="at-letter-foot-space"></view>
 				</view>
 
-				<!-- 维度卡片 -->
-				<view v-if="showDimensions" class="pp-dimensions">
-					<view
-						v-for="dim in narrative.dimensions"
-						:key="dim.key"
-						class="pp-dim-card"
-						@tap="showDimensionDetail(dim.title)"
-					>
-						<text class="pp-dim-icon">{{ dim.icon }}</text>
-						<view class="pp-dim-main">
-							<text class="pp-dim-title">{{ dim.title }}</text>
-							<text class="pp-dim-summary">{{ dim.summary }}</text>
+				<!-- 成稿未就绪(pending / 空) -->
+				<view v-else class="at-letter-pending">
+					<view v-if="hasBottledBefore" class="at-curing-panel">
+						<view class="at-curing-steam">
+							<view class="at-steam-dot at-steam-dot-1"></view>
+							<view class="at-steam-dot at-steam-dot-2"></view>
+							<view class="at-steam-dot at-steam-dot-3"></view>
 						</view>
-						<text class="pp-dim-arrow">›</text>
-					</view>
-				</view>
-
-				<!-- 理想型百分比(关于对方) -->
-				<view v-if="showIdealWeights" class="pp-weights">
-					<text class="pp-weights-title">你更看重</text>
-					<view
-						v-for="w in narrative.ideal_weights"
-						:key="w.key"
-						class="pp-weight-row"
-					>
-						<text class="pp-weight-label">{{ w.label }}</text>
-						<view class="pp-weight-track">
-							<view class="pp-weight-fill" :style="{ width: w.percent + '%' }"></view>
+						<text class="at-curing-title">正在写下理解</text>
+						<text class="at-curing-sub">这一稿已经写下,AI 正在整理对你的理解。通常需要一点时间。</text>
+						<view class="at-curing-actions">
+							<view class="at-curing-btn" @tap="refreshNarrativeNow">
+								<text class="at-curing-btn-text">刷新理解</text>
+							</view>
+							<view class="at-curing-btn at-curing-btn-plain" @tap="switchPane('dialog')">
+								<text class="at-curing-btn-plain-text">回到落笔</text>
+							</view>
 						</view>
-						<text class="pp-weight-percent">{{ w.percent }}%</text>
 					</view>
-				</view>
-
-				<!-- 最近的变化 -->
-				<view v-if="showRecentChange" class="pp-change">
-					<text class="pp-change-title">最近的变化</text>
-					<text class="pp-change-summary">{{ narrative.recent_change.direction == 'up' ? '↑' : '↓' }} {{ narrative.recent_change.summary }}</text>
-					<text class="pp-change-obs">{{ narrative.recent_change.observation }}</text>
-					<view class="pp-change-more" @tap="openHistory">
-						<text class="pp-change-more-text">查看画像变化 →</text>
+					<view v-else class="at-curing-panel">
+						<text class="at-curing-title">这篇还没有成稿</text>
+						<text class="at-curing-sub">先去落笔,确认足够的字段并写下成稿后,这里会留下 AI 对你的理解。</text>
+						<view class="at-curing-actions">
+							<view class="at-curing-btn" @tap="switchPane('dialog')">
+								<text class="at-curing-btn-text">去落笔</text>
+							</view>
+						</view>
 					</view>
 				</view>
 			</scroll-view>
 
-			<!-- 底部操作栏 -->
-			<view v-if="!showModeSelect && !featureDisabled && !consentRequired" class="pp-input-bar">
-				<!-- 转写确认态(语音模式) -->
-				<view v-if="voiceMode && transcribeText != ''" class="pp-input-row pp-transcribe-row">
-					<view class="pp-transcribe-card">
-						<text class="pp-transcribe-label">语音转写结果</text>
+			<!-- ===== 落笔(对话) ===== -->
+			<view v-else class="at-dialog">
+				<!-- 本次会话进度(仅代表本次落笔,不是长期"理解度") -->
+				<view class="at-progress">
+					<view class="at-progress-track">
+						<view class="at-progress-fill" :style="{ width: progressPercent + '%' }"></view>
+					</view>
+					<text class="at-progress-text">本次落笔 {{ progressPercent }}% · 已确认 {{ confirmedCount }} 笔</text>
+					<view v-if="session != null && !extracting && !publishing" class="at-pause" @tap="togglePause">
+						<text class="at-pause-text">{{ paused ? '继续' : '暂存' }}</text>
+					</view>
+				</view>
+
+				<!-- 对话流 -->
+				<scroll-view scroll-y class="at-flow" enhanced :show-scrollbar="false" :scroll-into-view="scrollAnchor">
+					<view v-if="messages.length == 0 && session == null" class="at-empty">
+						<text class="at-empty-title">还没有开始落笔</text>
+						<text class="at-empty-sub">AI 会一个字段一个字段地问你</text>
+					</view>
+
+					<view v-for="msg in messages" :key="msg.id" :id="'msg-' + msg.id">
+						<!-- AI 提问 -->
+						<view v-if="msg.type == 'question'" class="at-msg at-msg-left">
+							<view class="at-bubble at-bubble-ai">
+								<text class="at-bubble-ai-text">{{ msg.text }}</text>
+								<view v-if="msg.options != null && msg.options.length > 0" class="at-options">
+									<view
+										v-for="opt in msg.options"
+										:key="opt"
+										class="at-option-chip"
+										:class="{ selected: answerText == opt }"
+										@tap="answerText = opt"
+									>
+										<text class="at-option-chip-text">{{ opt }}</text>
+									</view>
+								</view>
+							</view>
+						</view>
+
+						<!-- 用户回答(右) -->
+						<view v-if="msg.type == 'answer'" class="at-msg at-msg-right">
+							<view class="at-bubble at-bubble-user">
+								<text class="at-bubble-user-text">{{ msg.text }}</text>
+							</view>
+						</view>
+
+						<!-- 思考中 -->
+						<view v-if="msg.type == 'typing'" class="at-msg at-msg-left">
+							<view class="at-bubble at-bubble-ai at-typing">
+								<view class="at-dot"></view>
+								<view class="at-dot"></view>
+								<view class="at-dot"></view>
+								<text class="at-typing-text">{{ msg.text }}</text>
+							</view>
+						</view>
+
+						<!-- 系统提示 -->
+						<view v-if="msg.type == 'system'" class="at-msg at-msg-system">
+							<text class="at-system-text">{{ msg.text }}</text>
+						</view>
+
+						<!-- 待确认理解事件 -->
+						<view v-if="msg.type == 'ingredients'" class="at-msg at-msg-ingredients">
+							<text class="at-ingredients-title">{{ msg.count }} 条理解待确认</text>
+							<view class="at-ingredients-chips">
+								<view
+									v-for="label in msg.labels"
+									:key="label"
+									class="at-ingredient-chip"
+									@tap="recipeVisible = true"
+								>
+									<text class="at-ingredient-chip-text">{{ label }}</text>
+								</view>
+							</view>
+							<text class="at-ingredients-more" @tap="recipeVisible = true">打开待确认的理解 ›</text>
+						</view>
+
+						<!-- 成稿成功 -->
+						<view v-if="msg.type == 'published'" class="at-msg at-msg-system">
+							<text class="at-system-text at-published-text">✓ 已写成稿 · 第 {{ msg.revision }} 稿 · 已确认 {{ msg.fieldCount }} 笔</text>
+						</view>
+					</view>
+					<view class="at-flow-spacer"></view>
+				</scroll-view>
+
+				<!-- 底部操作区 -->
+				<view v-if="!featureDisabled && !consentRequired" class="at-input-bar">
+					<!-- 转写确认(普通语音) -->
+					<view v-if="voiceMode && transcribeText != ''" class="at-transcribe-card">
+						<text class="at-transcribe-label">转写结果(请确认后再提交)</text>
 						<textarea
-							class="pp-transcribe-input"
+							class="at-transcribe-input"
 							:value="transcribeText"
 							@input="onTranscribeInput"
 							maxlength="2000"
@@ -237,86 +317,227 @@
 							:disable-default-padding="true"
 							:cursor-spacing="16"
 						/>
-						<view class="pp-transcribe-foot">
-							<view class="pp-transcribe-retry" @tap="retryVoice">
-								<text class="pp-transcribe-retry-text">重新录音</text>
+						<view class="at-transcribe-foot">
+							<view class="at-transcribe-retry" @tap="retryVoice">
+								<text class="at-transcribe-retry-text">重新录</text>
 							</view>
-							<view class="pp-transcribe-confirm" @tap="confirmTranscribe">
-								<text class="pp-transcribe-confirm-text">确认回答</text>
+							<view class="at-transcribe-confirm" @tap="confirmTranscribe">
+								<text class="at-transcribe-confirm-text">确认,交给 AI</text>
 							</view>
 						</view>
 					</view>
-				</view>
 
-				<!-- 语音输入态 -->
-				<view v-else-if="voiceMode && currentQuestion != null && !extracting && !publishing" class="pp-voice-area">
-					<VoiceRecorder
-						ref="voiceRecorderRef"
-						:questionText="currentQuestionText"
-						:questionFieldKey="currentQuestionFieldKey"
-						:autoSpeak="true"
-						@transcribed="onTranscribed"
-						@cancelled="onVoiceCancelled"
-					/>
-					<view class="pp-mode-switch" @tap="switchToText">
-						<text class="pp-mode-switch-text">切换为文字模式</text>
+					<!-- 普通语音区 -->
+					<view v-else-if="voiceMode && !extracting && !publishing" class="at-voice-area">
+						<VoiceRecorder
+							ref="voiceRecorderRef"
+							:questionText="currentQuestionText"
+							:questionFieldKey="currentQuestionFieldKey"
+							:autoSpeak="true"
+							theme="atelier"
+							@transcribed="onTranscribed"
+							@cancelled="onVoiceCancelled"
+						/>
+						<view class="at-mode-switch" @tap="switchToText">
+							<text class="at-mode-switch-text">改用文字</text>
+						</view>
 					</view>
-				</view>
 
-				<!-- 文字输入态 -->
-				<view v-else-if="!voiceMode && currentQuestion != null && !extracting && !publishing" class="pp-input-row">
-					<input
-						class="pp-input"
-						:value="answerText"
-						@input="onAnswerInput"
-						:placeholder="inputPlaceholder"
-						placeholder-class="pp-ph"
-						maxlength="2000"
-						:cursor-spacing="16"
-					/>
-					<view
-						class="pp-send-btn"
-						:class="{ 'pp-send-ready': answerText.trim().length > 0 }"
-						@tap="submitAnswer"
-					>
-						<text class="pp-send-text">发送</text>
+					<!-- 文字输入区 -->
+					<view v-else-if="!voiceMode && !extracting && !publishing" class="at-input-row">
+						<input
+							class="at-input"
+							:value="answerText"
+							@input="onAnswerInput"
+							:placeholder="inputPlaceholder"
+							placeholder-class="at-ph"
+							maxlength="2000"
+							:cursor-spacing="16"
+						/>
+						<view
+							v-if="currentQuestion != null"
+							class="at-round-btn"
+							@tap="switchToVoice"
+						>
+							<text class="at-round-btn-text">🎤</text>
+						</view>
+						<view
+							v-if="currentQuestion != null && session != null"
+							class="at-round-btn"
+							@tap="startConversationSession"
+						>
+							<text class="at-round-btn-text">💬</text>
+						</view>
+						<view
+							class="at-send-btn"
+							:class="{ 'at-send-ready': answerText.trim().length > 0 }"
+							@tap="submitAnswer"
+						>
+							<text class="at-send-text">写上</text>
+						</view>
 					</view>
-					<view class="pp-mode-switch pp-mode-switch-inline" @tap="switchToVoice" v-if="!voiceMode">
-						<text class="pp-mode-switch-text">🎤</text>
-					</view>
-				</view>
 
-				<!-- 抽取中态 -->
-				<view v-if="extracting" class="pp-input-row">
-					<view class="pp-bar-status">
-						<text class="pp-bar-status-text">AI 正在整理你的回答...</text>
+					<!-- AI 提取中 -->
+					<view v-if="extracting" class="at-bar-status">
+						<view class="at-mini-steam">
+							<view class="at-steam-dot at-steam-dot-1"></view>
+							<view class="at-steam-dot at-steam-dot-2"></view>
+						</view>
+						<text class="at-bar-status-text">AI 正在整理你刚说的话...</text>
 					</view>
-				</view>
 
-				<!-- 发布态 -->
-				<view v-if="confirmedCount > 0 && !extracting" class="pp-input-row pp-publish-row">
-					<text class="pp-publish-info">已确认 {{ confirmedCount }} 个字段</text>
-					<view
-						class="pp-publish-btn"
-						:class="{ 'pp-publish-ready': !publishing }"
-						@tap="publishDraft"
-					>
-						<text class="pp-publish-text">{{ publishing ? '发布中...' : '发布画像' }}</text>
+					<!-- 写下成稿 -->
+					<view v-if="confirmedCount > 0 && !extracting && !publishing && draft != null" class="at-publish-row">
+						<text class="at-publish-info">已确认 {{ confirmedCount }} 笔</text>
+						<view class="at-publish-btn" @tap="publishDraft">
+							<text class="at-publish-text">写下成稿</text>
+						</view>
 					</view>
 				</view>
 			</view>
 		</view>
 
-		<!-- 历史版本弹窗(升级为时间线叙事) -->
-		<PortraitHistorySheet
-			:visible="historyVisible"
-			:loading="historyLoading"
-			:items="historyItems"
+		<!-- ===== 实时语音对话层(沉浸式) ===== -->
+		<view v-if="conversationMode" class="at-voice-overlay">
+			<view class="at-voice-head" :style="{ paddingTop: navPadTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+				<view class="at-voice-exit" @tap="closeConversation">
+					<text class="at-voice-exit-text">‹</text>
+				</view>
+				<text class="at-voice-title" :style="{ top: navPadTop + 'px' }">和 AI 对话</text>
+				<view class="at-voice-head-side"></view>
+			</view>
+
+			<view class="at-voice-body">
+				<VoiceConversation
+					ref="conversationRef"
+					:sessionId="session != null && session.session_id != null ? String(session.session_id) : ''"
+					:fieldKey="currentQuestionFieldKey"
+					theme="atelier-dark"
+					@transcribed="onConversationTranscribed"
+					@aiReply="onConversationAIReply"
+					@error="onConversationError"
+					@sessionEnd="onConversationEnd"
+				/>
+
+				<!-- 最终转写确认:实时对话不自动写入画像 -->
+				<view v-if="convReviewShow" class="at-conv-review">
+					<text class="at-conv-review-label">转写结果(请确认后再提交)</text>
+					<textarea
+						class="at-conv-review-input"
+						:value="convReview"
+						@input="onConvReviewInput"
+						maxlength="2000"
+						:show-confirm-bar="false"
+						:disable-default-padding="true"
+					/>
+					<view class="at-conv-review-foot">
+						<view class="at-conv-review-retry" @tap="redoConvReview">
+							<text class="at-conv-review-retry-text">重新说</text>
+						</view>
+						<view class="at-conv-review-confirm" @tap="confirmConvReview">
+							<text class="at-conv-review-confirm-text">确认,交给 AI</text>
+						</view>
+					</view>
+				</view>
+
+				<!-- 降级面板 -->
+				<view v-if="convDegraded" class="at-conv-degrade">
+					<text class="at-conv-degrade-title">实时对话暂时不可用</text>
+					<view class="at-conv-degrade-actions">
+						<view class="at-conv-degrade-btn" @tap="retryConversation">
+							<text class="at-conv-degrade-btn-text">再试一次</text>
+						</view>
+						<view class="at-conv-degrade-btn" @tap="degradeToRecorder">
+							<text class="at-conv-degrade-btn-text">改用普通录音</text>
+						</view>
+						<view class="at-conv-degrade-btn" @tap="degradeToText">
+							<text class="at-conv-degrade-btn-text">改用文字</text>
+						</view>
+					</view>
+				</view>
+
+				<text class="at-voice-hint">像朋友一样聊天。对话内容不会自动写入画像,只有你确认后的话才会进入落笔。</text>
+			</view>
+		</view>
+
+		<!-- ===== 生成层(写下成稿后真实任务进度) ===== -->
+		<view v-if="publishing" class="at-curing-overlay">
+			<view class="at-curing-overlay-body">
+				<view class="at-curing-steam at-curing-steam-lg">
+					<view class="at-steam-dot at-steam-dot-1"></view>
+					<view class="at-steam-dot at-steam-dot-2"></view>
+					<view class="at-steam-dot at-steam-dot-3"></view>
+				</view>
+				<text class="at-curing-overlay-title">正在写下成稿</text>
+				<view class="at-curing-lines">
+					<view v-for="(line, li) in curingLines" :key="li" class="at-cure-line">
+						<text class="at-cure-check">✓</text>
+						<text class="at-cure-line-text">{{ line }}</text>
+					</view>
+				</view>
+				<text class="at-curing-overlay-sub">{{ curingCurrentText }}</text>
+			</view>
+		</view>
+
+		<!-- ===== 待确认的理解(协商中心) ===== -->
+		<XsaSheet :visible="recipeVisible" title="待确认的理解" @close="recipeVisible = false">
+			<view class="at-recipe-body">
+				<text class="at-recipe-sub">AI 提出的理解都在这里。哪一条留下、哪一条拿掉,由你决定。</text>
+				<view v-if="recipeFields.length == 0" class="at-recipe-empty">
+					<text class="at-recipe-empty-title">还没有需要确认的内容</text>
+					<text class="at-recipe-empty-sub">回到对话,回答 AI 的问题</text>
+				</view>
+				<PersonaIngredient
+					v-for="f in recipeFields"
+					:key="f.field_key"
+					:field="f"
+					:fieldLabel="fieldLabel(String(f.field_key))"
+					@confirm="onFieldConfirm"
+					@replace="onFieldReplace"
+					@reject="onFieldReject"
+					@delete="onFieldDelete"
+				/>
+			</view>
+		</XsaSheet>
+
+		<!-- ===== 往稿 ===== -->
+		<PortraitBatchSheetComponent
+			:visible="batchVisible"
+			:loading="batchLoading"
+			:items="batchItems"
 			:subject="subject"
 			:observations="historyObservations"
-			@close="closeHistory"
+			@close="closeBatch"
 			@restore="restoreRevision"
 		/>
+
+		<!-- ===== 墨相管理 ===== -->
+		<XsaSheet :visible="manageVisible" title="墨相管理" @close="manageVisible = false">
+				<view class="at-manage-body">
+					<view class="at-manage-row" @tap="openBatchFromManage">
+						<text class="at-manage-row-text">往稿</text>
+						<text class="at-manage-row-arrow">›</text>
+					</view>
+					<view class="at-manage-row" @tap="togglePause">
+						<text class="at-manage-row-text">{{ paused ? '继续本次' : '暂存本次' }}</text>
+						<text class="at-manage-row-arrow">›</text>
+					</view>
+				<view class="at-manage-row" @tap="endSession">
+					<text class="at-manage-row-text">结束本次</text>
+					<text class="at-manage-row-arrow">›</text>
+				</view>
+				<view class="at-manage-divider"></view>
+				<view class="at-manage-row at-manage-danger" @tap="discardBottle">
+					<text class="at-manage-row-text at-manage-danger-text">删除画像</text>
+					<text class="at-manage-row-arrow">›</text>
+				</view>
+				<view class="at-manage-row at-manage-danger" @tap="revokeConsent">
+					<text class="at-manage-row-text at-manage-danger-text">撤回画像授权</text>
+					<text class="at-manage-row-arrow">›</text>
+				</view>
+				<text class="at-manage-note">删除画像会删除该主体的画像与全部历史版本,并撤回画像授权,数据随后异步清理。已发布版本的元数据保留在历史记录。</text>
+			</view>
+		</XsaSheet>
 	</view>
 </template>
 
@@ -332,28 +553,48 @@ import {
 	restoreProfileRevision,
 	pauseProfileSession,
 	resumeProfileSession,
+	deleteProfileSession,
+	deleteAiProfile,
 	getPortraitNarrative,
 	pollExtractionAndLoadDraft,
+	pollTaskUntilTerminal,
 	fieldAction,
 	fieldLabel,
 	mapProfileError,
+	getAiConsents,
+	grantProfileTextConsent,
+	revokeProfileTextConsent,
 	ENUM_FIELDS,
 	ENUM_OPTIONS
 } from '@/api/ai-profile.uts'
 import VoiceRecorder from '@/components/VoiceRecorder.uvue'
-import XsaPortraitField from '@/components/XsaPortraitField.uvue'
-import PortraitOrb from '@/components/PortraitOrb.uvue'
-import PortraitHistorySheet from '@/components/PortraitHistorySheet.uvue'
+import VoiceConversation from '@/components/VoiceConversation.uvue'
+import PersonaBottle from '@/components/PersonaBottle.uvue'
+import PersonaIngredient from '@/components/PersonaIngredient.uvue'
+import PortraitBatchSheetComponent from '@/components/PersonaBatchSheet.uvue'
+import XsaSheet from '@/components/XsaSheet.uvue'
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+const menuButtonInfo = uni.getMenuButtonBoundingClientRect()
+const navPadTop = menuButtonInfo != null && menuButtonInfo.top > statusBarHeight ? menuButtonInfo.top : statusBarHeight + 6
+const menuButtonSpacing = menuButtonInfo != null ? (systemInfo.windowWidth - menuButtonInfo.left) : 8
 
+// 页面存活标记:离场后终止所有异步轮询/延迟任务
+let alive = true
+
+// ===== 视图结构 =====
+const viewMode = ref('shelf') // shelf | subject
 const subject = ref('personal')
+const subjectPane = ref('dialog') // letter | dialog
 const loading = ref(true)
 const featureDisabled = ref(false)
 const consentRequired = ref(false)
 const consentMessage = ref('')
-const showModeSelect = ref(true)
+const granting = ref(false)
+let pendingSubject = 'personal'
+
+// ===== 会话与草稿 =====
 const session = ref<any>(null)
 const draft = ref<any>(null)
 const messages = ref<any[]>([])
@@ -362,17 +603,43 @@ const currentQuestion = ref<any>(null)
 const extracting = ref(false)
 const publishing = ref(false)
 const scrollAnchor = ref('')
-const historyVisible = ref(false)
-const historyLoading = ref(false)
-const historyItems = ref<any[]>([])
+const paused = ref(false)
+const curingLines = ref<string[]>([])
+const curingCurrentText = ref('')
+
+// ===== 语音 =====
 const voiceMode = ref(false)
 const transcribeText = ref('')
 const voiceRecorderRef = ref<any>(null)
-const narrative = ref<any>(null)
-const paused = ref(false)
-const showGenerating = ref(false)
-const generatingSteps = ref<string[]>([])
+const conversationMode = ref(false)
+const conversationRef = ref<any>(null)
+const convReview = ref('')
+const convReviewShow = ref(false)
+const convDegraded = ref(false)
+
+// ===== 叙事与版本 =====
+const narrativeMe = ref<any>(null)
+const narrativeTa = ref<any>(null)
 const historyObservations = ref<any[]>([])
+const sessionInfoMe = ref<any>(null)
+const sessionInfoTa = ref<any>(null)
+const cleanupPending = ref('')
+
+// ===== 弹层 =====
+const recipeVisible = ref(false)
+const batchVisible = ref(false)
+const batchLoading = ref(false)
+const batchItems = ref<any[]>([])
+const manageVisible = ref(false)
+
+// ===== 计算属性 =====
+
+const navTitle = computed(() => {
+	if (viewMode.value == 'subject') return subject.value == 'personal' ? '我的墨相' : '愿遇之相'
+	return '墨相'
+})
+
+const narrative = computed(() => subject.value == 'personal' ? narrativeMe.value : narrativeTa.value)
 
 const currentQuestionText = computed(() => {
 	const q = currentQuestion.value
@@ -389,12 +656,17 @@ const currentQuestionFieldKey = computed(() => {
 const inputPlaceholder = computed(() => {
 	const q = currentQuestion.value
 	if (q != null && q.text != null) return '回答: ' + String(q.text)
-	return '输入你的回答'
+	return '说说你自己'
 })
 
 const confirmedCount = computed(() => {
 	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
 	return draft.value.fields.filter((f: any) => f.confirmation_status == 'confirmed').length
+})
+
+const pendingCount = computed(() => {
+	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
+	return draft.value.fields.filter((f: any) => f.confirmation_status == 'suggested').length
 })
 
 const progressValue = computed(() => {
@@ -406,140 +678,262 @@ const progressValue = computed(() => {
 
 const progressPercent = computed(() => Math.round(progressValue.value * 100))
 
-const progressGuide = computed(() => {
-	const count = confirmedCount.value
-	if (count == 0) return '回答几个问题,让 AI 帮你整理画像'
-	if (progressValue.value >= 0.67) return '已可生成草稿,确认后即可发布画像'
-	if (count > 5) return '已收集 ' + count + ' 个字段,继续说说你的生活'
-	return '已收集 ' + count + ' 个字段,继续说说你的生活'
+const recipeFields = computed(() => {
+	if (draft.value == null || !Array.isArray(draft.value.fields)) return [] as any[]
+	return draft.value.fields.filter((f: any) => f.confirmation_status != 'deleted')
 })
 
-const orbStatusText = computed(() => {
-	const fk = currentQuestionFieldKey.value
-	if (fk == 'interest_tags' || fk == 'lifestyle_tags') return '正在理解你的生活方式'
-	if (fk == 'occupation_group') return '正在理解你的生活节奏'
-	if (fk == 'relationship_goal' || fk == 'marriage_status') return '正在理解你的关系观'
-	if (fk == 'age' || fk == 'education_level' || fk == 'height_cm' || fk == 'income_band') return '正在理解你的基本信息'
-	if (fk == 'city_code') return '正在理解你的生活圈'
-	return '正在理解你'
+const letterReady = computed(() => {
+	return narrative.value != null && narrative.value.status == 'published'
 })
 
-const showInsight = computed(() => {
-	return draft.value != null && confirmedCount.value >= 2 && narrative.value != null
+const hasBottledBefore = computed(() => {
+	const info = sessionCacheFor(subject.value)
+	if (info != null && info.status == 'published') return true
+	return false
 })
 
-const showDimensions = computed(() => {
-	return draft.value != null && confirmedCount.value >= 3 && narrative.value != null && narrative.value.dimensions != null
+const letterTags = computed(() => {
+	const n = narrative.value
+	if (n == null || n.persona_tags == null || !Array.isArray(n.persona_tags)) return [] as string[]
+	return n.persona_tags
 })
 
-const showIdealWeights = computed(() => {
-	return subject.value == 'ideal_partner' && narrative.value != null && narrative.value.ideal_weights != null && narrative.value.ideal_weights.length > 0
+const letterInsight = computed(() => {
+	const n = narrative.value
+	if (n == null || n.insight == null) return ''
+	return String(n.insight)
 })
 
-const showRecentChange = computed(() => {
-	return narrative.value != null && narrative.value.recent_change != null
+const letterDimensions = computed(() => {
+	const n = narrative.value
+	if (n == null || n.dimensions == null || !Array.isArray(n.dimensions)) return [] as any[]
+	return n.dimensions
 })
 
-const back = () => { uni.navigateBack({ delta: 1 }) }
+const letterWeights = computed(() => {
+	if (subject.value != 'ideal_partner') return [] as any[]
+	const n = narrative.value
+	if (n == null || n.ideal_weights == null || !Array.isArray(n.ideal_weights)) return [] as any[]
+	return n.ideal_weights
+})
 
-const switchSubject = (newSubject: string) => {
-	if (subject.value == newSubject) return
-	subject.value = newSubject
-	messages.value = []
-	session.value = null
-	draft.value = null
-	narrative.value = null
-	paused.value = false
-	currentQuestion.value = null
-	answerText.value = ''
-	transcribeText.value = ''
-	voiceMode.value = false
-	showModeSelect.value = true
-	loading.value = false
-	loadSession()
+const letterRecentChange = computed(() => {
+	const n = narrative.value
+	if (n == null || n.recent_change == null) return null
+	return n.recent_change
+})
+
+const letterConclusion = computed(() => {
+	const n = narrative.value
+	if (n == null || n.conclusion == null) return ''
+	return String(n.conclusion)
+})
+
+const insightPreview = computed(() => {
+	if (narrativeMe.value != null && narrativeMe.value.status == 'published' && narrativeMe.value.insight != null && narrativeMe.value.insight != '') {
+		return String(narrativeMe.value.insight)
+	}
+	if (narrativeTa.value != null && narrativeTa.value.status == 'published' && narrativeTa.value.insight != null && narrativeTa.value.insight != '') {
+		return String(narrativeTa.value.insight)
+	}
+	return ''
+})
+
+const insightPreviewLabel = computed(() => {
+	if (narrativeMe.value != null && narrativeMe.value.status == 'published' && narrativeMe.value.insight != null && narrativeMe.value.insight != '') return '我的墨相'
+	return '愿遇之相'
+})
+
+// ===== 墨案辅助 =====
+
+function narrativeFor(sub: string): any {
+	return sub == 'personal' ? narrativeMe.value : narrativeTa.value
 }
 
-const loadNarrative = async () => {
+function sessionCacheFor(sub: string): any {
+	return sub == 'personal' ? sessionInfoMe.value : sessionInfoTa.value
+}
+
+function updateSessionCache(sub: string) {
+	if (session.value == null) return
+	const hasDraft = session.value.draft_id != null && session.value.draft_id != ''
+	const info: any = {
+		status: String(session.value.status != null ? session.value.status : ''),
+		draft_id: session.value.draft_id != null ? String(session.value.draft_id) : '',
+		hasDraft: hasDraft,
+		profile_revision: session.value.profile_revision != null ? Number(session.value.profile_revision) : 0
+	}
+	if (sub == 'personal') sessionInfoMe.value = info
+	else sessionInfoTa.value = info
+}
+
+function bottleState(sub: string): string {
+	if (cleanupPending.value == sub) return 'cleanup'
+	const narr = narrativeFor(sub)
+	const info = sessionCacheFor(sub)
+	if (narr != null && narr.status == 'published') return 'bottled'
+	if (info != null && info.status == 'published') return 'curing'
+	if (info != null && info.hasDraft) return 'mixing'
+	return 'empty'
+}
+
+function bottleFill(sub: string): number {
+	const state = bottleState(sub)
+	if (state == 'bottled') return 1
+	if (state == 'mixing') {
+		if (subject.value == sub && draft.value != null && Array.isArray(draft.value.fields)) {
+			const confirmed = draft.value.fields.filter((f: any) => f.confirmation_status == 'confirmed').length
+			return Math.max(0.15, Math.min(confirmed / 10, 0.9))
+		}
+		return 0.18
+	}
+	return 0.08
+}
+
+function bottleTitle(sub: string): string {
+	const narr = narrativeFor(sub)
+	if (bottleState(sub) == 'bottled' && narr != null && narr.persona_title != null && narr.persona_title != '') {
+		return String(narr.persona_title)
+	}
+	return sub == 'personal' ? '我的墨相' : '愿遇之相'
+}
+
+function bottleSub(sub: string): string {
+	const state = bottleState(sub)
+	if (state == 'cleanup') return '清理中'
+	if (state == 'bottled') {
+		const info = sessionCacheFor(sub)
+		const revNo = info != null && info.profile_revision > 0 ? info.profile_revision : 0
+		return revNo > 0 ? '第 ' + revNo + ' 稿 · 已写成稿' : '已写成稿'
+	}
+	if (state == 'curing') return '正在写下理解'
+	if (state == 'mixing') {
+		if (subject.value == sub && draft.value != null) return '落笔中 · 已确认 ' + confirmedCount.value + ' 笔'
+		return '落笔中'
+	}
+	return '还没落笔,点这里开始'
+}
+
+function bottleHasChange(sub: string): boolean {
+	const narr = narrativeFor(sub)
+	return narr != null && narr.status == 'published' && narr.recent_change != null
+}
+
+// ===== 导航 =====
+
+const navBack = () => {
+	if (viewMode.value == 'subject') {
+		backToShelf()
+		return
+	}
+	uni.navigateBack({ delta: 1 })
+}
+
+const backToShelf = () => {
+	if (conversationMode.value) closeConversation()
+	voiceMode.value = false
+	transcribeText.value = ''
+	viewMode.value = 'shelf'
+}
+
+const openInsightSubject = () => {
+	const sub = insightPreviewLabel.value == '我的墨相' ? 'personal' : 'ideal_partner'
+	enterSubject(sub, true)
+}
+
+const switchPane = (pane: string) => {
+	if (subjectPane.value == pane) return
+	subjectPane.value = pane
+	if (pane == 'letter') {
+		refreshNarrativeNow()
+	} else if (pane == 'dialog' && session.value == null) {
+		ensureSession()
+	}
+}
+
+// ===== 叙事层 =====
+
+const loadNarrative = async (sub: string) => {
 	try {
-		const res = await getPortraitNarrative(subject.value)
+		const res = await getPortraitNarrative(sub)
+		if (!alive) return
 		if (res.success && res.data != null) {
-			narrative.value = res.data
-			if (res.data.history_observations != null && Array.isArray(res.data.history_observations)) {
+			if (sub == 'personal') narrativeMe.value = res.data
+			else narrativeTa.value = res.data
+			if (sub == subject.value && res.data.history_observations != null && Array.isArray(res.data.history_observations)) {
 				historyObservations.value = res.data.history_observations
 			}
 		}
 	} catch (e) {
-		// 叙事层为 mock 占位(后端待交付),失败不阻断主流程
-		console.error('[Portrait] loadNarrative failed', e)
+		// 叙事层失败不阻断主流程
+		console.error('[Atelier] loadNarrative failed', e)
 	}
 }
 
-const togglePause = async () => {
-	if (session.value == null) return
-	const sid = String(session.value.session_id)
-	try {
-		if (paused.value) {
-			const res = await resumeProfileSession(sid)
-			if (res.success && res.data != null) {
-				session.value = res.data
-				paused.value = false
-			}
-		} else {
-			const res = await pauseProfileSession(sid)
-			if (res.success && res.data != null) {
-				session.value = res.data
-				paused.value = true
-			}
-		}
-	} catch (e) {
-		uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+const refreshNarrativeNow = async () => {
+	await loadNarrative(subject.value)
+	if (narrative.value != null && narrative.value.status == 'published') {
+		uni.showToast({ title: '理解已就绪', icon: 'none' })
 	}
 }
 
-const runGeneratingTransition = (revisionNo: number, fieldCount: number) => {
-	// 首次发布生成过渡(mock 驱动,叙事层后端待交付)
-	showGenerating.value = true
-	generatingSteps.value = []
-	const steps = ['性格倾向', '情感需求', '生活节奏', '价值观', '未来规划']
-	let i = 0
-	const tick = () => {
-		if (i < steps.length) {
-			generatingSteps.value.push(steps[i])
-			i++
-			setTimeout(tick, 350)
-		} else {
-			setTimeout(() => {
-				showGenerating.value = false
-				messages.value.push({
-					id: 'published-' + Date.now(),
-					type: 'published',
-					revision: revisionNo,
-					fieldCount: fieldCount
-				})
-				scrollToBottom()
-				uni.showToast({ title: '画像发布成功', icon: 'success' })
-			}, 800)
-		}
+// ===== 进入主体 =====
+
+const enterSubject = async (sub: string, toLetter: boolean = false) => {
+	subject.value = sub
+	viewMode.value = 'subject'
+	const narr = narrativeFor(sub)
+	if (toLetter || (narr != null && narr.status == 'published')) {
+		subjectPane.value = 'letter'
+		return
 	}
-	setTimeout(tick, 400)
+	subjectPane.value = 'dialog'
+	await ensureSession()
 }
 
-const loadSession = async () => {
+const continueExpressing = async () => {
+	subjectPane.value = 'dialog'
+	if (session.value == null) {
+		await ensureSession()
+	} else if (session.value.status == 'published') {
+		// 上一会话已发布(终态),创建新会话继续表达
+		await ensureSession()
+	}
+}
+
+// ===== 会话管理 =====
+
+const symbolicCode = (res: any): string => {
+	if (res == null) return ''
+	if (res.data != null && res.data.detail != null && res.data.detail.code != null) {
+		return String(res.data.detail.code)
+	}
+	if (res.code != null) return String(res.code)
+	return ''
+}
+
+const ensureSession = async () => {
 	loading.value = true
 	featureDisabled.value = false
 	consentRequired.value = false
 	try {
 		const res = await createProfileSession(subject.value)
+		if (!alive) return
 		if (!res.success || res.data == null) {
-			const code = String(res.code != null ? res.code : '')
+			const code = symbolicCode(res)
 			if (code == 'AI_FEATURE_DISABLED' || res.code == 503) {
 				featureDisabled.value = true
 			} else if (code == 'AI_CONSENT_REQUIRED' || res.code == 403) {
 				consentRequired.value = true
+				pendingSubject = subject.value
 				consentMessage.value = mapProfileError(code, String(res.message))
+			} else if (code == 'PROFILE_SESSION_STALE') {
+				// 资料已更新,旧会话过期;稍后重开新落笔
+				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+				setTimeout(() => { if (alive) ensureSession() }, 900)
 			} else {
 				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
-				showModeSelect.value = true
 			}
 			loading.value = false
 			return
@@ -547,101 +941,164 @@ const loadSession = async () => {
 		session.value = res.data
 		const status = String(res.data.status != null ? res.data.status : '')
 		paused.value = (status == 'paused')
-		await loadNarrative()
-		if (status == 'draft' && res.data.current_question != null) {
-			await loadDraftAndRebuildFlow()
+		updateSessionCache(subject.value)
+		await loadNarrative(subject.value)
+		if (status == 'draft' || status == 'awaiting_confirmation' || status == 'paused') {
+			await loadDraftAndRebuildFlow(true)
 		} else if (status == 'published') {
 			if (res.data.draft_id != null && res.data.draft_id != '') {
-				await loadDraftAndRebuildFlow()
+				await loadDraftAndRebuildFlow(false)
 			} else {
-				addSystemMessage('画像已发布,可点击「历史」查看或恢复')
+				addSystemMessage('这一稿已经写下。继续说会开启一次新的落笔。')
 			}
 		}
 	} catch (e) {
-		uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+		if (alive) uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
 	} finally {
-		loading.value = false
+		if (alive) loading.value = false
 	}
 }
 
-const loadDraftAndRebuildFlow = async () => {
+const loadDraftAndRebuildFlow = async (resumed: boolean) => {
 	if (session.value == null) return
 	const draftId = session.value.draft_id
 	if (draftId == null || draftId == '') {
-		// 无 draft,只有对话
 		if (session.value.current_question != null) {
 			currentQuestion.value = session.value.current_question
 			addQuestionMessage(session.value.current_question)
 		}
 		return
 	}
-
 	try {
 		const draftRes = await getProfileDraft(String(draftId))
+		if (!alive) return
 		if (draftRes.success && draftRes.data != null) {
 			draft.value = draftRes.data
-			rebuildMessageFlow()
+			if (resumed && recipeFields.value.length > 0) {
+				addSystemMessage('已恢复上次的落笔进度,待确认的理解还在等你处理')
+			}
 		}
 	} catch (e) {
-		console.error('[Portrait] loadDraft failed', e)
+		console.error('[Atelier] loadDraft failed', e)
 	}
-
 	if (session.value.current_question != null) {
 		currentQuestion.value = session.value.current_question
 		addQuestionMessage(session.value.current_question)
+	} else {
+		addSystemMessage('问题都问完了。打开待确认的理解,确认后写下成稿。')
 	}
 }
 
-const rebuildMessageFlow = () => {
-	messages.value = []
-	if (draft.value == null || !Array.isArray(draft.value.fields)) return
-	const fields = draft.value.fields
-	for (let i = 0; i < fields.length; i++) {
-		const f = fields[i]
-		if (f.confirmation_status == 'deleted') continue
+// ===== 表达循环:提交回答 → 抽取 → 待确认理解 =====
+
+const submitAnswer = async () => {
+	const text = answerText.value.trim()
+	if (text == '') {
+		uni.showToast({ title: '先说点什么', icon: 'none' })
+		return
+	}
+	if (session.value == null) {
+		await ensureSession()
+		if (session.value == null) return
+	}
+
+	addAnswerMessage(text)
+	answerText.value = ''
+	extracting.value = true
+	const typingId = addTypingMessage('正在整理你的回答...', 0)
+
+	try {
+		const turnRes = await submitProfileTurn(String(session.value.session_id), text)
+		if (!alive) return
+		if (!turnRes.success || turnRes.data == null) {
+			extracting.value = false
+			removeMessage(typingId)
+			const code = symbolicCode(turnRes)
+			uni.showToast({ title: mapProfileError(code, String(turnRes.message)), icon: 'none' })
+			if (code == 'PROFILE_SESSION_STALE') {
+				session.value = null
+				draft.value = null
+				await ensureSession()
+			}
+			return
+		}
+
+		const taskId = String(turnRes.data.task_id != null ? turnRes.data.task_id : '')
+		const draftId = String(session.value.draft_id != null ? session.value.draft_id : '')
+		const result = await pollExtractionAndLoadDraft(taskId, draftId)
+		if (!alive) return
+		extracting.value = false
+		removeMessage(typingId)
+
+		if (!result.success) {
+			uni.showToast({ title: result.error, icon: 'none' })
+			return
+		}
+
+		const prevDraft = draft.value
+		draft.value = result.draft
+		announceIngredients(prevDraft, result.draft)
+		await refreshSessionAfterTurn()
+	} catch (e) {
+		if (!alive) return
+		extracting.value = false
+		removeMessage(typingId)
+		uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+	}
+}
+
+const refreshSessionAfterTurn = async () => {
+	if (session.value == null) return
+	const sessionRes = await getProfileSession(String(session.value.session_id))
+	if (!alive) return
+	if (sessionRes.success && sessionRes.data != null) {
+		session.value = sessionRes.data
+		updateSessionCache(subject.value)
+		if (sessionRes.data.current_question != null) {
+			currentQuestion.value = sessionRes.data.current_question
+			addTypingMessage('正在思考...', 600, () => {
+				if (alive && session.value != null && session.value.current_question != null) {
+					addQuestionMessage(session.value.current_question)
+				}
+			})
+		} else {
+			currentQuestion.value = null
+			addSystemMessage('问题都问完了。打开待确认的理解,确认后写下成稿。')
+		}
+	}
+}
+
+/** 新一轮抽取完成后,把新增/变化的待确认字段呈现 */
+const announceIngredients = (prevDraft: any, newDraft: any) => {
+	if (newDraft == null || !Array.isArray(newDraft.fields)) return
+	const prevStatuses: Map<string, string> = new Map()
+	if (prevDraft != null && Array.isArray(prevDraft.fields)) {
+		for (let i = 0; i < prevDraft.fields.length; i++) {
+			const pf = prevDraft.fields[i]
+			prevStatuses.set(String(pf.field_key), String(pf.confirmation_status != null ? pf.confirmation_status : ''))
+		}
+	}
+	const labels: string[] = []
+	for (let i = 0; i < newDraft.fields.length; i++) {
+		const f = newDraft.fields[i]
+		if (f.confirmation_status != 'suggested') continue
+		const prev = prevStatuses.get(String(f.field_key))
+		if (prev == null || prev == '' || prev == 'rejected') {
+			labels.push(fieldLabel(String(f.field_key)))
+		}
+	}
+	if (labels.length > 0) {
 		messages.value.push({
-			id: 'field-' + String(f.field_key) + '-' + i,
-			type: 'field',
-			field: f,
-			label: fieldLabel(String(f.field_key))
+			id: 'ing-' + Date.now(),
+			type: 'ingredients',
+			count: labels.length,
+			labels: labels
 		})
-	}
-	scrollToBottom()
-}
-
-const startTextSession = async () => {
-	voiceMode.value = false
-	showModeSelect.value = false
-	if (session.value == null) {
-		await loadSession()
-		return
-	}
-	if (session.value.current_question != null) {
-		currentQuestion.value = session.value.current_question
-		addTypingMessage('正在思考...', 600, () => {
-			addQuestionMessage(session.value.current_question)
-		})
+		scrollToBottom()
 	}
 }
 
-const startVoiceSession = async () => {
-	voiceMode.value = true
-	showModeSelect.value = false
-	if (session.value == null) {
-		await loadSession()
-		return
-	}
-	if (session.value.current_question != null) {
-		currentQuestion.value = session.value.current_question
-		addQuestionMessage(session.value.current_question)
-	}
-}
-
-const switchToText = () => {
-	if (voiceRecorderRef.value != null) voiceRecorderRef.value.reset()
-	voiceMode.value = false
-	transcribeText.value = ''
-}
+// ===== 语音:普通录音 =====
 
 const switchToVoice = () => {
 	voiceMode.value = true
@@ -649,6 +1106,12 @@ const switchToVoice = () => {
 	if (voiceRecorderRef.value != null && currentQuestion.value != null) {
 		voiceRecorderRef.value.startSpeaking()
 	}
+}
+
+const switchToText = () => {
+	if (voiceRecorderRef.value != null) voiceRecorderRef.value.reset()
+	voiceMode.value = false
+	transcribeText.value = ''
 }
 
 const onTranscribed = (text: string) => {
@@ -679,7 +1142,7 @@ const confirmTranscribe = async () => {
 	answerText.value = text
 	transcribeText.value = ''
 
-	// 枚举字段:转写文本匹配选项值后直接 PATCH confirm,跳过 AI 抽取
+	// 枚举字段:转写匹配选项值后直接 PATCH replace 为 confirmed,跳过 AI 抽取
 	const fieldKey = currentQuestion.value != null && currentQuestion.value.field_key != null
 		? String(currentQuestion.value.field_key) : ''
 	if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
@@ -695,12 +1158,12 @@ const confirmTranscribe = async () => {
 					const act = fieldAction(fieldKey, 'replace', matchedValue, expectedRev)
 					try {
 						const res = await patchProfileDraft(String(draft.value.draft_id), [act], expectedRev)
+						if (!alive) return
 						if (res.success && res.data != null) {
 							draft.value = res.data
-							rebuildMessageFlow()
 						}
 					} catch (e) {
-						console.error('[Portrait] enum voice confirm failed', e)
+						console.error('[Atelier] enum voice confirm failed', e)
 					}
 				}
 				addAnswerMessage(text)
@@ -713,98 +1176,115 @@ const confirmTranscribe = async () => {
 	await submitAnswer()
 }
 
-const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
-
-const submitAnswer = async () => {
-	const text = answerText.value.trim()
-	if (text == '') {
-		uni.showToast({ title: '请输入回答', icon: 'none' })
-		return
-	}
-	if (session.value == null) return
-
-	addAnswerMessage(text)
-	answerText.value = ''
-	extracting.value = true
-
-	const typingId = addTypingMessage('正在整理你的回答...', 0)
-
-	try {
-		const turnRes = await submitProfileTurn(String(session.value.session_id), text)
-		if (!turnRes.success || turnRes.data == null) {
-			extracting.value = false
-			removeMessage(typingId)
-			const code = String(turnRes.code != null ? turnRes.code : '')
-			uni.showToast({ title: mapProfileError(code, String(turnRes.message)), icon: 'none' })
-			return
-		}
-
-		const taskId = String(turnRes.data.task_id != null ? turnRes.data.task_id : '')
-		const draftId = String(session.value.draft_id != null ? session.value.draft_id : '')
-
-		const result = await pollExtractionAndLoadDraft(taskId, draftId)
-		extracting.value = false
-		removeMessage(typingId)
-
-		if (!result.success) {
-			uni.showToast({ title: result.error, icon: 'none' })
-			return
-		}
-
-		draft.value = result.draft
-		rebuildMessageFlow()
-
-		// 更新 session 的 current_question
-		const sessionRes = await getProfileSession(String(session.value.session_id))
-		if (sessionRes.success && sessionRes.data != null) {
-			session.value = sessionRes.data
-			if (sessionRes.data.current_question != null) {
-				currentQuestion.value = sessionRes.data.current_question
-				if (voiceMode.value) {
-					addQuestionMessage(sessionRes.data.current_question)
-				} else {
-					addTypingMessage('正在思考...', 600, () => {
-						addQuestionMessage(sessionRes.data.current_question)
-					})
-				}
-			} else {
-				currentQuestion.value = null
-				addSystemMessage('所有问题已回答完毕,确认字段后即可发布画像')
-			}
-		}
-	} catch (e) {
-		extracting.value = false
-		removeMessage(typingId)
-		uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
-	}
-}
-
 const advanceToNextQuestion = async () => {
 	if (session.value == null) return
 	const sessionRes = await getProfileSession(String(session.value.session_id))
+	if (!alive) return
 	if (sessionRes.success && sessionRes.data != null) {
 		session.value = sessionRes.data
+		updateSessionCache(subject.value)
 		if (sessionRes.data.current_question != null) {
 			currentQuestion.value = sessionRes.data.current_question
-			if (voiceMode.value) {
-				addQuestionMessage(sessionRes.data.current_question)
-			} else {
-				addTypingMessage('正在思考...', 600, () => {
-					addQuestionMessage(sessionRes.data.current_question)
-				})
-			}
+			addQuestionMessage(sessionRes.data.current_question)
 		} else {
 			currentQuestion.value = null
-			addSystemMessage('所有问题已回答完毕,确认字段后即可发布画像')
+			addSystemMessage('问题都问完了。打开待确认的理解,确认后写下成稿。')
 		}
 	}
 }
+
+// ===== 语音:实时对话层(最终转写必须经用户确认) =====
+
+const startConversationSession = async () => {
+	if (session.value == null) {
+		await ensureSession()
+		if (session.value == null) return
+	}
+	voiceMode.value = false
+	transcribeText.value = ''
+	convDegraded.value = false
+	convReview.value = ''
+	convReviewShow.value = false
+	conversationMode.value = true
+}
+
+const closeConversation = () => {
+	if (conversationRef.value != null) conversationRef.value.reset()
+	conversationMode.value = false
+	convDegraded.value = false
+	convReview.value = ''
+	convReviewShow.value = false
+}
+
+const onConversationTranscribed = (text: string) => {
+	// 不自动提交:实时通道不写画像,先进入用户确认
+	convReview.value = text
+	convReviewShow.value = true
+}
+
+const onConvReviewInput = (e: any) => {
+	convReview.value = e.detail.value
+}
+
+const redoConvReview = () => {
+	convReview.value = ''
+	convReviewShow.value = false
+}
+
+const confirmConvReview = () => {
+	const text = convReview.value.trim()
+	if (text == '') {
+		uni.showToast({ title: '内容为空,重新说一次', icon: 'none' })
+		return
+	}
+	closeConversation()
+	answerText.value = text
+	submitAnswer()
+}
+
+const onConversationAIReply = (text: string, fieldKey: string) => {
+	// AI 在实时层的回应以气泡进入对话流
+	addQuestionMessage({ text: text, field_key: fieldKey, id: 'ai-' + Date.now() })
+}
+
+const onConversationError = (code: string, message: string) => {
+	if (code == 'WS_CONNECT_FAILED' || code == 'WS_ERROR' || code == 'AUTH_REQUIRED') {
+		convDegraded.value = true
+		return
+	}
+	uni.showToast({ title: message, icon: 'none' })
+}
+
+const onConversationEnd = () => {
+	// WS 重试耗尽:给出降级入口
+	convDegraded.value = true
+}
+
+const retryConversation = () => {
+	convDegraded.value = false
+	convReviewShow.value = false
+	convReview.value = ''
+	if (conversationRef.value != null) conversationRef.value.reset()
+}
+
+const degradeToRecorder = () => {
+	closeConversation()
+	voiceMode.value = true
+	uni.showToast({ title: '已切换为普通录音', icon: 'none' })
+}
+
+const degradeToText = () => {
+	closeConversation()
+	switchToText()
+}
+
+// ===== 协商循环:待确认理解操作 =====
 
 const onFieldConfirm = async (fieldKey: string) => {
 	await patchField(fieldKey, 'confirm', null)
 }
 
-const onFieldEdit = async (fieldKey: string, value: any) => {
+const onFieldReplace = async (fieldKey: string, value: any) => {
 	await patchField(fieldKey, 'replace', value)
 }
 
@@ -822,126 +1302,365 @@ const patchField = async (fieldKey: string, action: string, value: any) => {
 	const act = fieldAction(fieldKey, action, value, expectedRev)
 	try {
 		const res = await patchProfileDraft(String(draft.value.draft_id), [act], expectedRev)
+		if (!alive) return
 		if (!res.success || res.data == null) {
-			const code = String(res.code != null ? res.code : '')
+			const code = symbolicCode(res)
 			uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
-			if (code == 'DRAFT_VERSION_CONFLICT') {
+			if (code == 'DRAFT_VERSION_CONFLICT' || code == 'RESULT_STALE') {
 				const draftRes = await getProfileDraft(String(draft.value.draft_id))
+				if (!alive) return
 				if (draftRes.success && draftRes.data != null) {
 					draft.value = draftRes.data
-					rebuildMessageFlow()
+					uni.showToast({ title: '内容已被更新,已为你刷新', icon: 'none' })
 				}
 			}
 			return
 		}
 		draft.value = res.data
-		rebuildMessageFlow()
+		if (action == 'confirm') {
+			uni.showToast({ title: '已确认 · ' + fieldLabel(fieldKey), icon: 'none' })
+		}
 	} catch (e) {
 		uni.showToast({ title: '操作失败,请重试', icon: 'none' })
 	}
 }
 
+// ===== 成长循环:写下成稿(发布) =====
+
 const publishDraft = async () => {
 	if (draft.value == null || publishing.value) return
 	if (confirmedCount.value == 0) {
-		uni.showToast({ title: '至少确认一个字段后才能发布', icon: 'none' })
+		uni.showToast({ title: '至少确认一笔后才能写下成稿', icon: 'none' })
 		return
 	}
 	publishing.value = true
+	curingLines.value = []
+	curingCurrentText.value = '正在写下成稿...'
 	const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
 	try {
 		const res = await publishProfileDraft(String(draft.value.draft_id), expectedRev)
-		publishing.value = false
+		if (!alive) return
 		if (!res.success || res.data == null) {
-			const code = String(res.code != null ? res.code : '')
+			publishing.value = false
+			const code = symbolicCode(res)
 			uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+			if (code == 'DRAFT_VERSION_CONFLICT' || code == 'RESULT_STALE') {
+				const draftRes = await getProfileDraft(String(draft.value.draft_id))
+				if (draftRes.success && draftRes.data != null) {
+					draft.value = draftRes.data
+				}
+			}
 			return
 		}
-		const revisionNo = res.data.revision_no != null ? Number(res.data.revision_no) : 0
-		const fieldCount = res.data.field_count != null ? Number(res.data.field_count) : confirmedCount.value
-		runGeneratingTransition(revisionNo, fieldCount)
-	} catch (e) {
+		curingLines.value.push('成稿已提交')
+
+		// 发布是异步任务:轮询到终态
+		curingCurrentText.value = '正在生成这一稿...'
+		const taskId = String(res.data.task_id != null ? res.data.task_id : '')
+		const taskRes = await pollTaskUntilTerminal(taskId)
+		if (!alive) return
+		if (!taskRes.done || taskRes.status != 'succeeded') {
+			publishing.value = false
+			uni.showToast({ title: taskRes.error != '' ? taskRes.error : '成稿未完成,请稍后重试', icon: 'none' })
+			return
+		}
+
+		// 刷新会话与稿号
+		let revisionNo = 0
+		let fieldCount = confirmedCount.value
+		const sessionRes = await getProfileSession(String(session.value.session_id))
+		if (!alive) return
+		if (sessionRes.success && sessionRes.data != null) {
+			session.value = sessionRes.data
+			updateSessionCache(subject.value)
+			if (sessionRes.data.profile_revision != null) {
+				revisionNo = Number(sessionRes.data.profile_revision)
+			}
+		}
+		if (res.data.field_count != null && res.data.field_count != 0) {
+			fieldCount = Number(res.data.field_count)
+		}
+		curingLines.value.push('第 ' + (revisionNo > 0 ? revisionNo : 1) + ' 稿已生成')
+
+		// narrative 由 Worker 异步生成:有界轮询 pending → published
+		curingCurrentText.value = '正在写下理解...'
+		let narrReady = false
+		for (let i = 0; i < 5; i++) {
+			await loadNarrative(subject.value)
+			if (!alive) return
+			if (narrative.value != null && narrative.value.status == 'published') {
+				narrReady = true
+				break
+			}
+			await sleepMs(3000)
+			if (!alive) return
+		}
+
 		publishing.value = false
-		uni.showToast({ title: '发布失败,请重试', icon: 'none' })
+		messages.value.push({
+			id: 'published-' + Date.now(),
+			type: 'published',
+			revision: revisionNo,
+			fieldCount: fieldCount
+		})
+		scrollToBottom()
+		if (narrReady) {
+			subjectPane.value = 'letter'
+			uni.showToast({ title: '成稿已写下', icon: 'success' })
+		} else {
+			subjectPane.value = 'letter'
+			uni.showToast({ title: '这一稿已生成,理解仍在整理', icon: 'none' })
+		}
+	} catch (e) {
+		if (!alive) return
+		publishing.value = false
+		uni.showToast({ title: '写下成稿失败,请重试', icon: 'none' })
 	}
 }
 
-const openHistory = async () => {
-	historyVisible.value = true
-	historyLoading.value = true
+// ===== 往稿 =====
+
+const openBatchFromManage = () => {
+	manageVisible.value = false
+	openBatch()
+}
+
+const openBatch = async () => {
+	batchVisible.value = true
+	batchLoading.value = true
 	if (narrative.value == null) {
-		await loadNarrative()
+		await loadNarrative(subject.value)
+		if (!alive) return
 	}
 	try {
 		const res = await listProfileRevisions('', 20)
+		if (!alive) return
 		if (res.success && res.data != null && Array.isArray(res.data.items)) {
-			historyItems.value = res.data.items
+			batchItems.value = res.data.items
 		} else {
-			historyItems.value = []
+			batchItems.value = []
 		}
 	} catch (e) {
-		historyItems.value = []
+		batchItems.value = []
 	} finally {
-		historyLoading.value = false
+		if (alive) batchLoading.value = false
 	}
 }
 
-const closeHistory = () => { historyVisible.value = false }
+const closeBatch = () => { batchVisible.value = false }
 
 const restoreRevision = async (revisionId: number) => {
 	uni.showModal({
-		title: '恢复历史版本',
-		content: '将从该版本生成新的草稿,你可以在草稿中修改后再发布。旧版本不会被修改。',
-		confirmText: '恢复',
+		title: '从这稿再写一版',
+		content: '将从该稿生成一份新的草稿(全部回到待确认)。你逐条确认后重新写下成稿。原稿不会被修改。',
+		confirmText: '再写一版',
 		success: async (modalRes) => {
 			if (!modalRes.confirm) return
-			uni.showLoading({ title: '恢复中...' })
+			uni.showLoading({ title: '生成中...' })
 			try {
 				const res = await restoreProfileRevision(revisionId)
 				uni.hideLoading()
+				if (!alive) return
 				if (!res.success || res.data == null) {
-					uni.showToast({ title: '恢复失败,请重试', icon: 'none' })
+					uni.showToast({ title: '再写一版失败,请重试', icon: 'none' })
 					return
 				}
 				draft.value = res.data
 				if (session.value != null) {
 					const sessionRes = await getProfileSession(String(session.value.session_id))
+					if (!alive) return
 					if (sessionRes.success && sessionRes.data != null) {
 						session.value = sessionRes.data
+						updateSessionCache(subject.value)
 					}
 				}
-				historyVisible.value = false
-				showModeSelect.value = false
+				batchVisible.value = false
+				subjectPane.value = 'dialog'
 				messages.value = []
-				rebuildMessageFlow()
-				if (session.value != null && session.value.current_question != null) {
-					currentQuestion.value = session.value.current_question
-					addQuestionMessage(session.value.current_question)
-				}
-				uni.showToast({ title: '已恢复,请确认后发布', icon: 'success' })
+				addSystemMessage('已从该稿生成新草稿,请逐条确认后重新写下成稿')
+				announceIngredients(null, draft.value)
+				uni.showToast({ title: '已生成新草稿,等待确认', icon: 'success' })
 			} catch (e) {
 				uni.hideLoading()
-				uni.showToast({ title: '恢复失败,请重试', icon: 'none' })
+				uni.showToast({ title: '再写一版失败,请重试', icon: 'none' })
 			}
 		}
 	})
 }
 
-const showInsightDetail = () => {
-	// TODO(后端待交付):完整分析端点就绪后跳转
-	uni.showToast({ title: '完整分析即将上线', icon: 'none' })
+// ===== 暂停 / 删除 / 授权 =====
+
+const togglePause = async () => {
+	manageVisible.value = false
+	if (session.value == null) return
+	const sid = String(session.value.session_id)
+	try {
+		if (paused.value) {
+			const res = await resumeProfileSession(sid)
+			if (!alive) return
+			if (res.success && res.data != null) {
+				session.value = res.data
+				updateSessionCache(subject.value)
+				paused.value = false
+				uni.showToast({ title: '已继续', icon: 'none' })
+			}
+		} else {
+			const res = await pauseProfileSession(sid)
+			if (!alive) return
+			if (res.success && res.data != null) {
+				session.value = res.data
+				updateSessionCache(subject.value)
+				paused.value = true
+				uni.showToast({ title: '已暂存,随时回来继续', icon: 'none' })
+			}
+		}
+	} catch (e) {
+		uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+	}
 }
 
-const showDimensionDetail = (title: string) => {
-	// TODO(后端待交付):维度详情端点就绪后跳转
-	uni.showToast({ title: title + '详情即将上线', icon: 'none' })
-}
-
-const goEditProfile = () => {
-	uni.navigateTo({
-		url: '/pagesSub/userExtra/user/edit',
-		fail: () => { uni.showToast({ title: '页面打开失败', icon: 'none' }) }
+const endSession = () => {
+	manageVisible.value = false
+	if (session.value == null) {
+		uni.showToast({ title: '当前没有进行中的落笔', icon: 'none' })
+		return
+	}
+	uni.showModal({
+		title: '结束本次',
+		content: '本次对话会被取消,未发布的草稿将一并作废。已发布的历史版本不受影响。',
+		confirmText: '结束',
+		success: async (modalRes) => {
+			if (!modalRes.confirm) return
+			try {
+				const res = await deleteProfileSession(String(session.value.session_id))
+				if (!alive) return
+				if (res.success) {
+					session.value = null
+					draft.value = null
+					messages.value = []
+					currentQuestion.value = null
+					if (subject.value == 'personal') sessionInfoMe.value = null
+					else sessionInfoTa.value = null
+					uni.showToast({ title: '本次已结束', icon: 'none' })
+					backToShelf()
+				} else {
+					uni.showToast({ title: mapProfileError(symbolicCode(res), String(res.message)), icon: 'none' })
+				}
+			} catch (e) {
+				uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+			}
+		}
 	})
+}
+
+const discardBottle = () => {
+	manageVisible.value = false
+	uni.showModal({
+		title: '删除画像',
+		content: '将删除「' + (subject.value == 'personal' ? '我的墨相' : '愿遇之相') + '」的画像数据与全部历史版本,并撤回画像授权。删除后立即不可读,数据随后异步清理。此操作不可撤销。',
+		confirmText: '删除',
+		confirmColor: '#B4543E',
+		success: async (modalRes) => {
+			if (!modalRes.confirm) return
+			try {
+				const res = await deleteAiProfile(subject.value)
+				if (!alive) return
+				if (res.success) {
+					cleanupPending.value = subject.value
+					session.value = null
+					draft.value = null
+					messages.value = []
+					currentQuestion.value = null
+					narrativeMe.value = null
+					narrativeTa.value = null
+					sessionInfoMe.value = null
+					sessionInfoTa.value = null
+					backToShelf()
+					uni.showToast({ title: '已删除,正在清理', icon: 'none' })
+					setTimeout(async () => {
+						if (!alive) return
+						cleanupPending.value = ''
+						await loadNarrative('personal')
+						await loadNarrative('ideal_partner')
+					}, 2000)
+				} else {
+					uni.showToast({ title: mapProfileError(symbolicCode(res), String(res.message)), icon: 'none' })
+				}
+			} catch (e) {
+				uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+			}
+		}
+	})
+}
+
+const revokeConsent = () => {
+	manageVisible.value = false
+	uni.showModal({
+		title: '撤回画像授权',
+		content: '撤回后 AI 画像功能将不可用,相关数据会被异步清理。你可以随时重新授权。',
+		confirmText: '撤回',
+		confirmColor: '#B4543E',
+		success: async (modalRes) => {
+			if (!modalRes.confirm) return
+			try {
+				const listRes = await getAiConsents()
+				if (!alive) return
+				if (!listRes.success || listRes.data == null) {
+					uni.showToast({ title: '授权状态查询失败', icon: 'none' })
+					return
+				}
+				const privacyRevision = listRes.data.privacy_revision != null ? Number(listRes.data.privacy_revision) : 0
+				const res = await revokeProfileTextConsent(privacyRevision)
+				if (!alive) return
+				if (res.success) {
+					uni.showToast({ title: '授权已撤回', icon: 'none' })
+					session.value = null
+					draft.value = null
+					messages.value = []
+					consentRequired.value = true
+					pendingSubject = subject.value
+					consentMessage.value = ''
+				} else {
+					const code = symbolicCode(res)
+					uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+				}
+			} catch (e) {
+				uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+			}
+		}
+	})
+}
+
+const doGrantConsent = async () => {
+	if (granting.value) return
+	granting.value = true
+	try {
+		const listRes = await getAiConsents()
+		if (!alive) return
+		if (!listRes.success || listRes.data == null) {
+			uni.showToast({ title: '授权状态查询失败,请重试', icon: 'none' })
+			return
+		}
+		const privacyRevision = listRes.data.privacy_revision != null ? Number(listRes.data.privacy_revision) : 0
+		const res = await grantProfileTextConsent(privacyRevision)
+		if (!alive) return
+		if (res.success) {
+			consentRequired.value = false
+			consentMessage.value = ''
+			uni.showToast({ title: '授权成功', icon: 'success' })
+			viewMode.value = 'subject'
+			subject.value = pendingSubject
+			subjectPane.value = 'dialog'
+			await ensureSession()
+		} else {
+			const code = symbolicCode(res)
+			consentMessage.value = mapProfileError(code, String(res.message))
+		}
+	} catch (e) {
+		uni.showToast({ title: '授权失败,请重试', icon: 'none' })
+	} finally {
+		if (alive) granting.value = false
+	}
 }
 
 // ===== 消息流辅助 =====
@@ -986,6 +1705,7 @@ function addTypingMessage(text: string, durationMs: number, onTimeout: (() => vo
 	scrollToBottom()
 	if (durationMs > 0) {
 		setTimeout(() => {
+			if (!alive) return
 			removeMessage(id)
 			if (onTimeout != null) onTimeout()
 		}, durationMs)
@@ -1014,211 +1734,458 @@ function scrollToBottom() {
 	})
 }
 
-function formatTime(iso: string): string {
-	if (iso == '' || iso == null) return ''
-	try {
-		const d = new Date(iso)
-		const month = d.getMonth() + 1
-		const day = d.getDate()
-		const hour = d.getHours()
-		const min = d.getMinutes()
-		return month + '/' + day + ' ' + (hour < 10 ? '0' + hour : hour) + ':' + (min < 10 ? '0' + min : min)
-	} catch (e) {
-		return ''
-	}
+const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
+
+function sleepMs(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(() => resolve(), ms))
 }
 
-// 初始化
-loadSession()
+const goEditProfile = () => {
+	uni.navigateTo({
+		url: '/pagesSub/userExtra/user/edit',
+		fail: () => { uni.showToast({ title: '页面打开失败', icon: 'none' }) }
+	})
+}
+
+// ===== 生命周期:离场释放 =====
+onUnmounted(() => {
+	alive = false
+	try {
+		if (voiceRecorderRef.value != null) voiceRecorderRef.value.reset()
+	} catch (e) {}
+	try {
+		if (conversationRef.value != null) conversationRef.value.reset()
+	} catch (e) {}
+})
+
+// 初始化:并行拉取两个主体的叙事层
+const init = async () => {
+	loading.value = true
+	await loadNarrative('personal')
+	await loadNarrative('ideal_partner')
+	if (alive) loading.value = false
+}
+init()
 </script>
 
-<style scoped>
-.portrait-page {
+<style>
+/* ===== 墨相模块 Token(经用户 2026-08-22 重构授权,独立于全局 uni.scss,已登记 DESIGN.md) ===== */
+.persona-root {
+	--at-bg: #F7F1E5;
+	--at-card: #FFFCF5;
+	--at-ink: #2E2418;
+	--at-ink2: #5C4F3D;
+	--at-mist: #9A8C77;
+	--at-line: #E6DAC4;
+	--at-amber: #B4762B;
+	--at-amber-deep: #8A5A1D;
+	--at-honey: #D9A441;
+	--at-fixed: #4E7D5B;
+	--at-danger: #B4543E;
+
 	min-height: 100vh;
-	background: var(--canvas);
+	background: var(--at-bg);
 	display: flex;
 	flex-direction: column;
 }
 
-/* 导航栏 */
-.pp-nav {
+/* ===== 导航 ===== */
+.at-nav {
+	position: relative;
+	box-sizing: content-box;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
-	padding: 0 16px;
-	height: 44px;
-	background: var(--paper);
-	border-bottom: 1px solid var(--line);
+	padding-left: 10px;
+	padding-bottom: 8px;
+	background: var(--at-bg);
 }
-.pp-nav-side { width: 44px; display: flex; align-items: center; justify-content: center; }
-.pp-back { font-size: 28px; color: var(--ink); }
-.pp-nav-title { font-size: 17px; font-weight: 700; color: var(--ink); font-family: var(--serif); }
-.pp-nav-history { font-size: 14px; color: var(--accent2); }
-
-/* 主体 Tab */
-.pp-tabs {
+.at-nav-side {
+	z-index: 1;
+	min-width: 66px;
+	height: 32px;
 	display: flex;
 	flex-direction: row;
-	background: var(--paper);
-	padding: 0 16px;
-	border-bottom: 1px solid var(--line);
+	align-items: center;
+	justify-content: flex-end;
+	gap: 14px;
 }
-.pp-tab { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px 0; position: relative; }
-.pp-tab-text { font-size: 14px; color: var(--muted); font-weight: 600; }
-.pp-tab-text-active { color: var(--accent2); font-weight: 700; }
-.pp-tab-active { border-bottom: 2px solid var(--accent); }
+.at-nav-back { justify-content: flex-start; }
+.at-back { font-size: 28px; color: var(--at-ink); padding: 0 8px; }
+.at-nav-title {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 32px;
+	line-height: 32px;
+	text-align: center;
+	font-size: 17px;
+	font-weight: 700;
+	color: var(--at-ink);
+	font-family: var(--serif);
+	pointer-events: none;
+}
+.at-nav-action { font-size: 14px; color: var(--at-amber-deep); }
 
-/* 进度条 */
-.pp-progress-bar { padding: 12px 16px; background: var(--paper); }
-.pp-progress-row { display: flex; flex-direction: row; align-items: center; gap: 10px; }
-.pp-progress-track { flex: 1; height: 4px; background: var(--warm); border-radius: 999px; overflow: hidden; }
-.pp-progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.3s ease-out; }
-.pp-pause-btn { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
-.pp-pause-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
-.pp-progress-text { font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* ===== 通用状态页 ===== */
+.at-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; }
+.at-state-bottle { font-size: 44px; margin-bottom: 14px; opacity: 0.7; }
+.at-state-title { font-size: 17px; font-weight: 700; color: var(--at-ink); text-align: center; font-family: var(--serif); }
+.at-state-copy { font-size: 13px; color: var(--at-mist); text-align: center; margin-top: 8px; line-height: 1.7; }
+.at-state-btn { margin-top: 22px; padding: 11px 28px; background: var(--at-amber); border-radius: 999px; }
+.at-state-btn-text { font-size: 14px; font-weight: 700; color: #FFF6E8; }
 
-/* 顶部 AI Orb */
-.pp-orb-zone { display: flex; flex-direction: column; align-items: center; padding: 16px 0 8px; background: var(--paper); }
-.pp-orb-status { font-size: 12px; color: var(--muted); margin-top: 10px; letter-spacing: 0.06em; }
+/* 纸面呼吸点(加载/生成共用) */
+.at-loading-steam, .at-curing-steam { display: flex; flex-direction: row; justify-content: center; gap: 10px; margin-bottom: 14px; }
+.at-steam-dot {
+	width: 10px; height: 10px; border-radius: 999px;
+	background: radial-gradient(circle at 50% 50%, rgba(180, 118, 43, 0.45), rgba(180, 118, 43, 0) 70%);
+	animation: at-steam-rise 2.6s ease-in-out infinite;
+}
+.at-steam-dot-2 { animation-delay: 0.85s; }
+.at-steam-dot-3 { animation-delay: 1.7s; }
+@keyframes at-steam-rise {
+	0% { transform: translateY(8px) scale(0.7); opacity: 0; }
+	40% { opacity: 0.9; }
+	100% { transform: translateY(-16px) scale(1.5); opacity: 0; }
+}
 
-/* 生成过渡屏 */
-.pp-generating { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px; }
-.pp-generating-title { font-size: 16px; font-weight: 600; color: var(--ink2); margin-top: 20px; }
-.pp-generating-steps { display: flex; flex-direction: column; align-items: flex-start; margin-top: 24px; gap: 10px; }
-.pp-gen-step { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-.pp-gen-check { font-size: 13px; color: var(--accent); font-weight: 700; }
-.pp-gen-step-text { font-size: 13px; color: var(--ink2); }
-.pp-generating-summary { font-size: 14px; color: var(--ink); line-height: 1.7; text-align: center; margin-top: 28px; font-family: var(--serif); padding: 0 20px; }
+/* ===== 授权门槛 ===== */
+.at-gate { flex: 1; display: flex; flex-direction: column; padding: 30px 26px; }
+.at-gate-title { font-size: 24px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); }
+.at-gate-sub { font-size: 13px; color: var(--at-mist); margin-top: 6px; }
+.at-gate-card {
+	display: flex; flex-direction: column; gap: 14px;
+	margin-top: 24px; padding: 20px 18px;
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 16px;
+}
+.at-gate-row { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; }
+.at-gate-row-icon { font-size: 12px; color: var(--at-honey); margin-top: 2px; }
+.at-gate-row-text { flex: 1; font-size: 13px; color: var(--at-ink2); line-height: 1.7; }
+.at-gate-msg { font-size: 12px; color: var(--at-danger); margin-top: 12px; }
+.at-gate-btn {
+	margin-top: 26px; padding: 13px 0; border-radius: 999px;
+	background: var(--at-amber); display: flex; align-items: center; justify-content: center;
+}
+.at-gate-btn-busy { opacity: 0.6; }
+.at-gate-btn-text { font-size: 15px; font-weight: 700; color: #FFF6E8; }
+.at-gate-skip { margin-top: 14px; display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+.at-gate-skip-text { font-size: 13px; color: var(--at-mist); }
 
-/* 叙事层滚动区 */
-.pp-narrative-scroll { max-height: 280px; padding: 0 16px; }
+/* ===== 墨案 ===== */
+.at-shelf { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 26px 20px 40px; }
+.at-shelf-intro { font-size: 22px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); text-align: center; }
+.at-shelf-intro2 { font-size: 14px; color: var(--at-ink2); margin-top: 8px; text-align: center; font-family: var(--serif); }
+.at-bottles {
+	display: flex; flex-direction: row; justify-content: center; gap: 14px;
+	margin-top: 34px; padding: 26px 18px 20px;
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 20px;
+	align-self: stretch;
+}
+.at-bottle-hit { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.at-shelf-note { margin-top: 18px; padding: 5px 14px; border-radius: 999px; background: rgba(230, 218, 196, 0.4); }
+.at-shelf-note-text { font-size: 11px; color: var(--at-mist); }
+.at-shelf-insight {
+	margin-top: 26px; padding: 16px 18px; border-radius: 16px;
+	background: var(--at-card); border: 1px solid var(--at-line); align-self: stretch;
+}
+.at-shelf-insight-label { font-size: 11px; color: var(--at-amber-deep); font-weight: 700; }
+.at-shelf-insight-text { font-size: 14px; color: var(--at-ink); line-height: 1.7; margin-top: 8px; font-family: var(--serif); }
+.at-shelf-insight-more { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; margin-top: 10px; }
 
-/* AI 洞察 */
-.pp-insight { padding: 18px 16px; margin: 12px 0; border-radius: 14px; background: linear-gradient(135deg, var(--canvas), var(--paper)); }
-.pp-insight-label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
-.pp-insight-text { font-size: 14px; color: var(--ink); line-height: 1.7; margin-top: 8px; font-family: var(--serif); }
-.pp-insight-more { margin-top: 12px; }
-.pp-insight-more-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+/* ===== 主体子导航 ===== */
+.at-subject { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.at-subject-bar {
+	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+	padding: 6px 12px; background: var(--at-bg);
+}
+.at-subject-back { padding: 6px 8px; }
+.at-subject-back-text { font-size: 14px; color: var(--at-amber-deep); font-weight: 600; }
+.at-seg {
+	display: flex; flex-direction: row;
+	background: rgba(230, 218, 196, 0.45); border-radius: 999px; padding: 3px;
+}
+.at-seg-item { padding: 5px 22px; border-radius: 999px; }
+.at-seg-active { background: var(--at-card); box-shadow: 0 1px 4px rgba(46, 36, 24, 0.1); }
+.at-seg-text { font-size: 13px; color: var(--at-mist); font-weight: 600; }
+.at-seg-text-active { color: var(--at-ink); font-weight: 700; }
+.at-subject-bar-side { width: 58px; }
 
-/* 维度卡片 */
-.pp-dimensions { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
-.pp-dim-card { display: flex; flex-direction: row; align-items: center; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
-.pp-dim-card:active { background: var(--canvas); }
-.pp-dim-icon { font-size: 20px; color: var(--accent); width: 32px; }
-.pp-dim-main { flex: 1; display: flex; flex-direction: column; }
-.pp-dim-title { font-size: 14px; font-weight: 600; color: var(--ink); }
-.pp-dim-summary { font-size: 12px; color: var(--ink2); line-height: 1.5; margin-top: 4px; }
-.pp-dim-arrow { font-size: 18px; color: var(--muted); }
+/* ===== 成稿 ===== */
+.at-letter { flex: 1; }
+.at-letter-body { padding: 18px 20px 30px; display: flex; flex-direction: column; }
+.at-letter-head { display: flex; flex-direction: column; align-items: center; padding: 12px 0 4px; }
+.at-letter-title { font-size: 26px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); text-align: center; }
+.at-letter-tags { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 12px; }
+.at-letter-tag {
+	padding: 3px 12px; border-radius: 999px;
+	background: rgba(180, 118, 43, 0.1); color: var(--at-amber-deep); font-size: 12px;
+}
+.at-letter-block { margin-top: 22px; }
+.at-block-label { font-size: 11px; color: var(--at-mist); font-weight: 700; letter-spacing: 0.12em; }
+.at-block-serif { font-size: 15px; color: var(--at-ink); line-height: 1.9; margin-top: 8px; font-family: var(--serif); text-align: justify; }
 
-/* 理想型百分比 */
-.pp-weights { padding: 14px 16px; margin: 12px 0; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
-.pp-weights-title { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
-.pp-weight-row { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 5px 0; }
-.pp-weight-label { width: 72px; font-size: 12px; color: var(--ink2); }
-.pp-weight-track { flex: 1; height: 4px; background: var(--warm); border-radius: 999px; overflow: hidden; }
-.pp-weight-fill { height: 100%; background: var(--sage); border-radius: 999px; transition: width 0.3s ease-out; }
-.pp-weight-percent { width: 36px; text-align: right; font-size: 12px; color: var(--muted); }
+.at-dim-row {
+	display: flex; flex-direction: row; align-items: flex-start; gap: 10px;
+	padding: 12px 14px; margin-top: 8px;
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px;
+}
+.at-dim-icon { font-size: 18px; color: var(--at-amber); width: 26px; }
+.at-dim-main { flex: 1; display: flex; flex-direction: column; }
+.at-dim-title { font-size: 14px; font-weight: 700; color: var(--at-ink); }
+.at-dim-summary { font-size: 12px; color: var(--at-ink2); line-height: 1.6; margin-top: 4px; }
 
-/* 最近的变化 */
-.pp-change { padding: 16px; margin: 12px 0; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
-.pp-change-title { font-size: 13px; font-weight: 600; color: var(--ink); }
-.pp-change-summary { font-size: 14px; color: var(--accent2); font-weight: 600; margin-top: 8px; line-height: 1.5; }
-.pp-change-obs { font-size: 13px; color: var(--ink2); line-height: 1.6; margin-top: 6px; }
-.pp-change-more { margin-top: 10px; display: flex; justify-content: flex-end; }
-.pp-change-more-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
+.at-weight-row { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 6px 0; }
+.at-weight-label { width: 66px; font-size: 12px; color: var(--at-ink2); }
+.at-weight-track { flex: 1; height: 5px; background: rgba(230, 218, 196, 0.6); border-radius: 999px; overflow: hidden; }
+.at-weight-fill { height: 100%; background: var(--at-honey); border-radius: 999px; transition: width 0.4s ease-out; }
+.at-weight-percent { width: 38px; text-align: right; font-size: 12px; color: var(--at-mist); }
 
-/* 状态页 */
-.pp-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; }
-.pp-state-title { font-size: 16px; font-weight: 700; color: var(--ink); text-align: center; }
-.pp-state-copy { font-size: 13px; color: var(--muted); text-align: center; margin-top: 8px; line-height: 1.6; }
-.pp-state-btn { margin-top: 20px; padding: 10px 24px; background: var(--accent); border-radius: 8px; }
-.pp-state-btn-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+.at-change-block { padding: 14px 16px; background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px; }
+.at-change-summary { font-size: 14px; color: var(--at-amber-deep); font-weight: 700; margin-top: 8px; line-height: 1.5; }
+.at-change-obs { font-size: 13px; color: var(--at-ink2); line-height: 1.7; margin-top: 6px; }
+.at-conclusion-block { padding: 16px; background: linear-gradient(160deg, var(--at-card), rgba(230, 218, 196, 0.3)); border-radius: 14px; border: 1px solid var(--at-line); }
 
-/* 模式选择 */
-.pp-mode-select { padding: 32px 16px; }
-.pp-mode-title { font-size: 20px; font-weight: 700; color: var(--ink); font-family: var(--serif); }
-.pp-mode-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
-.pp-mode-actions { display: flex; flex-direction: row; gap: 12px; margin-top: 24px; }
-.pp-mode-btn { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 20px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
-.pp-mode-text-btn { border-color: var(--accent); }
-.pp-mode-voice-btn { border-color: var(--accent); }
-.pp-mode-btn-icon { font-size: 32px; }
-.pp-mode-btn-name { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 8px; }
-.pp-mode-btn-desc { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.at-letter-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 30px; }
+.at-letter-btn {
+	padding: 12px 0; border-radius: 999px; border: 1px solid var(--at-line);
+	display: flex; align-items: center; justify-content: center; background: var(--at-card);
+}
+.at-letter-btn-main { background: var(--at-amber); border-color: var(--at-amber); }
+.at-letter-btn-main-text { font-size: 14px; font-weight: 700; color: #FFF6E8; }
+.at-letter-btn-text { font-size: 14px; font-weight: 600; color: var(--at-ink2); }
+.at-letter-foot-space { height: 30px; }
 
-/* 对话流 */
-.pp-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.pp-chat-flow { flex: 1; padding: 12px 16px; }
-.pp-chat-spacer { height: 100px; }
+/* 成稿未就绪 */
+.at-letter-pending { padding: 30px 24px; display: flex; flex-direction: column; }
+.at-curing-panel {
+	display: flex; flex-direction: column; align-items: center; padding: 34px 22px;
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 18px;
+}
+.at-curing-title { font-size: 17px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); margin-top: 6px; }
+.at-curing-sub { font-size: 13px; color: var(--at-mist); text-align: center; margin-top: 10px; line-height: 1.7; }
+.at-curing-actions { display: flex; flex-direction: row; gap: 10px; margin-top: 22px; }
+.at-curing-btn { padding: 9px 24px; border-radius: 999px; background: var(--at-amber); }
+.at-curing-btn-text { font-size: 13px; font-weight: 700; color: #FFF6E8; }
+.at-curing-btn-plain { background: transparent; border: 1px solid var(--at-line); }
+.at-curing-btn-plain-text { font-size: 13px; font-weight: 600; color: var(--at-ink2); }
 
-.pp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
-.pp-empty-title { font-size: 15px; font-weight: 700; color: var(--muted); }
-.pp-empty-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+	/* ===== 落笔对话 ===== */
+.at-dialog { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.at-progress { padding: 8px 16px 6px; display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.at-progress-track { flex: 1; height: 4px; background: rgba(230, 218, 196, 0.6); border-radius: 999px; overflow: hidden; }
+.at-progress-fill { height: 100%; background: var(--at-honey); border-radius: 999px; transition: width 0.35s ease-out; }
+.at-progress-text { font-size: 10px; color: var(--at-mist); min-width: 128px; }
+.at-pause { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-card); }
+.at-pause-text { font-size: 11px; color: var(--at-amber-deep); font-weight: 600; }
 
-.pp-msg { margin-bottom: 10px; }
-.pp-msg-left { display: flex; flex-direction: row; justify-content: flex-start; }
-.pp-msg-right { display: flex; flex-direction: row; justify-content: flex-end; }
-.pp-msg-system { display: flex; flex-direction: row; justify-content: center; }
-.pp-msg-field { margin: 4px 0; }
+.at-flow { flex: 1; padding: 6px 16px; }
+.at-flow-spacer { height: 90px; }
+.at-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
+.at-empty-title { font-size: 15px; font-weight: 700; color: var(--at-mist); }
+.at-empty-sub { font-size: 12px; color: var(--at-mist); margin-top: 6px; }
 
-.pp-bubble { max-width: 78%; padding: 10px 14px; border-radius: 12px; }
-.pp-bubble-ai { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-.pp-bubble-user { background: var(--accent); border-bottom-right-radius: 4px; }
-.pp-bubble-text { font-size: 14px; line-height: 1.6; }
-.pp-bubble-ai .pp-bubble-text { color: var(--ink); }
-.pp-bubble-user .pp-bubble-text { color: var(--text-invert); }
+.at-msg { margin-bottom: 10px; }
+.at-msg-left { display: flex; flex-direction: row; justify-content: flex-start; }
+.at-msg-right { display: flex; flex-direction: row; justify-content: flex-end; }
+.at-msg-system { display: flex; flex-direction: row; justify-content: center; }
+.at-bubble { max-width: 78%; padding: 11px 14px; border-radius: 14px; }
+.at-bubble-ai {
+	background: var(--at-card); border: 1px solid var(--at-line);
+	border-bottom-left-radius: 4px;
+}
+.at-bubble-ai-text { font-size: 14px; line-height: 1.7; color: var(--at-ink); font-family: var(--serif); }
+.at-bubble-user { background: var(--at-amber); border-bottom-right-radius: 4px; }
+.at-bubble-user-text { font-size: 14px; line-height: 1.6; color: #FFF6E8; }
 
-/* 枚举选项 */
-.pp-options { display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.pp-option-chip { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); }
-.pp-option-chip.selected { background: var(--accent-bg); border-color: var(--accent); }
-.pp-option-chip-text { font-size: 12px; color: var(--ink2); }
-.pp-option-chip.selected .pp-option-chip-text { color: var(--accent2); }
+.at-options { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+.at-option-chip { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-bg); }
+.at-option-chip.selected { background: rgba(180, 118, 43, 0.14); border-color: var(--at-amber); }
+.at-option-chip-text { font-size: 12px; color: var(--at-ink2); }
+.at-option-chip.selected .at-option-chip-text { color: var(--at-amber-deep); font-weight: 700; }
 
-/* 打字指示器 */
-.pp-typing { display: flex; flex-direction: row; align-items: center; gap: 4px; }
-.pp-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: pp-bounce 0.6s ease-out infinite alternate; }
-.pp-dot:nth-child(2) { animation-delay: 0.15s; }
-.pp-dot:nth-child(3) { animation-delay: 0.3s; }
-.pp-typing-text { font-size: 12px; color: var(--muted); margin-left: 4px; }
-@keyframes pp-bounce { from { opacity: 0.3; transform: translateY(0); } to { opacity: 1; transform: translateY(-4px); } }
+.at-typing { display: flex; flex-direction: row; align-items: center; gap: 4px; }
+.at-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--at-mist); animation: at-bounce 0.6s ease-out infinite alternate; }
+.at-dot:nth-child(2) { animation-delay: 0.15s; }
+.at-dot:nth-child(3) { animation-delay: 0.3s; }
+.at-typing-text { font-size: 12px; color: var(--at-mist); margin-left: 4px; }
+@keyframes at-bounce { from { opacity: 0.3; transform: translateY(0); } to { opacity: 1; transform: translateY(-4px); } }
+.at-system-text { font-size: 12px; color: var(--at-mist); text-align: center; line-height: 1.6; }
+.at-published-text { color: var(--at-fixed); font-weight: 700; }
 
-/* 系统提示 */
-.pp-system-text { font-size: 12px; color: var(--muted); text-align: center; }
+/* 待确认理解事件 */
+.at-msg-ingredients {
+	padding: 12px 14px; border-radius: 14px;
+	background: rgba(217, 164, 65, 0.1); border: 1px dashed rgba(180, 118, 43, 0.4);
+}
+.at-ingredients-title { font-size: 13px; font-weight: 700; color: var(--at-amber-deep); }
+.at-ingredients-chips { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+.at-ingredient-chip {
+	padding: 4px 12px; border-radius: 999px;
+	background: var(--at-card); border: 1px solid rgba(180, 118, 43, 0.4);
+	animation: at-chip-drop 0.45s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+.at-ingredient-chip-text { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; }
+@keyframes at-chip-drop {
+	from { transform: translateY(-14px) scale(0.85); opacity: 0; }
+	to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.at-ingredients-more { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; margin-top: 9px; }
 
-/* 底部操作栏 */
-.pp-input-bar { padding: 8px 16px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
-.pp-input-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-.pp-input { flex: 1; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; color: var(--ink); background: var(--surface); }
-.pp-ph { color: var(--muted); }
-.pp-send-btn { padding: 0 16px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--bg-subtle); }
-.pp-send-ready { background: var(--accent); }
-.pp-send-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+/* ===== 底部操作区 ===== */
+.at-input-bar {
+	padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+	background: var(--at-bg);
+	border-top: 1px solid var(--at-line);
+}
+.at-input-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.at-input {
+	flex: 1; height: 40px; padding: 0 13px;
+	border: 1px solid var(--at-line); border-radius: 999px;
+	font-size: 14px; color: var(--at-ink); background: var(--at-card);
+}
+.at-ph { color: var(--at-mist); }
+.at-round-btn {
+	width: 40px; height: 40px; border-radius: 999px;
+	border: 1px solid var(--at-line); background: var(--at-card);
+	display: flex; align-items: center; justify-content: center;
+}
+.at-round-btn-text { font-size: 17px; }
+.at-send-btn {
+	padding: 0 18px; height: 40px; border-radius: 999px;
+	background: rgba(230, 218, 196, 0.6);
+	display: flex; align-items: center; justify-content: center;
+	transition: background 0.2s ease-out;
+}
+.at-send-ready { background: var(--at-amber); }
+.at-send-text { font-size: 14px; font-weight: 700; color: var(--at-ink2); }
+.at-send-ready .at-send-text { color: #FFF6E8; }
 
-.pp-bar-status { flex: 1; display: flex; align-items: center; justify-content: center; height: 38px; }
-.pp-bar-status-text { font-size: 13px; color: var(--muted); }
+.at-bar-status { display: flex; flex-direction: row; align-items: center; justify-content: center; height: 42px; gap: 8px; }
+.at-mini-steam { display: flex; flex-direction: row; gap: 6px; }
+.at-mini-steam .at-steam-dot { width: 7px; height: 7px; }
+.at-bar-status-text { font-size: 13px; color: var(--at-mist); }
 
-.pp-publish-row { justify-content: space-between; }
-.pp-publish-info { font-size: 13px; color: var(--ink2); }
-.pp-publish-btn { padding: 0 20px; height: 38px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--bg-subtle); }
-.pp-publish-ready { background: var(--accent); }
-.pp-publish-text { font-size: 14px; font-weight: 700; color: var(--text-invert); }
+.at-publish-row {
+	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+	margin-top: 8px;
+}
+.at-publish-info { font-size: 13px; color: var(--at-ink2); }
+.at-publish-btn { padding: 0 22px; height: 40px; border-radius: 999px; background: var(--at-fixed); display: flex; align-items: center; justify-content: center; }
+.at-publish-text { font-size: 14px; font-weight: 700; color: #F2F7EF; }
 
-/* 语音输入区 */
-.pp-voice-area { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
-.pp-mode-switch { margin-top: 8px; padding: 4px 12px; }
-.pp-mode-switch-text { font-size: 12px; color: var(--accent2); font-weight: 600; }
-.pp-mode-switch-inline { margin-left: 4px; }
+.at-voice-area { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+.at-mode-switch { margin-top: 8px; padding: 4px 12px; }
+.at-mode-switch-text { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; }
 
-/* 转写确认卡片 */
-.pp-transcribe-row { flex-direction: column; align-items: stretch; }
-.pp-transcribe-card { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 10px; }
-.pp-transcribe-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
-.pp-transcribe-input { width: 100%; min-height: 48px; font-size: 14px; color: var(--ink); line-height: 1.5; }
-.pp-transcribe-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.pp-transcribe-retry { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); }
-.pp-transcribe-retry-text { font-size: 12px; font-weight: 700; color: var(--muted); }
-.pp-transcribe-confirm { padding: 6px 14px; border-radius: 8px; background: var(--accent); }
-.pp-transcribe-confirm-text { font-size: 12px; font-weight: 700; color: var(--text-invert); }
+/* 转写确认卡 */
+.at-transcribe-card {
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 14px; padding: 11px;
+}
+.at-transcribe-label { font-size: 11px; color: var(--at-amber-deep); font-weight: 700; margin-bottom: 6px; }
+.at-transcribe-input { width: 100%; min-height: 52px; font-size: 14px; color: var(--at-ink); line-height: 1.5; }
+.at-transcribe-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.at-transcribe-retry { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--at-line); }
+.at-transcribe-retry-text { font-size: 12px; font-weight: 700; color: var(--at-mist); }
+.at-transcribe-confirm { padding: 7px 15px; border-radius: 999px; background: var(--at-amber); }
+.at-transcribe-confirm-text { font-size: 12px; font-weight: 700; color: #FFF6E8; }
+
+/* ===== 实时语音沉浸层 ===== */
+.at-voice-overlay {
+	position: fixed; inset: 0; z-index: 80;
+	background: linear-gradient(180deg, #2A2015, #241B12);
+	display: flex; flex-direction: column;
+}
+.at-voice-head {
+	position: relative;
+	box-sizing: content-box;
+	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+	padding-left: 10px; padding-bottom: 8px;
+}
+.at-voice-exit { z-index: 1; width: 44px; height: 32px; display: flex; align-items: center; justify-content: center; }
+.at-voice-exit-text { font-size: 28px; color: #F6EEE0; }
+.at-voice-title {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 32px;
+	line-height: 32px;
+	text-align: center;
+	font-size: 16px;
+	font-weight: 700;
+	color: #F6EEE0;
+	font-family: var(--serif);
+	pointer-events: none;
+}
+.at-voice-head-side { z-index: 1; width: 44px; height: 32px; }
+.at-voice-body {
+	flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+	padding: 0 22px calc(30px + env(safe-area-inset-bottom));
+}
+.at-voice-hint {
+	font-size: 11px; color: rgba(246, 238, 224, 0.45);
+	text-align: center; line-height: 1.7; margin-top: 22px;
+}
+
+/* 实时转写确认卡 */
+.at-conv-review {
+	margin-top: 22px; width: 100%;
+	background: rgba(255, 252, 245, 0.08); border: 1px solid rgba(246, 238, 224, 0.2);
+	border-radius: 16px; padding: 13px;
+}
+.at-conv-review-label { font-size: 11px; color: #E8B54F; font-weight: 700; margin-bottom: 7px; }
+.at-conv-review-input { width: 100%; min-height: 56px; font-size: 14px; color: #F6EEE0; line-height: 1.6; }
+.at-conv-review-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+.at-conv-review-retry { padding: 7px 15px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.28); }
+.at-conv-review-retry-text { font-size: 12px; font-weight: 600; color: rgba(246, 238, 224, 0.75); }
+.at-conv-review-confirm { padding: 7px 15px; border-radius: 999px; background: var(--at-amber); }
+.at-conv-review-confirm-text { font-size: 12px; font-weight: 700; color: #FFF6E8; }
+
+/* 降级面板 */
+.at-conv-degrade {
+	margin-top: 22px; width: 100%;
+	background: rgba(255, 252, 245, 0.06); border: 1px solid rgba(246, 238, 224, 0.16);
+	border-radius: 16px; padding: 16px;
+	display: flex; flex-direction: column; align-items: center;
+}
+.at-conv-degrade-title { font-size: 14px; font-weight: 700; color: #F6EEE0; }
+.at-conv-degrade-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 9px; margin-top: 14px; justify-content: center; }
+.at-conv-degrade-btn { padding: 8px 17px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.3); }
+.at-conv-degrade-btn-text { font-size: 12px; font-weight: 600; color: #F6EEE0; }
+
+/* ===== 生成层 ===== */
+.at-curing-overlay {
+	position: fixed; inset: 0; z-index: 90;
+	background: rgba(36, 27, 18, 0.94);
+	display: flex; flex-direction: column; align-items: center; justify-content: center;
+	padding: 40px 30px;
+}
+.at-curing-overlay-body { display: flex; flex-direction: column; align-items: center; }
+.at-curing-steam-lg .at-steam-dot { width: 14px; height: 14px; }
+.at-curing-overlay-title { font-size: 19px; font-weight: 700; color: #F6EEE0; font-family: var(--serif); margin-top: 18px; }
+.at-curing-lines { display: flex; flex-direction: column; align-items: flex-start; margin-top: 24px; gap: 10px; }
+.at-cure-line { display: flex; flex-direction: row; align-items: center; gap: 9px; }
+.at-cure-check { font-size: 13px; color: #E8B54F; font-weight: 700; }
+.at-cure-line-text { font-size: 13px; color: rgba(246, 238, 224, 0.85); }
+.at-curing-overlay-sub { font-size: 12px; color: rgba(246, 238, 224, 0.5); margin-top: 24px; }
+
+/* ===== 待确认的理解 ===== */
+.at-recipe-body { display: flex; flex-direction: column; }
+.at-recipe-sub { font-size: 12px; color: var(--at-mist); line-height: 1.6; margin-bottom: 14px; }
+.at-recipe-empty { display: flex; flex-direction: column; align-items: center; padding: 40px 0; }
+.at-recipe-empty-title { font-size: 15px; font-weight: 700; color: var(--at-mist); }
+.at-recipe-empty-sub { font-size: 12px; color: var(--at-mist); margin-top: 6px; }
+
+/* ===== 管理面板 ===== */
+.at-manage-body { display: flex; flex-direction: column; }
+.at-manage-row {
+	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+	padding: 15px 4px; border-bottom: 1px solid var(--at-line);
+}
+.at-manage-row-text { font-size: 14px; color: var(--at-ink2); font-weight: 600; }
+.at-manage-danger-text { color: var(--at-danger); }
+.at-manage-row-arrow { font-size: 16px; color: var(--at-mist); }
+.at-manage-divider { height: 10px; }
+.at-manage-note { font-size: 11px; color: var(--at-mist); line-height: 1.7; margin-top: 14px; }
 </style>

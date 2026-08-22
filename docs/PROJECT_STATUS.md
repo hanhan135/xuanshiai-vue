@@ -1,6 +1,6 @@
 ﻿# 当前工程状态与已知差异
 
-> 更新日期：2026-07-30
+> 更新日期：2026-08-21
 > 用途：防止文档把占位实现、Mock 或历史配置描述成已完成生产能力。
 
 ## 当前验收记录（2026-07-30）
@@ -36,13 +36,13 @@
 - **范围：** 对话式建构「关于我 / 关于对方」画像。新增 `api/ai-profile.uts`（会话 / 草稿 / 发布 / 历史 / 任务轮询 / 语音转写，含幂等键与错误码映射）、`mock/ai-profile.uts`（字段抽取、版本冲突、任务轮询模拟）、页面 `pagesSub/profileExtra/my-portrait.uvue`、组件 `XsaPortraitField` / `VoiceRecorder` / `VoiceWaveform`；`pages/profile/profile.uvue` 画像入口已从占位 Toast 改为 `navigateTo`。
 - **验证：** `node tests/test-ai-profile-page.js`、`node tests/test-mock-system.js`、`node tests/test-activity-detail-page.js`、`node tests/test-community-test-filters.js` 均 exit 0；`git diff --check` 通过。`npm run verify:mp` 因技能脚本 `debug-wechat-build-artifacts` 在本机缺失无法运行（环境问题，非本次改动），手工等价检查现有产物：`lazyCodeLoading=requiredComponents`、主包 ~416KB、`pagesSub` ~1.5MB、`my-portrait` 页面文件与 `app.json` 声明交叉验证通过。HBuilderX 重编译 + 微信开发者工具回归尚未执行（HBuilderX 安装未定位）。
 - **后置：** 真实 ASR 接入、后端 `/ai/*` 接口联调、67% 提前建构、暂停 / 恢复 / 重新开始、画像更新触发用心度与搜索重算。
-- **API_BASE_URL：** 当前工作区 `api/config.uts` 为 `http://127.0.0.1:8000`（M04 本地联调进行中），联调完成后切回测试服务器 `https://xhztest.xyz`。本文件既有叙事仍以测试服务器为仓库默认。
+- **API_BASE_URL：** 仓库当前 `api/config.uts` 为测试服务器 `https://xhztest.xyz`（`USE_MOCK = false`）。本机 FastAPI `http://127.0.0.1:8000` 仅作可选本地联调，不作为仓库默认。
 
 ## 1. 当前可确认的工程事实
 
 - 技术栈：UniApp / Vue 3，页面和组件以 `.uvue` 为主，逻辑以 `.uts` 为主。
 - 主目标端：微信小程序；H5 用于快速调试。
-- 已注册 35 个页面，其中 5 个 Tab：首页、社区、牵线、消息、我的。
+- `pages.json` 当前登记主包 7 页 + 分包 50 页，共 57 个页面；五个 Tab 为 **首页 / 牵线 / 社区 / 消息 / 我的**（`XsaTabBar` 文案与定版一致；`pages.json` tabBar 第二项文本仍为「红娘服务」，属受保护配置，未擅自改名）。
 - 社区闭环子路由（`pages.json` 已登记）：话题列表/详情、动态详情、活动列表/详情/我的活动、纸飞机、社区通知、发布。
 - 社区主 Tab：**关注 / 同城 / 发现**；二级筛选随主 Tab 切换：
   - 关注：`全部 / 关注 / 喜欢`（喜欢 = 用户级喜欢关系，不是帖子点赞）
@@ -77,8 +77,8 @@
 
 ## 4. 当前后端 / 联调状态
 
-- `api/request.uts`：`USE_MOCK=true` 走 mock；`false` 且 `API_CONFIG.useHttp=true` 走 FastAPI HTTP（Bearer）；`useHttp=false` 才回退 `uniCloud.callFunction`。
-- 仓库默认 `API_BASE_URL=https://xhztest.xyz`（当前已切到测试服务器；本地联调可临时改为 `http://127.0.0.1:8000` 或局域网 IP）；token 存 `xsa_access_token`。
+- `api/request.uts`：`USE_MOCK=true` 走 mock；`false` 走 FastAPI HTTP（Bearer）。不再按 `useHttp` 回退 uniCloud。
+- 仓库默认 `API_BASE_URL=https://xhztest.xyz`（测试服务器；本地联调可临时改为 `http://127.0.0.1:8000` 或局域网 IP）；token 存 `xsa_access_token`。
 - 社区模块主链路与旁路（like/apply）**适配器 + 审查 P0 缺陷已修**。
 - **2026-07-25 本地 HTTP 冒烟（A1–A4/B1 核心）已过：** quotas 200、like 可取消、`page_size` 50/100 契约、互喜欢无 `chat_session`、apply remain−1 + 409、accept 才建会话；记录见 changelog「实际测试」。环境：MySQL + Docker Redis + `SMS_PROVIDER=mock`。
 - **关 Mock 端侧联调（本地模拟器已验证）：** 本地使用 `USE_MOCK=false`、`API_BASE_URL=http://127.0.0.1:8000`（现已切到测试服务器 `https://xhztest.xyz`）；登录页调试登录使用 `17870810285`/`123456`；HBuilderX 5.15 编译成功，微信开发者工具已打开并完成社区路径回归。物理手机、正式登录、正式 HTTPS 合法域名仍不在本次范围。
@@ -87,7 +87,7 @@
 - BE：`set_like` 不再互喜欢建会话（对齐先申请再聊）；quotas VIP 用 `end_at`；额度 Redis 键 UTC 统一。
 - **同城城市（2026-07-25 续）：** 独立偏好 `community_city_*`（**不写** residence）；一周限改 429；`mode=city` **只按** 帖子 `p.location`；锚点请求→偏好→现居回落；未设城 FE CTA「选择城市」。Live：`tests/live/test_community_city_http.py`。详见 changelog「同城偏好独立 + location-only + 一周限改」。
 - Mock 应按模块逐步退役，不删除作为契约样例的有效数据；当前社区联调保持 `USE_MOCK = false`，其它尚未接入真实后端的模块仍按模块保留 Mock。
-- 仍后置：媒体上传、消息页 applications 真路径、聊天 sessions FE、纸飞机 reply 幂等、区级筛选/完整 regions 选择器、自动化 E2E 入库；见 changelog / 审查台账 deferred。
+- 仍后置：消息页 applications 真路径、聊天 sessions FE、纸飞机 reply 幂等、区级筛选/完整 regions 选择器、自动化 E2E 入库；见 changelog deferred。
 
 ## 5. 配置与产品边界差异
 
@@ -95,29 +95,20 @@
 
 - `manifest.json` 包含定位、麦克风等 App 权限描述。
 - 权限文案提到“附近推荐”“语音聊天和视频通话”，与当前认真婚恋、申请认识优先的产品边界并不完全一致。
-- `manifest.json` 引用了 `static/logo.png`，但当前仓库没有该正式品牌图标。
+- `manifest.json` 引用 `static/logo.png`；该文件目前存在于仓库，不代表已完成正式品牌定稿。
 
 这些内容属于受保护配置，本文只记录差异；修改前需明确授权并同步产品、设计与隐私说明。
 
 ## 6. 设计实现差异
 
-- `DESIGN.md` 规定圆角等级为 4px / 8px / 12px / 999px。
-- 当前 `uni.scss` 的部分旧工具类仍为 6px / 10px / 16px。
-- 新页面应遵循 `DESIGN.md`，不要继续复制旧圆角值；全局 Token 的统一修改需要设计评审。
+- `DESIGN.md` 现役圆角等级含 4 / 6 / 8 / 9 / 12 / 16 / 999px。
+- `uni.scss` 可能仍残留旧工具类；新页面遵循 `DESIGN.md`，不要继续复制未评审色值或旧圆角。
+- 全局 Token 的统一修改需要设计评审。
 - `pages.json` 只能使用平台支持的静态色值，不能直接引用 CSS 变量；其中颜色应视为平台配置映射，而非新增设计 Token。
 - **Token 运行时（2026-07-22 方案 A）**：语义名不变；色值为 hex/rgba。全局注入在 `App.uvue` 的 `page { --token }`（进入微信 `app.wxss`），并与 `uni.scss` 对齐。业务继续用 `var(--token)`，禁止 `oklch()` 与页面散落字面色。
 - 历史产物 `unpackage/dist/dev/mp-weixin` 在未重新编译前可能仍是旧样式；验收以 HBuilderX 重新运行到微信开发者工具后的结果为准。
 
-## 7. 下一阶段开发计划
-
-分阶段执行与验收以 [`DEV_PLAN_HBUILDERX.md`](./DEV_PLAN_HBUILDERX.md) 为准（2026-07-22 v1.0.0）：
-
-- **P0：** Tab 顺序与图标、首页壳层/故事卡/广场双列（对照冷白 HTML final，不回 HTML 主线）
-- **P1：** 申请认识 → 双方同意 → 聊天主路径；社区/牵线/我的/认证
-- **P2：** 会员拦截、爆灯/置顶/积分 Mock 付费
-- **工具链：** HBuilderX + 微信开发者工具验收；不以 npm CLI 构建为门禁
-
-## 8. 当前需求依据
+## 7. 当前需求依据
 
 定版产品定义以工作区根 `../PRODUCT.md` 为唯一权威；本目录 `PRODUCT.md` 仅为受控实现镜像。裁决优先级：
 

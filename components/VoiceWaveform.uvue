@@ -1,5 +1,5 @@
 <template>
-	<view class="vw-waveform" :class="'vw-state-' + state">
+	<view class="vw-waveform" :class="['vw-state-' + state, { 'vw-atelier': theme == 'atelier', 'vw-atelier-dark': theme == 'atelier-dark' }]">
 		<view
 			v-for="(bar, i) in bars"
 			:key="i"
@@ -12,9 +12,11 @@
 <script setup lang="uts">
 interface Props {
 	state?: string
+	theme?: string
 }
 const props = withDefaults(defineProps<Props>(), {
-	state: 'idle'
+	state: 'idle',
+	theme: 'default'
 })
 const bars = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 </script>
@@ -56,6 +58,19 @@ const bars = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 	background: var(--accent2);
 	animation: none;
 }
+
+/* 调香室主题(琥珀色系) */
+.vw-atelier .vw-bar { background: var(--at-line, #E6DAC4); }
+.vw-atelier.vw-state-listening .vw-bar { background: var(--at-honey, #D9A441); }
+.vw-atelier.vw-state-speaking .vw-bar { background: #C97B57; }
+.vw-atelier.vw-state-transcribing .vw-bar { background: var(--at-mist, #9A8C77); }
+.vw-atelier.vw-state-reviewing .vw-bar { background: var(--at-amber, #B4762B); }
+/* 调香室 · 深色沉浸模式(实时对话层) */
+.vw-atelier-dark .vw-bar { background: rgba(246, 238, 224, 0.22); }
+.vw-atelier-dark.vw-state-listening .vw-bar { background: #E8B54F; }
+.vw-atelier-dark.vw-state-speaking .vw-bar { background: #E09468; }
+.vw-atelier-dark.vw-state-transcribing .vw-bar { background: rgba(246, 238, 224, 0.55); }
+.vw-atelier-dark.vw-state-reviewing .vw-bar { background: #E8B54F; }
 @keyframes vw-idle {
 	0%, 100% { transform: scaleY(1); opacity: 0.6; }
 	50% { transform: scaleY(1.4); opacity: 1; }

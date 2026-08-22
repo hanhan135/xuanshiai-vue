@@ -32,4 +32,4 @@ const response = await getRecommendUser()
 4. 按模块逐步切换并保留可回退能力，不直接删除 `mock/`。
 5. 在 H5 和微信开发者工具回归关键流程。
 
-详细说明见 [`docs/MOCK_API_GUIDE.md`](./docs/MOCK_API_GUIDE.md) 与 [`docs/Mock使用与退役约定.md`](./docs/Mock使用与退役约定.md)。
+详细说明见 [`docs/MOCK_API_GUIDE.md`](./docs/MOCK_API_GUIDE.md)。
