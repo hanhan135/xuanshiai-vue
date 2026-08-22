@@ -147,7 +147,7 @@
 					<view v-if="letterDimensions.length > 0" class="at-letter-block">
 						<text class="at-block-label">结构</text>
 						<view v-for="dim in letterDimensions" :key="dim.key" class="at-dim-row">
-							<text class="at-dim-icon">{{ dim.icon }}</text>
+							<text class="at-dim-icon at-ic" :class="dim.iconClass"></text>
 							<view class="at-dim-main">
 								<text class="at-dim-title">{{ dim.title }}</text>
 								<text class="at-dim-summary">{{ dim.summary }}</text>
@@ -257,7 +257,7 @@
 										:key="opt"
 										class="at-option-chip"
 										:class="{ selected: answerText == opt }"
-										@tap="answerText = opt"
+										@tap="onEnumOptionTap(opt, msg.fieldKey)"
 									>
 										<text class="at-option-chip-text">{{ opt }}</text>
 									</view>
@@ -743,18 +743,21 @@ const letterInsight = computed(() => {
 const letterDimensions = computed(() => {
 		const n = narrative.value
 		if (n == null || n.dimensions == null || !Array.isArray(n.dimensions)) return [] as any[]
-		const fallback: any = { relationship: '♡', personality: '☀', lifestyle: '⌂', future: '↗' }
+		// 维度 key → iconfont class(与后端 sanitize_narrative_dimension_icon 白名单 token 对齐,经 iconfont-social 字库渲染)
+		// 后端 sanitize_narrative_dimension_icon 已把 emoji/伪标签归一为 token 名
+		const iconClass: any = {
+			relationship: 'at-ic-love',
+			personality: 'at-ic-biaoqing',
+			lifestyle: 'at-ic-canyuhuati',
+			future: 'at-ic-xianxiahuodong'
+		}
 		const out: any[] = []
 		for (let i = 0; i < n.dimensions.length; i++) {
 			const dim = n.dimensions[i]
 			if (dim == null) continue
 			const key = dim.key != null ? String(dim.key) : ''
-			const rawIcon = dim.icon != null ? String(dim.icon) : ''
-			let icon = rawIcon
-			if (icon == '' || icon.indexOf('<') >= 0 || icon.indexOf('>') >= 0 || icon.indexOf('/') >= 0 || icon.length > 4) {
-				icon = fallback[key] != null ? String(fallback[key]) : '·'
-			}
-			out.push({ key: key, icon: icon, title: dim.title, summary: dim.summary })
+			const cls = iconClass[key] != null ? String(iconClass[key]) : 'at-ic-love'
+			out.push({ key: key, iconClass: cls, title: dim.title, summary: dim.summary })
 		}
 		return out
 	})
@@ -961,10 +964,13 @@ const symbolicCode = (res: any): string => {
 	return ''
 }
 
+let staleRetryCount = 0
+const MAX_STALE_RETRIES = 3
 let ensuringSession = false
 const sessionFailed = ref(false)
 const retrySession = () => {
 	sessionFailed.value = false
+	staleRetryCount = 0
 	ensureSession()
 }
 
@@ -986,7 +992,15 @@ const ensureSession = async () => {
 				pendingSubject = subject.value
 				consentMessage.value = mapProfileError(code, String(res.message))
 			} else if (code == 'PROFILE_SESSION_STALE') {
-				// 资料已更新,旧会话过期;稍后重开新落笔
+				// 资料已更新,旧会话过期;有界重试(最多 MAX_STALE_RETRIES 次)
+				staleRetryCount++
+				if (staleRetryCount > MAX_STALE_RETRIES) {
+					staleRetryCount = 0
+					sessionFailed.value = true
+					uni.showToast({ title: '资料已更新,请稍后重试', icon: 'none' })
+					loading.value = false
+					return
+				}
 				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
 				ensuringSession = false
 				setTimeout(() => { if (alive) ensureSession() }, 900)
@@ -999,6 +1013,7 @@ const ensureSession = async () => {
 			return
 		}
 		sessionFailed.value = false
+		staleRetryCount = 0
 		session.value = res.data
 		const status = String(res.data.status != null ? res.data.status : '')
 		paused.value = (status == 'paused')
@@ -1090,7 +1105,7 @@ const submitAnswer = async () => {
 
 		const taskId = String(turnRes.data.task_id != null ? turnRes.data.task_id : '')
 		const draftId = String(session.value.draft_id != null ? session.value.draft_id : '')
-		const result = await pollExtractionAndLoadDraft(taskId, draftId)
+		const result = await pollExtractionAndLoadDraft(taskId, draftId, 30, () => alive)
 		if (!alive) return
 		extracting.value = false
 		removeMessage(typingId)
@@ -1196,6 +1211,38 @@ const retryVoice = () => {
 	}
 }
 
+// 枚举选项点选:展示中文标签,提交后端契约 value
+const onEnumOptionTap = (label: string, fieldKey: string) => {
+	// 与「不想答」链接同款守卫:抽取/发布/暂存中不并发写草稿(防 409)
+	if (extracting.value || publishing.value || paused.value) return
+	answerText.value = label
+	// 枚举字段点选直接提交后端契约 value,跳过 AI 抽取
+	// 仅 personal 主体:ideal_partner 的同名字段是 set/range 形状,PATCH 标量会被后端 422(渲染已不挂 chips,此处兜底)
+	if (subject.value != 'personal' || fieldKey == '' || ENUM_FIELDS.indexOf(fieldKey) < 0) return
+	const options = ENUM_OPTIONS.get(fieldKey)
+	if (options == null) return
+	let matchedValue: any = null
+	for (let i = 0; i < options.length; i++) {
+		if (options[i].label == label) { matchedValue = options[i].value; break }
+	}
+	if (matchedValue == null || draft.value == null) return
+	const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
+	const act = fieldAction(fieldKey, 'replace', matchedValue, expectedRev)
+	patchProfileDraft(String(draft.value.draft_id), [act], expectedRev).then((res: any) => {
+		if (!alive) return
+		if (res.success && res.data != null) {
+			draft.value = res.data
+			addAnswerMessage(label)
+			advanceToNextQuestion()
+		} else {
+			uni.showToast({ title: mapProfileError(symbolicCode(res), String(res.message)), icon: 'none' })
+		}
+	}).catch((e: any) => {
+		console.error('[Atelier] enum tap confirm failed', e)
+		if (alive) uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+	})
+}
+
 const confirmTranscribe = async () => {
 	const text = transcribeText.value.trim()
 	if (text == '') {
@@ -1205,17 +1252,23 @@ const confirmTranscribe = async () => {
 	answerText.value = text
 	transcribeText.value = ''
 
-	// 枚举字段:转写匹配选项值后直接 PATCH replace 为 confirmed,跳过 AI 抽取
+	// 枚举字段:转写匹配选项标签后直接 PATCH replace 为 confirmed(提交后端契约 value),跳过 AI 抽取
+	// 仅 personal 主体:ideal_partner 的同名字段是 set/range 形状,PATCH 标量会被后端 422(渲染已不挂 chips,此处兜底)
 	const fieldKey = currentQuestion.value != null && currentQuestion.value.field_key != null
 		? String(currentQuestion.value.field_key) : ''
-	if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
+	if (subject.value == 'personal' && fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
 		const options = ENUM_OPTIONS.get(fieldKey)
 		if (options != null) {
-			let matchedValue = ''
+			let matchedValue: any = null
+			let matchedLabel = ''
 			for (let i = 0; i < options.length; i++) {
-				if (text.indexOf(options[i]) >= 0) { matchedValue = options[i]; break }
+				if (text.indexOf(options[i].label) >= 0) {
+					matchedValue = options[i].value
+					matchedLabel = options[i].label
+					break
+				}
 			}
-			if (matchedValue != '') {
+			if (matchedValue != null) {
 				if (draft.value != null) {
 					const expectedRev = Number(draft.value.expected_revision != null ? draft.value.expected_revision : 0)
 					const act = fieldAction(fieldKey, 'replace', matchedValue, expectedRev)
@@ -1229,7 +1282,7 @@ const confirmTranscribe = async () => {
 						console.error('[Atelier] enum voice confirm failed', e)
 					}
 				}
-				addAnswerMessage(text)
+				addAnswerMessage(matchedLabel != '' ? matchedLabel : text)
 				await advanceToNextQuestion()
 				return
 			}
@@ -1472,7 +1525,7 @@ const publishDraft = async () => {
 		// 发布是异步任务:轮询到终态
 		curingCurrentText.value = '正在生成这一稿...'
 		const taskId = String(res.data.task_id != null ? res.data.task_id : '')
-		const taskRes = await pollTaskUntilTerminal(taskId)
+		const taskRes = await pollTaskUntilTerminal(taskId, 40, () => alive)
 		if (!alive) return
 		if (!taskRes.done || taskRes.status != 'succeeded') {
 			publishing.value = false
@@ -1797,9 +1850,12 @@ const doGrantConsent = async () => {
 		}
 
 		let options: string[] = []
-		if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
+		// 枚举选项只挂在 personal 主体:ideal_partner 的同名字段是 set/range 形状,自由文本交 AI 抽取
+		if (subject.value == 'personal' && fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
 			const opts = ENUM_OPTIONS.get(fieldKey)
-			if (opts != null) options = opts
+			if (opts != null) {
+				for (let i = 0; i < opts.length; i++) { options.push(opts[i].label) }
+			}
 		}
 
 	messages.value.push({
@@ -1887,8 +1943,7 @@ onUnmounted(() => {
 // 初始化:并行拉取两个主体的叙事层
 const init = async () => {
 	loading.value = true
-	await loadNarrative('personal')
-	await loadNarrative('ideal_partner')
+	await Promise.all([loadNarrative('personal'), loadNarrative('ideal_partner')])
 	if (alive) loading.value = false
 }
 init()
@@ -1930,6 +1985,10 @@ init()
 }
 .at-ic-yuyin:before { content: "\e888"; font-size: 18px; }
 .at-ic-pinglun:before { content: "\e679"; font-size: 18px; }
+.at-ic-love:before { content: "\e623"; font-size: 18px; }
+.at-ic-biaoqing:before { content: "\e606"; font-size: 18px; }
+.at-ic-canyuhuati:before { content: "\e608"; font-size: 18px; }
+.at-ic-xianxiahuodong:before { content: "\e704"; font-size: 18px; }
 
 /* ===== 导航 ===== */
 .at-nav {
@@ -2078,7 +2137,7 @@ init()
 	padding: 12px 14px; margin-top: 8px;
 	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px;
 }
-.at-dim-icon { font-size: 18px; color: var(--at-amber); width: 26px; }
+.at-dim-icon { font-size: 18px; width: 26px; }
 .at-dim-main { flex: 1; display: flex; flex-direction: column; }
 .at-dim-title { font-size: 14px; font-weight: 700; color: var(--at-ink); }
 .at-dim-summary { font-size: 12px; color: var(--at-ink2); line-height: 1.6; margin-top: 4px; }

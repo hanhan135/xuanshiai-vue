@@ -36,11 +36,30 @@ FIELD_KEY_LABELS.set('relationship_goal', '关系期待')
 /** 枚举字段:以选项按钮展示,点选直接生成 confirmed */
 export const ENUM_FIELDS: string[] = ['marriage_status', 'education_level', 'income_band']
 
-/** 枚举字段可选值 */
-export const ENUM_OPTIONS: Map<string, string[]> = new Map()
-ENUM_OPTIONS.set('marriage_status', ['未婚', '离异', '丧偶'])
-ENUM_OPTIONS.set('education_level', ['高中及以下', '大专', '本科', '硕士', '博士'])
-ENUM_OPTIONS.set('income_band', ['10万以下', '10-20万', '20-30万', '30-50万', '50万以上'])
+/** 枚举字段可选值:label 用于展示,value 提交后端(与后端冻结字典/区间对齐) */
+export interface EnumOption { label: string, value: any }
+export const ENUM_OPTIONS: Map<string, EnumOption[]> = new Map()
+ENUM_OPTIONS.set('marriage_status', [
+  { label: '未婚', value: 'single' },
+  { label: '离异', value: 'divorced' },
+  { label: '丧偶', value: 'widowed' }
+])
+ENUM_OPTIONS.set('education_level', [
+  { label: '初中及以下', value: 1 },
+  { label: '高中/中专', value: 2 },
+  { label: '大专', value: 3 },
+  { label: '本科', value: 4 },
+  { label: '硕士', value: 5 },
+  { label: '博士', value: 6 }
+])
+ENUM_OPTIONS.set('income_band', [
+  { label: '无收入', value: 0 },
+  { label: '一档', value: 1 },
+  { label: '二档', value: 2 },
+  { label: '三档', value: 3 },
+  { label: '四档', value: 4 },
+  { label: '五档及以上', value: 5 }
+])
 
 export function fieldLabel(key: string): string {
   const label = FIELD_KEY_LABELS.get(key)
@@ -189,8 +208,11 @@ export async function pollTask(taskId: string): Promise<any> {
  * 直到 succeeded/failed/cancelled/superseded 或超次。
  * 返回 { done, status, task, error }。
  */
-export async function pollTaskUntilTerminal(taskId: string, maxAttempts: number = 40): Promise<any> {
+export async function pollTaskUntilTerminal(taskId: string, maxAttempts: number = 40, shouldContinue: (() => boolean) | null = null): Promise<any> {
   for (let i = 0; i < maxAttempts; i++) {
+    if (shouldContinue != null && !shouldContinue()) {
+      return { done: false, status: 'aborted', task: null, error: '页面已退出' }
+    }
     const taskRes = await pollTask(taskId)
     if (!taskRes.success || taskRes.data == null) {
       return { done: false, status: 'unknown', task: null, error: '任务状态查询失败' }
@@ -217,8 +239,11 @@ export async function pollTaskUntilTerminal(taskId: string, maxAttempts: number 
  * 轮询抽取任务直到完成,然后拉取草稿。
  * 返回 { success, draft, error }
  */
-export async function pollExtractionAndLoadDraft(taskId: string, draftId: string, maxAttempts: number = 30): Promise<any> {
+export async function pollExtractionAndLoadDraft(taskId: string, draftId: string, maxAttempts: number = 30, shouldContinue: (() => boolean) | null = null): Promise<any> {
   for (let i = 0; i < maxAttempts; i++) {
+    if (shouldContinue != null && !shouldContinue()) {
+      return { success: false, draft: null, error: '页面已退出' }
+    }
     const taskRes = await pollTask(taskId)
     if (!taskRes.success || taskRes.data == null) {
       return { success: false, draft: null, error: '任务状态查询失败' }

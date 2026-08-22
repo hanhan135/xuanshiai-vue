@@ -40,7 +40,8 @@ export class VoiceWS {
 			return false
 		}
 		const url = buildWsUrl('/voice/conversation', token)
-		console.log('🔌 [VoiceWS] connecting', url)
+		// 不打印完整 URL(含 access token),仅打路径标记
+		console.log('🔌 [VoiceWS] connecting /voice/conversation')
 		this.socketTask = uni.connectSocket({
 			url: url,
 			success: () => {},

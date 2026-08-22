@@ -240,6 +240,7 @@ export {
   FIELD_KEY_LABELS,
   ENUM_FIELDS,
   ENUM_OPTIONS,
+  type EnumOption,
   type ProfileSubject,
   type FieldConfirmationStatus,
   type FieldPatchAction

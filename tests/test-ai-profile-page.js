@@ -91,8 +91,9 @@ assert.match(api, /skipProfileQuestion/, 'ai-profile api must expose skipProfile
 assert.match(api, /\/skip-question/, 'skip path must POST to /profile-sessions/{id}/skip-question')
 assert.match(page, /不想答/, 'atelier question bubble must offer 不想答')
 assert.match(page, /skipCurrentQuestion/, 'atelier page must skip the current interview question')
-assert.match(page, /at-dim-ic/, 'letter dimensions must render iconfont classes, not raw emoji')
+assert.match(page, /at-ic-love|at-ic-biaoqing|at-ic-canyuhuati|at-ic-xianxiahuodong/, 'letter dimensions must use iconfont glyph classes, not raw emoji')
 assert.doesNotMatch(page, /relationship:\s*'♡'/, 'letter dimension fallback must not keep emoji icons')
+assert.match(page, /iconClass/, 'letter dimensions must expose iconClass for iconfont binding')
 assert.match(page, /删除画像/, 'danger path must use literal 删除画像')
 assert.match(page, /if \(session\.value != null\)/, 'revision restore must guard against a missing session')
 const restoreBlock = page.slice(page.indexOf('restoreProfileRevision(revisionId)'))
@@ -207,5 +208,25 @@ for (const [name, source] of copySurfaces) {
     assert.doesNotMatch(source, new RegExp(word), `${name} must not keep forbidden copy ${word}`)
   }
 }
+
+// ===== 枚举契约:选项提交后端冻结值(single/integer),不是中文标签 =====
+assert.match(api, /value:\s*'single'/, 'ENUM_OPTIONS marriage_status must use backend enum value single, not Chinese label')
+assert.match(api, /value:\s*4/, 'ENUM_OPTIONS education_level must use integer value, not Chinese label')
+assert.match(api, /value:\s*0/, 'ENUM_OPTIONS income_band must use integer value starting at 0')
+assert.match(api, /interface EnumOption/, 'ENUM_OPTIONS must use typed EnumOption with label+value')
+assert.match(page, /fieldAction\(fieldKey, 'replace', matchedValue/, 'enum fast-patch must submit the contract value (matchedValue), not the label')
+assert.match(page, /subject\.value == 'personal' && fieldKey != '' && ENUM_FIELDS/, 'enum fast-patch must be gated to the personal subject (ideal_partner shapes differ)')
+
+// ===== ensureSession STALE 重试必须有限(防 toast 轰炸与请求风暴) =====
+assert.match(page, /MAX_STALE_RETRIES/, 'ensureSession STALE retry must have a bounded counter')
+assert.match(page, /staleRetryCount > MAX_STALE_RETRIES/, 'ensureSession must stop retrying after exceeding MAX_STALE_RETRIES')
+
+// ===== 轮询感知页面卸载:shouldContinue 回调使页面退出后立即停止循环 =====
+assert.match(api, /shouldContinue/, 'poll functions must accept shouldContinue callback for abort-on-unmount')
+assert.match(page, /\(\) => alive\)/, 'polling call sites must pass alive callback')
+
+// ===== init 并行拉取:Promise.all 而非顺序 await =====
+const initBlock = page.slice(page.indexOf('const init = async'))
+assert.match(initBlock.slice(0, 200), /Promise\.all/, 'init must use Promise.all for parallel narrative fetch, not sequential await')
 
 console.log('ai profile ink-portrait contract passed')
