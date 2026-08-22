@@ -1,6 +1,6 @@
 <template>
 	<view class="xsa-sheet-overlay" :class="{ open: visible }" @click="handleOverlayClick">
-		<view class="xsa-sheet" :class="{ tall: tall }" @click.stop>
+		<view class="xsa-sheet" :class="[tall ? 'tall' : '', theme == 'atelier' ? 'xsa-sheet-atelier' : '']" @click.stop>
 			<view class="handle" v-if="showHandle"></view>
 			<view class="sheet-header" v-if="title">
 				<text class="sheet-title">{{ title }}</text>
@@ -19,6 +19,7 @@
 /**
  * XsaSheet - 宣誓爱底部滑出面板组件
  * 遵循 DESIGN.md 设计规范
+ * theme="atelier": 墨相模块暖纸主题(继承页面 --at-* Token)
  */
 
 interface Props {
@@ -27,13 +28,15 @@ interface Props {
 	tall?: boolean;
 	closeOnOverlay?: boolean;
 	showHandle?: boolean;
+	theme?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
 	visible: false,
 	tall: false,
 	closeOnOverlay: true,
-	showHandle: true
+	showHandle: true,
+	theme: 'default'
 });
 
 const emit = defineEmits<{
@@ -154,4 +157,14 @@ const handleOverlayClick = () => {
 .sheet-body::-webkit-scrollbar {
 	display: none;
 }
+
+/* ===== 墨相主题(暖纸):仅在墨相模块内使用,颜色继承页面 --at-* Token ===== */
+.xsa-sheet-atelier {
+	background: var(--at-card, #FFFCF5);
+	border-top: 1px solid var(--at-line, #E6DAC4);
+}
+.xsa-sheet-atelier .handle { background: var(--at-line, #E6DAC4); }
+.xsa-sheet-atelier .sheet-header { border-bottom: 1px solid var(--at-line, #E6DAC4); }
+.xsa-sheet-atelier .sheet-title { color: var(--at-ink, #2E2418); }
+.xsa-sheet-atelier .close-btn text { color: var(--at-ink2, #5C4F3D); }
 </style>

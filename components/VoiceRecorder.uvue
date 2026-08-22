@@ -1,13 +1,21 @@
 <template>
 	<view class="vr-area" :class="{ 'vr-atelier': theme == 'atelier' }">
+		<!-- 问题卡片(常驻):语音模式的信息主通道,播放是可选动作 -->
+		<view v-if="questionText != ''" class="vr-question-card">
+			<text class="vr-question-text">{{ questionText }}</text>
+			<view v-if="recorderState != 'speaking'" class="vr-listen" @tap="playQuestion">
+				<text class="vr-listen-text">听它读</text>
+			</view>
+		</view>
+
 		<!-- AI 提问区(speaking 态展示) -->
 		<view v-if="recorderState == 'speaking'" class="vr-speak-zone">
 			<view class="vr-speak-text">
-				<text class="vr-speak-label">AI 正在提问</text>
+				<text class="vr-speak-label">AI 正在读这个问题</text>
 			</view>
 			<VoiceWaveform state="speaking" />
 			<view class="vr-skip" @tap="skipSpeaking">
-				<text class="vr-skip-text">跳过语音</text>
+				<text class="vr-skip-text">停止播放</text>
 			</view>
 		</view>
 
@@ -18,8 +26,8 @@
 
 		<!-- 状态文案 -->
 		<view class="vr-status-zone">
-			<text v-if="recorderState == 'speaking'" class="vr-status-text vr-status-active">AI 正在提问...</text>
-			<text v-if="recorderState == 'idle'" class="vr-status-text">长按说话,回答 AI 的问题</text>
+			<text v-if="recorderState == 'speaking'" class="vr-status-text vr-status-active">AI 正在读...</text>
+			<text v-if="recorderState == 'idle'" class="vr-status-text">长按说话{{ questionText != '' ? ',回答上面的问题' : '' }}</text>
 			<text v-if="recorderState == 'listening'" class="vr-status-text vr-status-active">正在聆听... {{ durationLabel }} 松开结束</text>
 			<text v-if="recorderState == 'transcribing'" class="vr-status-text">正在转写你的回答...</text>
 			<text v-if="recorderState == 'reviewing'" class="vr-status-text">转写完成,请确认</text>
@@ -34,21 +42,21 @@
 			@touchmove="onTouchMove"
 		>
 			<view v-if="recorderState == 'speaking'" class="vr-mic-zone">
-				<text class="vr-mic-icon vr-mic-icon-speaking">💬</text>
+				<text class="vr-ic vr-ic-pinglun"></text>
 			</view>
 			<view v-if="recorderState == 'idle'" class="vr-mic-zone">
-				<text class="vr-mic-icon">🎤</text>
+				<text class="vr-ic vr-ic-yuyin"></text>
 			</view>
 			<view v-if="recorderState == 'listening'" class="vr-mic-zone vr-mic-zone-active">
 				<view class="vr-pulse-ring"></view>
 				<view class="vr-pulse-ring vr-pulse-ring-2"></view>
-				<text class="vr-mic-icon vr-mic-icon-active">🎤</text>
+				<text class="vr-ic vr-ic-yuyin vr-mic-icon-active"></text>
 			</view>
 			<view v-if="recorderState == 'transcribing'" class="vr-mic-zone">
 				<view class="vr-spinner"></view>
 			</view>
 			<view v-if="recorderState == 'reviewing'" class="vr-mic-zone">
-				<text class="vr-mic-icon">✓</text>
+				<text class="vr-review-check">✓</text>
 			</view>
 		</view>
 
@@ -64,14 +72,12 @@ import { USE_MOCK } from '@/api/config.uts'
 interface Props {
 	questionText?: string
 	questionFieldKey?: string
-	autoSpeak?: boolean
 	theme?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
 	questionText: '',
 	questionFieldKey: '',
-	autoSpeak: true,
 	theme: 'default'
 })
 
@@ -90,17 +96,20 @@ let durationTimer: number = 0
 let recordDuration = 0
 let startY = 0
 let speakTimer: number = 0
-let lastQuestionText = ''
+let lastQuestionText = props.questionText
 let audioContext: any = null
 
+// 问题文本只做展示与转写上下文,播报由用户显式触发(公共场合不外放)
 watch(() => props.questionText, (newText: string, oldText: string) => {
 	if (newText != oldText && newText != '') {
 		lastQuestionText = newText
-		if (props.autoSpeak) {
-			startSpeaking()
-		}
 	}
 })
+
+const playQuestion = () => {
+	if (recorderState.value == 'speaking') return
+	startSpeaking()
+}
 
 const startSpeaking = async () => {
 	stopSpeaking()
@@ -278,6 +287,23 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 </script>
 
 <style scoped>
+/* 单色描边图标(复用项目 iconfont 字库:社区互动与信息) */
+@font-face {
+	font-family: "iconfont-social";
+	src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'),
+		url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff');
+}
+.vr-ic {
+	font-family: "iconfont-social" !important;
+	font-style: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	font-size: 26px;
+	color: var(--ink);
+}
+.vr-ic-yuyin:before { content: "\e888"; }
+.vr-ic-pinglun:before { content: "\e679"; }
+
 .vr-area {
 	display: flex;
 	flex-direction: column;
@@ -285,11 +311,34 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 	padding: 8px 0;
 }
 
+/* 问题卡片(常驻展示) */
+.vr-question-card {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 11px 14px;
+	margin-bottom: 14px;
+	border-radius: 12px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+}
+.vr-question-text {
+	flex: 1;
+	font-size: 13px;
+	line-height: 1.7;
+	color: var(--ink);
+}
+.vr-listen { padding: 8px 12px; border-radius: 999px; background: var(--accent-bg); flex-shrink: 0; }
+.vr-listen-text { font-size: 12px; font-weight: 700; color: var(--accent); }
+
 /* AI 提问区 */
 .vr-speak-zone { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .vr-speak-text { display: flex; flex-direction: row; align-items: center; gap: 4px; }
 .vr-speak-label { font-size: 12px; font-weight: 700; color: var(--soft); }
-.vr-skip { margin-top: 4px; padding: 2px 10px; }
+.vr-skip { margin-top: 4px; padding: 9px 12px; }
 .vr-skip-text { font-size: 11px; color: var(--accent2); }
 
 /* 波形区 */
@@ -320,9 +369,8 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 .vr-drag-cancel { background: var(--bg-subtle) !important; border-color: var(--muted) !important; transform: scale(0.9) !important; }
 
 .vr-mic-zone { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
-.vr-mic-icon { font-size: 28px; }
 .vr-mic-icon-active { color: var(--text-invert); }
-.vr-mic-icon-speaking { font-size: 24px; }
+.vr-review-check { font-size: 24px; font-weight: 700; color: var(--accent); }
 
 /* 脉动光环 */
 .vr-pulse-ring { position: absolute; width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent); animation: vr-pulse 1.5s ease-out infinite; }
@@ -337,7 +385,7 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 .vr-cancel-hint { font-size: 12px; color: var(--match-coral); margin-top: 8px; font-weight: 600; }
 
 	/* 墨相主题(琥珀色系) */
-.vr-atelier .vr-status-text { color: var(--at-mist, #9A8C77); }
+.vr-atelier .vr-status-text { color: var(--at-ink2, #5C4F3D); }
 .vr-atelier .vr-status-active { color: var(--at-amber-deep, #8A5A1D); }
 .vr-atelier .vr-btn { background: var(--at-card, #FFFCF5); border-color: var(--at-line, #E6DAC4); }
 .vr-atelier .vr-btn-listening { background: var(--at-amber, #B4762B); border-color: var(--at-amber, #B4762B); }
@@ -347,4 +395,11 @@ defineExpose({ reset, startSpeaking, skipSpeaking })
 .vr-atelier .vr-speak-label { color: var(--at-amber-deep, #8A5A1D); }
 .vr-atelier .vr-skip-text { color: var(--at-amber-deep, #8A5A1D); }
 .vr-atelier .vr-cancel-hint { color: var(--at-danger, #B4543E); }
+.vr-atelier .vr-question-card { background: var(--at-card, #FFFCF5); border-color: var(--at-line, #E6DAC4); }
+.vr-atelier .vr-question-text { color: var(--at-ink, #2E2418); font-family: var(--serif); }
+.vr-atelier .vr-listen { background: rgba(180, 118, 43, 0.12); }
+.vr-atelier .vr-listen-text { color: var(--at-amber-deep, #8A5A1D); }
+.vr-atelier .vr-ic { color: var(--at-ink2, #5C4F3D); }
+.vr-atelier .vr-ic.vr-mic-icon-active { color: #FFF6E8; }
+.vr-atelier .vr-review-check { color: var(--at-fixed, #4E7D5B); }
 </style>

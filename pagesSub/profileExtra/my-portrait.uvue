@@ -13,7 +13,7 @@
 
 		<!-- 功能门禁关闭 -->
 		<view v-if="featureDisabled" class="at-state">
-			<view class="at-state-bottle">🕯</view>
+			<view class="at-state-mark"><text class="at-state-mark-text">墨</text></view>
 			<text class="at-state-title">墨相暂时不可用</text>
 			<text class="at-state-copy">AI 画像功能当前不可用。你可以先完善资料,稍后再来。</text>
 			<view class="at-state-btn" @tap="goEditProfile">
@@ -77,7 +77,6 @@
 							:sub="bottleSub('personal')"
 							:hasChange="bottleHasChange('personal')"
 							:active="subject == 'personal'"
-							@select="enterSubject('personal')"
 						/>
 					</view>
 					<view class="at-bottle-hit" @tap="enterSubject('ideal_partner')">
@@ -89,7 +88,6 @@
 							:sub="bottleSub('ideal_partner')"
 							:hasChange="bottleHasChange('ideal_partner')"
 							:active="subject == 'ideal_partner'"
-							@select="enterSubject('ideal_partner')"
 						/>
 					</view>
 				</view>
@@ -125,9 +123,15 @@
 			</view>
 
 			<!-- ===== 成稿(成品叙事) ===== -->
-			<scroll-view v-if="subjectPane == 'letter'" scroll-y class="at-letter" enhanced :show-scrollbar="false">
-				<view v-if="letterReady" class="at-letter-body">
-					<view class="at-letter-head">
+				<scroll-view v-if="subjectPane == 'letter'" scroll-y class="at-letter" enhanced :show-scrollbar="false">
+					<view class="at-progress at-progress-letter">
+						<view class="at-progress-track">
+							<view class="at-progress-fill" :style="{ width: progressPercent + '%' }"></view>
+						</view>
+						<text class="at-progress-text">{{ progressLabel }}</text>
+					</view>
+					<view v-if="letterReady" class="at-letter-body">
+						<view class="at-letter-head">
 						<text class="at-letter-title">{{ narrative != null && narrative.persona_title != null ? narrative.persona_title : '' }}</text>
 						<view v-if="letterTags.length > 0" class="at-letter-tags">
 							<text v-for="tag in letterTags" :key="tag" class="at-letter-tag">{{ tag }}</text>
@@ -225,7 +229,7 @@
 					<view class="at-progress-track">
 						<view class="at-progress-fill" :style="{ width: progressPercent + '%' }"></view>
 					</view>
-					<text class="at-progress-text">本次落笔 {{ progressPercent }}% · 已确认 {{ confirmedCount }} 笔</text>
+					<text class="at-progress-text">{{ progressLabel }}</text>
 					<view v-if="session != null && !extracting && !publishing" class="at-pause" @tap="togglePause">
 						<text class="at-pause-text">{{ paused ? '继续' : '暂存' }}</text>
 					</view>
@@ -236,6 +240,10 @@
 					<view v-if="messages.length == 0 && session == null" class="at-empty">
 						<text class="at-empty-title">还没有开始落笔</text>
 						<text class="at-empty-sub">AI 会一个字段一个字段地问你</text>
+						<text class="at-empty-sub2">打字,或点输入框旁的语音按钮开口说,都可以</text>
+						<view v-if="sessionFailed" class="at-empty-retry" @tap="retrySession">
+							<text class="at-empty-retry-text">重试连接</text>
+						</view>
 					</view>
 
 					<view v-for="msg in messages" :key="msg.id" :id="'msg-' + msg.id">
@@ -253,6 +261,13 @@
 									>
 										<text class="at-option-chip-text">{{ opt }}</text>
 									</view>
+								</view>
+								<view
+									v-if="msg.fieldKey != '' && msg.fieldKey == currentQuestionFieldKey && !extracting && !publishing && !paused"
+									class="at-skip"
+									@tap="skipCurrentQuestion"
+								>
+									<text class="at-skip-text">不想答,先问下一问</text>
 								</view>
 							</view>
 						</view>
@@ -333,7 +348,6 @@
 							ref="voiceRecorderRef"
 							:questionText="currentQuestionText"
 							:questionFieldKey="currentQuestionFieldKey"
-							:autoSpeak="true"
 							theme="atelier"
 							@transcribed="onTranscribed"
 							@cancelled="onVoiceCancelled"
@@ -355,18 +369,17 @@
 							:cursor-spacing="16"
 						/>
 						<view
-							v-if="currentQuestion != null"
 							class="at-round-btn"
 							@tap="switchToVoice"
 						>
-							<text class="at-round-btn-text">🎤</text>
+							<text class="at-ic at-ic-yuyin"></text>
 						</view>
 						<view
-							v-if="currentQuestion != null && session != null"
+							v-if="session != null"
 							class="at-round-btn"
 							@tap="startConversationSession"
 						>
-							<text class="at-round-btn-text">💬</text>
+							<text class="at-ic at-ic-pinglun"></text>
 						</view>
 						<view
 							class="at-send-btn"
@@ -387,10 +400,10 @@
 					</view>
 
 					<!-- 写下成稿 -->
-					<view v-if="confirmedCount > 0 && !extracting && !publishing && draft != null" class="at-publish-row">
-						<text class="at-publish-info">已确认 {{ confirmedCount }} 笔</text>
-						<view class="at-publish-btn" @tap="publishDraft">
-							<text class="at-publish-text">写下成稿</text>
+					<view v-if="draft != null && !extracting && !publishing" class="at-publish-row">
+						<text class="at-publish-info">{{ publishHint }}</text>
+						<view class="at-publish-btn" :class="{ 'at-publish-btn-disabled': !canPublish }" @tap="publishDraft">
+							<text class="at-publish-text">{{ canPublish ? '写下成稿' : '还差 ' + publishRemain + ' 笔' }}</text>
 						</view>
 					</view>
 				</view>
@@ -476,11 +489,14 @@
 					</view>
 				</view>
 				<text class="at-curing-overlay-sub">{{ curingCurrentText }}</text>
+				<view class="at-curing-overlay-secondary" @tap="publishInBackground">
+					<text class="at-curing-overlay-secondary-text">后台等待,先去落笔</text>
+				</view>
 			</view>
 		</view>
 
 		<!-- ===== 待确认的理解(协商中心) ===== -->
-		<XsaSheet :visible="recipeVisible" title="待确认的理解" @close="recipeVisible = false">
+		<XsaSheet :visible="recipeVisible" title="待确认的理解" theme="atelier" @close="recipeVisible = false">
 			<view class="at-recipe-body">
 				<text class="at-recipe-sub">AI 提出的理解都在这里。哪一条留下、哪一条拿掉,由你决定。</text>
 				<view v-if="recipeFields.length == 0" class="at-recipe-empty">
@@ -512,7 +528,7 @@
 		/>
 
 		<!-- ===== 墨相管理 ===== -->
-		<XsaSheet :visible="manageVisible" title="墨相管理" @close="manageVisible = false">
+		<XsaSheet :visible="manageVisible" title="墨相管理" theme="atelier" @close="manageVisible = false">
 				<view class="at-manage-body">
 					<view class="at-manage-row" @tap="openBatchFromManage">
 						<text class="at-manage-row-text">往稿</text>
@@ -553,6 +569,7 @@ import {
 	restoreProfileRevision,
 	pauseProfileSession,
 	resumeProfileSession,
+	skipProfileQuestion,
 	deleteProfileSession,
 	deleteAiProfile,
 	getPortraitNarrative,
@@ -654,27 +671,45 @@ const currentQuestionFieldKey = computed(() => {
 })
 
 const inputPlaceholder = computed(() => {
-	const q = currentQuestion.value
-	if (q != null && q.text != null) return '回答: ' + String(q.text)
+	if (currentQuestion.value != null) return '用你自己的话回答'
 	return '说说你自己'
 })
 
-const confirmedCount = computed(() => {
-	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
-	return draft.value.fields.filter((f: any) => f.confirmation_status == 'confirmed').length
-})
+	const confirmedCount = computed(() => {
+			if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
+			return draft.value.fields.filter((f: any) => f.confirmation_status == 'confirmed').length
+		})
+		const answeredCount = computed(() => {
+			if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
+			return draft.value.fields.filter((f: any) => {
+				const status = String(f.confirmation_status != null ? f.confirmation_status : '')
+				return status != 'deleted' && status != 'rejected'
+			}).length
+		})
+		const totalQuestionCount = 10
+		const minPublishCount = 3
+		const canPublish = computed(() => confirmedCount.value >= minPublishCount)
+		const publishRemain = computed(() => {
+			const remain = minPublishCount - confirmedCount.value
+			return remain > 0 ? remain : 0
+		})
+		const publishHint = computed(() => {
+			if (canPublish.value) return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，可以写下成稿'
+			return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，至少再确认 ' + publishRemain.value + ' 笔'
+		})
+		const progressLabel = computed(() => {
+			return '第 ' + answeredCount.value + ' / ' + totalQuestionCount + ' 题 · 已确认 ' + confirmedCount.value + ' 笔'
+		})
 
 const pendingCount = computed(() => {
 	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
 	return draft.value.fields.filter((f: any) => f.confirmation_status == 'suggested').length
 })
 
-const progressValue = computed(() => {
-	if (session.value != null && session.value.progress != null && session.value.progress.value != null) {
-		return Number(session.value.progress.value)
-	}
-	return 0
-})
+	const progressValue = computed(() => {
+		if (totalQuestionCount <= 0) return 0
+		return answeredCount.value / totalQuestionCount
+	})
 
 const progressPercent = computed(() => Math.round(progressValue.value * 100))
 
@@ -706,10 +741,23 @@ const letterInsight = computed(() => {
 })
 
 const letterDimensions = computed(() => {
-	const n = narrative.value
-	if (n == null || n.dimensions == null || !Array.isArray(n.dimensions)) return [] as any[]
-	return n.dimensions
-})
+		const n = narrative.value
+		if (n == null || n.dimensions == null || !Array.isArray(n.dimensions)) return [] as any[]
+		const fallback: any = { relationship: '♡', personality: '☀', lifestyle: '⌂', future: '↗' }
+		const out: any[] = []
+		for (let i = 0; i < n.dimensions.length; i++) {
+			const dim = n.dimensions[i]
+			if (dim == null) continue
+			const key = dim.key != null ? String(dim.key) : ''
+			const rawIcon = dim.icon != null ? String(dim.icon) : ''
+			let icon = rawIcon
+			if (icon == '' || icon.indexOf('<') >= 0 || icon.indexOf('>') >= 0 || icon.indexOf('/') >= 0 || icon.length > 4) {
+				icon = fallback[key] != null ? String(fallback[key]) : '·'
+			}
+			out.push({ key: key, icon: icon, title: dim.title, summary: dim.summary })
+		}
+		return out
+	})
 
 const letterWeights = computed(() => {
 	if (subject.value != 'ideal_partner') return [] as any[]
@@ -913,7 +961,16 @@ const symbolicCode = (res: any): string => {
 	return ''
 }
 
+let ensuringSession = false
+const sessionFailed = ref(false)
+const retrySession = () => {
+	sessionFailed.value = false
+	ensureSession()
+}
+
 const ensureSession = async () => {
+	if (ensuringSession) return
+	ensuringSession = true
 	loading.value = true
 	featureDisabled.value = false
 	consentRequired.value = false
@@ -931,13 +988,17 @@ const ensureSession = async () => {
 			} else if (code == 'PROFILE_SESSION_STALE') {
 				// 资料已更新,旧会话过期;稍后重开新落笔
 				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+				ensuringSession = false
 				setTimeout(() => { if (alive) ensureSession() }, 900)
+				return
 			} else {
+				sessionFailed.value = true
 				uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
 			}
 			loading.value = false
 			return
 		}
+		sessionFailed.value = false
 		session.value = res.data
 		const status = String(res.data.status != null ? res.data.status : '')
 		paused.value = (status == 'paused')
@@ -953,8 +1014,12 @@ const ensureSession = async () => {
 			}
 		}
 	} catch (e) {
-		if (alive) uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+		if (alive) {
+			sessionFailed.value = true
+			uni.showToast({ title: '网络异常,请稍后重试', icon: 'none' })
+		}
 	} finally {
+		ensuringSession = false
 		if (alive) loading.value = false
 	}
 }
@@ -1030,10 +1095,11 @@ const submitAnswer = async () => {
 		extracting.value = false
 		removeMessage(typingId)
 
-		if (!result.success) {
-			uni.showToast({ title: result.error, icon: 'none' })
-			return
-		}
+			if (!result.success) {
+				uni.showToast({ title: result.error, icon: 'none' })
+				addSystemMessage('这一句还没记下。换个说法再答一次，或先确认已抽出的理解。')
+				return
+			}
 
 		const prevDraft = draft.value
 		draft.value = result.draft
@@ -1103,9 +1169,6 @@ const announceIngredients = (prevDraft: any, newDraft: any) => {
 const switchToVoice = () => {
 	voiceMode.value = true
 	transcribeText.value = ''
-	if (voiceRecorderRef.value != null && currentQuestion.value != null) {
-		voiceRecorderRef.value.startSpeaking()
-	}
 }
 
 const switchToText = () => {
@@ -1193,6 +1256,39 @@ const advanceToNextQuestion = async () => {
 	}
 }
 
+// 不想答:跳过当前问题,不确认字段,本次会话不再追问
+const skipCurrentQuestion = async () => {
+	if (extracting.value || publishing.value) return
+	if (session.value == null) {
+		await ensureSession()
+		if (session.value == null) return
+	}
+	const fieldKey = currentQuestion.value != null && currentQuestion.value.field_key != null
+		? String(currentQuestion.value.field_key) : ''
+	if (fieldKey == '') return
+	try {
+		const res = await skipProfileQuestion(String(session.value.session_id), fieldKey)
+		if (!alive) return
+		if (res.success && res.data != null) {
+			session.value = res.data
+			updateSessionCache(subject.value)
+			if (res.data.current_question != null) {
+				currentQuestion.value = res.data.current_question
+				addSystemMessage('这一笔先不写,先问下一问。')
+				addQuestionMessage(res.data.current_question)
+			} else {
+				currentQuestion.value = null
+				addSystemMessage('问题都问完了。打开待确认的理解,确认后写下成稿。')
+			}
+		} else {
+			const code = symbolicCode(res)
+			uni.showToast({ title: mapProfileError(code, String(res.message)), icon: 'none' })
+		}
+	} catch (e) {
+		if (alive) uni.showToast({ title: '操作失败,请重试', icon: 'none' })
+	}
+}
+
 // ===== 语音:实时对话层(最终转写必须经用户确认) =====
 
 const startConversationSession = async () => {
@@ -1208,7 +1304,20 @@ const startConversationSession = async () => {
 	conversationMode.value = true
 }
 
-const closeConversation = () => {
+const closeConversation = (force: boolean = false) => {
+	// 转写还没提交时,退出先确认,避免无声丢弃用户口述的内容
+	if (!force && convReview.value.trim() != '') {
+		uni.showModal({
+			title: '转写还没提交',
+			content: '你说的内容还没确认提交,退出会丢弃这段转写。',
+			confirmText: '丢弃并退出',
+			cancelText: '继续编辑',
+			success: (modalRes) => {
+				if (modalRes.confirm) closeConversation(true)
+			}
+		})
+		return
+	}
 	if (conversationRef.value != null) conversationRef.value.reset()
 	conversationMode.value = false
 	convDegraded.value = false
@@ -1237,7 +1346,7 @@ const confirmConvReview = () => {
 		uni.showToast({ title: '内容为空,重新说一次', icon: 'none' })
 		return
 	}
-	closeConversation()
+	closeConversation(true)
 	answerText.value = text
 	submitAnswer()
 }
@@ -1327,12 +1436,18 @@ const patchField = async (fieldKey: string, action: string, value: any) => {
 
 // ===== 成长循环:写下成稿(发布) =====
 
+/** 发布任务本身在后台异步执行:收起遮罩不中断流程,完成时消息流与成稿页会接住结果 */
+const publishInBackground = () => {
+	publishing.value = false
+	uni.showToast({ title: '成稿在后台继续,完成后会在这里告诉你', icon: 'none' })
+}
+
 const publishDraft = async () => {
 	if (draft.value == null || publishing.value) return
-	if (confirmedCount.value == 0) {
-		uni.showToast({ title: '至少确认一笔后才能写下成稿', icon: 'none' })
-		return
-	}
+		if (!canPublish.value) {
+			uni.showToast({ title: '至少确认 ' + minPublishCount + ' 笔后才能写下成稿', icon: 'none' })
+			return
+		}
 	publishing.value = true
 	curingLines.value = []
 	curingCurrentText.value = '正在写下成稿...'
@@ -1665,23 +1780,34 @@ const doGrantConsent = async () => {
 
 // ===== 消息流辅助 =====
 
-function addQuestionMessage(question: any) {
-	if (question == null) return
-	const qId = String(question.id != null ? question.id : '')
-	const qText = String(question.text != null ? question.text : '')
-	const fieldKey = question.field_key != null ? String(question.field_key) : ''
+	function addQuestionMessage(question: any) {
+		if (question == null) return
+		const qId = String(question.id != null ? question.id : '')
+		const qText = String(question.text != null ? question.text : '')
+		const fieldKey = question.field_key != null ? String(question.field_key) : ''
 
-	let options: string[] = []
-	if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
-		const opts = ENUM_OPTIONS.get(fieldKey)
-		if (opts != null) options = opts
-	}
+		for (let i = messages.value.length - 1; i >= 0; i--) {
+			const msg = messages.value[i]
+			if (msg == null || msg.type != 'question') continue
+			const existingText = String(msg.text != null ? msg.text : '')
+			if ((qId != '' && String(msg.id).indexOf('q-' + qId + '-') == 0) || existingText == qText) {
+				return
+			}
+			break
+		}
+
+		let options: string[] = []
+		if (fieldKey != '' && ENUM_FIELDS.indexOf(fieldKey) >= 0) {
+			const opts = ENUM_OPTIONS.get(fieldKey)
+			if (opts != null) options = opts
+		}
 
 	messages.value.push({
 		id: 'q-' + qId + '-' + Date.now(),
 		type: 'question',
 		text: qText,
-		options: options
+		options: options,
+		fieldKey: fieldKey
 	})
 	scrollToBottom()
 }
@@ -1789,6 +1915,22 @@ init()
 	flex-direction: column;
 }
 
+/* ===== 模块图标(单色描边,复用项目 iconfont 字库:社区互动与信息) ===== */
+@font-face {
+	font-family: "iconfont-social";
+	src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'),
+		url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff');
+}
+.at-ic {
+	font-family: "iconfont-social" !important;
+	font-style: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	color: var(--at-amber-deep);
+}
+.at-ic-yuyin:before { content: "\e888"; font-size: 18px; }
+.at-ic-pinglun:before { content: "\e679"; font-size: 18px; }
+
 /* ===== 导航 ===== */
 .at-nav {
 	position: relative;
@@ -1804,7 +1946,7 @@ init()
 .at-nav-side {
 	z-index: 1;
 	min-width: 66px;
-	height: 32px;
+	height: 40px;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
@@ -1817,8 +1959,8 @@ init()
 	position: absolute;
 	left: 0;
 	right: 0;
-	height: 32px;
-	line-height: 32px;
+	height: 40px;
+	line-height: 40px;
 	text-align: center;
 	font-size: 17px;
 	font-weight: 700;
@@ -1830,10 +1972,15 @@ init()
 
 /* ===== 通用状态页 ===== */
 .at-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; }
-.at-state-bottle { font-size: 44px; margin-bottom: 14px; opacity: 0.7; }
+.at-state-mark {
+	width: 64px; height: 64px; border-radius: 999px; margin-bottom: 14px;
+	background: var(--at-card); border: 1px solid var(--at-line);
+	display: flex; align-items: center; justify-content: center;
+}
+.at-state-mark-text { font-size: 28px; color: var(--at-ink); opacity: 0.55; font-family: var(--serif); }
 .at-state-title { font-size: 17px; font-weight: 700; color: var(--at-ink); text-align: center; font-family: var(--serif); }
-.at-state-copy { font-size: 13px; color: var(--at-mist); text-align: center; margin-top: 8px; line-height: 1.7; }
-.at-state-btn { margin-top: 22px; padding: 11px 28px; background: var(--at-amber); border-radius: 999px; }
+.at-state-copy { font-size: 13px; color: var(--at-ink2); text-align: center; margin-top: 8px; line-height: 1.7; }
+.at-state-btn { margin-top: 22px; padding: 11px 28px; background: var(--at-amber-deep); border-radius: 999px; }
 .at-state-btn-text { font-size: 14px; font-weight: 700; color: #FFF6E8; }
 
 /* 纸面呼吸点(加载/生成共用) */
@@ -1854,7 +2001,7 @@ init()
 /* ===== 授权门槛 ===== */
 .at-gate { flex: 1; display: flex; flex-direction: column; padding: 30px 26px; }
 .at-gate-title { font-size: 24px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); }
-.at-gate-sub { font-size: 13px; color: var(--at-mist); margin-top: 6px; }
+.at-gate-sub { font-size: 13px; color: var(--at-ink2); margin-top: 6px; }
 .at-gate-card {
 	display: flex; flex-direction: column; gap: 14px;
 	margin-top: 24px; padding: 20px 18px;
@@ -1866,12 +2013,12 @@ init()
 .at-gate-msg { font-size: 12px; color: var(--at-danger); margin-top: 12px; }
 .at-gate-btn {
 	margin-top: 26px; padding: 13px 0; border-radius: 999px;
-	background: var(--at-amber); display: flex; align-items: center; justify-content: center;
+	background: var(--at-amber-deep); display: flex; align-items: center; justify-content: center;
 }
 .at-gate-btn-busy { opacity: 0.6; }
 .at-gate-btn-text { font-size: 15px; font-weight: 700; color: #FFF6E8; }
-.at-gate-skip { margin-top: 14px; display: flex; align-items: center; justify-content: center; padding: 8px 0; }
-.at-gate-skip-text { font-size: 13px; color: var(--at-mist); }
+.at-gate-skip { margin-top: 14px; display: flex; align-items: center; justify-content: center; padding: 10px 0; }
+.at-gate-skip-text { font-size: 13px; color: var(--at-ink2); }
 
 /* ===== 墨案 ===== */
 .at-shelf { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 26px 20px 40px; }
@@ -1885,7 +2032,7 @@ init()
 }
 .at-bottle-hit { flex: 1; display: flex; flex-direction: column; align-items: center; }
 .at-shelf-note { margin-top: 18px; padding: 5px 14px; border-radius: 999px; background: rgba(230, 218, 196, 0.4); }
-.at-shelf-note-text { font-size: 11px; color: var(--at-mist); }
+.at-shelf-note-text { font-size: 11px; color: var(--at-ink2); }
 .at-shelf-insight {
 	margin-top: 26px; padding: 16px 18px; border-radius: 16px;
 	background: var(--at-card); border: 1px solid var(--at-line); align-self: stretch;
@@ -1906,9 +2053,9 @@ init()
 	display: flex; flex-direction: row;
 	background: rgba(230, 218, 196, 0.45); border-radius: 999px; padding: 3px;
 }
-.at-seg-item { padding: 5px 22px; border-radius: 999px; }
+.at-seg-item { padding: 8px 22px; border-radius: 999px; }
 .at-seg-active { background: var(--at-card); box-shadow: 0 1px 4px rgba(46, 36, 24, 0.1); }
-.at-seg-text { font-size: 13px; color: var(--at-mist); font-weight: 600; }
+.at-seg-text { font-size: 13px; color: var(--at-ink2); font-weight: 600; }
 .at-seg-text-active { color: var(--at-ink); font-weight: 700; }
 .at-subject-bar-side { width: 58px; }
 
@@ -1923,7 +2070,7 @@ init()
 	background: rgba(180, 118, 43, 0.1); color: var(--at-amber-deep); font-size: 12px;
 }
 .at-letter-block { margin-top: 22px; }
-.at-block-label { font-size: 11px; color: var(--at-mist); font-weight: 700; letter-spacing: 0.12em; }
+.at-block-label { font-size: 11px; color: var(--at-ink2); font-weight: 700; letter-spacing: 0.12em; }
 .at-block-serif { font-size: 15px; color: var(--at-ink); line-height: 1.9; margin-top: 8px; font-family: var(--serif); text-align: justify; }
 
 .at-dim-row {
@@ -1940,7 +2087,7 @@ init()
 .at-weight-label { width: 66px; font-size: 12px; color: var(--at-ink2); }
 .at-weight-track { flex: 1; height: 5px; background: rgba(230, 218, 196, 0.6); border-radius: 999px; overflow: hidden; }
 .at-weight-fill { height: 100%; background: var(--at-honey); border-radius: 999px; transition: width 0.4s ease-out; }
-.at-weight-percent { width: 38px; text-align: right; font-size: 12px; color: var(--at-mist); }
+.at-weight-percent { width: 38px; text-align: right; font-size: 12px; color: var(--at-ink2); }
 
 .at-change-block { padding: 14px 16px; background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px; }
 .at-change-summary { font-size: 14px; color: var(--at-amber-deep); font-weight: 700; margin-top: 8px; line-height: 1.5; }
@@ -1952,7 +2099,7 @@ init()
 	padding: 12px 0; border-radius: 999px; border: 1px solid var(--at-line);
 	display: flex; align-items: center; justify-content: center; background: var(--at-card);
 }
-.at-letter-btn-main { background: var(--at-amber); border-color: var(--at-amber); }
+.at-letter-btn-main { background: var(--at-amber-deep); border-color: var(--at-amber-deep); }
 .at-letter-btn-main-text { font-size: 14px; font-weight: 700; color: #FFF6E8; }
 .at-letter-btn-text { font-size: 14px; font-weight: 600; color: var(--at-ink2); }
 .at-letter-foot-space { height: 30px; }
@@ -1964,9 +2111,9 @@ init()
 	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 18px;
 }
 .at-curing-title { font-size: 17px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); margin-top: 6px; }
-.at-curing-sub { font-size: 13px; color: var(--at-mist); text-align: center; margin-top: 10px; line-height: 1.7; }
+.at-curing-sub { font-size: 13px; color: var(--at-ink2); text-align: center; margin-top: 10px; line-height: 1.7; }
 .at-curing-actions { display: flex; flex-direction: row; gap: 10px; margin-top: 22px; }
-.at-curing-btn { padding: 9px 24px; border-radius: 999px; background: var(--at-amber); }
+.at-curing-btn { padding: 11px 24px; border-radius: 999px; background: var(--at-amber-deep); }
 .at-curing-btn-text { font-size: 13px; font-weight: 700; color: #FFF6E8; }
 .at-curing-btn-plain { background: transparent; border: 1px solid var(--at-line); }
 .at-curing-btn-plain-text { font-size: 13px; font-weight: 600; color: var(--at-ink2); }
@@ -1974,17 +2121,24 @@ init()
 	/* ===== 落笔对话 ===== */
 .at-dialog { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .at-progress { padding: 8px 16px 6px; display: flex; flex-direction: row; align-items: center; gap: 10px; }
+	.at-progress-letter { padding-top: 4px; padding-bottom: 2px; }
 .at-progress-track { flex: 1; height: 4px; background: rgba(230, 218, 196, 0.6); border-radius: 999px; overflow: hidden; }
 .at-progress-fill { height: 100%; background: var(--at-honey); border-radius: 999px; transition: width 0.35s ease-out; }
-.at-progress-text { font-size: 10px; color: var(--at-mist); min-width: 128px; }
-.at-pause { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-card); }
+.at-progress-text { font-size: 11px; color: var(--at-ink2); min-width: 128px; }
+.at-pause { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-card); }
 .at-pause-text { font-size: 11px; color: var(--at-amber-deep); font-weight: 600; }
 
 .at-flow { flex: 1; padding: 6px 16px; }
 .at-flow-spacer { height: 90px; }
 .at-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
-.at-empty-title { font-size: 15px; font-weight: 700; color: var(--at-mist); }
-.at-empty-sub { font-size: 12px; color: var(--at-mist); margin-top: 6px; }
+.at-empty-title { font-size: 15px; font-weight: 700; color: var(--at-ink2); }
+.at-empty-sub { font-size: 12px; color: var(--at-ink2); margin-top: 6px; }
+.at-empty-sub2 { font-size: 12px; color: var(--at-amber-deep); margin-top: 14px; font-weight: 600; }
+.at-empty-retry {
+	margin-top: 18px; padding: 10px 26px; border-radius: 999px;
+	background: var(--at-amber-deep); display: flex; align-items: center; justify-content: center;
+}
+.at-empty-retry-text { font-size: 13px; font-weight: 700; color: #FFF6E8; }
 
 .at-msg { margin-bottom: 10px; }
 .at-msg-left { display: flex; flex-direction: row; justify-content: flex-start; }
@@ -2000,7 +2154,7 @@ init()
 .at-bubble-user-text { font-size: 14px; line-height: 1.6; color: #FFF6E8; }
 
 .at-options { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-.at-option-chip { padding: 5px 13px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-bg); }
+.at-option-chip { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--at-line); background: var(--at-bg); }
 .at-option-chip.selected { background: rgba(180, 118, 43, 0.14); border-color: var(--at-amber); }
 .at-option-chip-text { font-size: 12px; color: var(--at-ink2); }
 .at-option-chip.selected .at-option-chip-text { color: var(--at-amber-deep); font-weight: 700; }
@@ -2009,10 +2163,10 @@ init()
 .at-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--at-mist); animation: at-bounce 0.6s ease-out infinite alternate; }
 .at-dot:nth-child(2) { animation-delay: 0.15s; }
 .at-dot:nth-child(3) { animation-delay: 0.3s; }
-.at-typing-text { font-size: 12px; color: var(--at-mist); margin-left: 4px; }
+.at-typing-text { font-size: 12px; color: var(--at-ink2); margin-left: 4px; }
 @keyframes at-bounce { from { opacity: 0.3; transform: translateY(0); } to { opacity: 1; transform: translateY(-4px); } }
-.at-system-text { font-size: 12px; color: var(--at-mist); text-align: center; line-height: 1.6; }
-.at-published-text { color: var(--at-fixed); font-weight: 700; }
+.at-system-text { font-size: 12px; color: var(--at-ink2); text-align: center; line-height: 1.6; }
+.at-published-text { color: var(--at-fixed); font-weight: 700; font-size: 13px; }
 
 /* 待确认理解事件 */
 .at-msg-ingredients {
@@ -2022,7 +2176,7 @@ init()
 .at-ingredients-title { font-size: 13px; font-weight: 700; color: var(--at-amber-deep); }
 .at-ingredients-chips { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .at-ingredient-chip {
-	padding: 4px 12px; border-radius: 999px;
+	padding: 7px 13px; border-radius: 999px;
 	background: var(--at-card); border: 1px solid rgba(180, 118, 43, 0.4);
 	animation: at-chip-drop 0.45s cubic-bezier(0.2, 1.2, 0.4, 1);
 }
@@ -2031,7 +2185,7 @@ init()
 	from { transform: translateY(-14px) scale(0.85); opacity: 0; }
 	to { transform: translateY(0) scale(1); opacity: 1; }
 }
-.at-ingredients-more { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; margin-top: 9px; }
+.at-ingredients-more { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; margin-top: 9px; padding: 8px 4px; align-self: flex-start; }
 
 /* ===== 底部操作区 ===== */
 .at-input-bar {
@@ -2041,42 +2195,42 @@ init()
 }
 .at-input-row { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .at-input {
-	flex: 1; height: 40px; padding: 0 13px;
+	flex: 1; height: 44px; padding: 0 13px;
 	border: 1px solid var(--at-line); border-radius: 999px;
 	font-size: 14px; color: var(--at-ink); background: var(--at-card);
 }
-.at-ph { color: var(--at-mist); }
+.at-ph { color: var(--at-ink2); }
 .at-round-btn {
-	width: 40px; height: 40px; border-radius: 999px;
+	width: 44px; height: 44px; border-radius: 999px;
 	border: 1px solid var(--at-line); background: var(--at-card);
 	display: flex; align-items: center; justify-content: center;
 }
-.at-round-btn-text { font-size: 17px; }
 .at-send-btn {
-	padding: 0 18px; height: 40px; border-radius: 999px;
+	padding: 0 18px; height: 44px; border-radius: 999px;
 	background: rgba(230, 218, 196, 0.6);
 	display: flex; align-items: center; justify-content: center;
 	transition: background 0.2s ease-out;
 }
-.at-send-ready { background: var(--at-amber); }
+.at-send-ready { background: var(--at-amber-deep); }
 .at-send-text { font-size: 14px; font-weight: 700; color: var(--at-ink2); }
 .at-send-ready .at-send-text { color: #FFF6E8; }
 
 .at-bar-status { display: flex; flex-direction: row; align-items: center; justify-content: center; height: 42px; gap: 8px; }
 .at-mini-steam { display: flex; flex-direction: row; gap: 6px; }
 .at-mini-steam .at-steam-dot { width: 7px; height: 7px; }
-.at-bar-status-text { font-size: 13px; color: var(--at-mist); }
+.at-bar-status-text { font-size: 13px; color: var(--at-ink2); }
 
 .at-publish-row {
 	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
 	margin-top: 8px;
 }
 .at-publish-info { font-size: 13px; color: var(--at-ink2); }
-.at-publish-btn { padding: 0 22px; height: 40px; border-radius: 999px; background: var(--at-fixed); display: flex; align-items: center; justify-content: center; }
-.at-publish-text { font-size: 14px; font-weight: 700; color: #F2F7EF; }
+.at-publish-btn { padding: 0 22px; height: 44px; border-radius: 999px; background: var(--at-fixed); display: flex; align-items: center; justify-content: center; }
+	.at-publish-btn-disabled { background: rgba(176, 141, 87, 0.35); }
+	.at-publish-text { font-size: 14px; font-weight: 700; color: #FFFCF5; }
 
 .at-voice-area { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
-.at-mode-switch { margin-top: 8px; padding: 4px 12px; }
+.at-mode-switch { margin-top: 8px; padding: 10px 16px; }
 .at-mode-switch-text { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; }
 
 /* 转写确认卡 */
@@ -2086,9 +2240,9 @@ init()
 .at-transcribe-label { font-size: 11px; color: var(--at-amber-deep); font-weight: 700; margin-bottom: 6px; }
 .at-transcribe-input { width: 100%; min-height: 52px; font-size: 14px; color: var(--at-ink); line-height: 1.5; }
 .at-transcribe-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.at-transcribe-retry { padding: 7px 15px; border-radius: 999px; border: 1px solid var(--at-line); }
-.at-transcribe-retry-text { font-size: 12px; font-weight: 700; color: var(--at-mist); }
-.at-transcribe-confirm { padding: 7px 15px; border-radius: 999px; background: var(--at-amber); }
+.at-transcribe-retry { padding: 11px 18px; border-radius: 999px; border: 1px solid var(--at-line); }
+.at-transcribe-retry-text { font-size: 12px; font-weight: 700; color: var(--at-ink2); }
+.at-transcribe-confirm { padding: 11px 18px; border-radius: 999px; background: var(--at-amber-deep); }
 .at-transcribe-confirm-text { font-size: 12px; font-weight: 700; color: #FFF6E8; }
 
 /* ===== 实时语音沉浸层 ===== */
@@ -2103,7 +2257,7 @@ init()
 	display: flex; flex-direction: row; align-items: center; justify-content: space-between;
 	padding-left: 10px; padding-bottom: 8px;
 }
-.at-voice-exit { z-index: 1; width: 44px; height: 32px; display: flex; align-items: center; justify-content: center; }
+.at-voice-exit { z-index: 1; width: 44px; height: 40px; display: flex; align-items: center; justify-content: center; }
 .at-voice-exit-text { font-size: 28px; color: #F6EEE0; }
 .at-voice-title {
 	position: absolute;
@@ -2124,7 +2278,7 @@ init()
 	padding: 0 22px calc(30px + env(safe-area-inset-bottom));
 }
 .at-voice-hint {
-	font-size: 11px; color: rgba(246, 238, 224, 0.45);
+	font-size: 11px; color: rgba(246, 238, 224, 0.72);
 	text-align: center; line-height: 1.7; margin-top: 22px;
 }
 
@@ -2137,9 +2291,9 @@ init()
 .at-conv-review-label { font-size: 11px; color: #E8B54F; font-weight: 700; margin-bottom: 7px; }
 .at-conv-review-input { width: 100%; min-height: 56px; font-size: 14px; color: #F6EEE0; line-height: 1.6; }
 .at-conv-review-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 9px; }
-.at-conv-review-retry { padding: 7px 15px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.28); }
-.at-conv-review-retry-text { font-size: 12px; font-weight: 600; color: rgba(246, 238, 224, 0.75); }
-.at-conv-review-confirm { padding: 7px 15px; border-radius: 999px; background: var(--at-amber); }
+.at-conv-review-retry { padding: 11px 18px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.28); }
+.at-conv-review-retry-text { font-size: 12px; font-weight: 600; color: rgba(246, 238, 224, 0.85); }
+.at-conv-review-confirm { padding: 11px 18px; border-radius: 999px; background: var(--at-amber-deep); }
 .at-conv-review-confirm-text { font-size: 12px; font-weight: 700; color: #FFF6E8; }
 
 /* 降级面板 */
@@ -2151,7 +2305,7 @@ init()
 }
 .at-conv-degrade-title { font-size: 14px; font-weight: 700; color: #F6EEE0; }
 .at-conv-degrade-actions { display: flex; flex-direction: row; flex-wrap: wrap; gap: 9px; margin-top: 14px; justify-content: center; }
-.at-conv-degrade-btn { padding: 8px 17px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.3); }
+.at-conv-degrade-btn { padding: 11px 18px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.3); }
 .at-conv-degrade-btn-text { font-size: 12px; font-weight: 600; color: #F6EEE0; }
 
 /* ===== 生成层 ===== */
@@ -2168,14 +2322,16 @@ init()
 .at-cure-line { display: flex; flex-direction: row; align-items: center; gap: 9px; }
 .at-cure-check { font-size: 13px; color: #E8B54F; font-weight: 700; }
 .at-cure-line-text { font-size: 13px; color: rgba(246, 238, 224, 0.85); }
-.at-curing-overlay-sub { font-size: 12px; color: rgba(246, 238, 224, 0.5); margin-top: 24px; }
+.at-curing-overlay-sub { font-size: 12px; color: rgba(246, 238, 224, 0.7); margin-top: 24px; }
+.at-curing-overlay-secondary { margin-top: 18px; padding: 12px 26px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.3); }
+.at-curing-overlay-secondary-text { font-size: 13px; font-weight: 600; color: rgba(246, 238, 224, 0.85); }
 
 /* ===== 待确认的理解 ===== */
 .at-recipe-body { display: flex; flex-direction: column; }
-.at-recipe-sub { font-size: 12px; color: var(--at-mist); line-height: 1.6; margin-bottom: 14px; }
+.at-recipe-sub { font-size: 12px; color: var(--at-ink2); line-height: 1.6; margin-bottom: 14px; }
 .at-recipe-empty { display: flex; flex-direction: column; align-items: center; padding: 40px 0; }
-.at-recipe-empty-title { font-size: 15px; font-weight: 700; color: var(--at-mist); }
-.at-recipe-empty-sub { font-size: 12px; color: var(--at-mist); margin-top: 6px; }
+.at-recipe-empty-title { font-size: 15px; font-weight: 700; color: var(--at-ink2); }
+.at-recipe-empty-sub { font-size: 12px; color: var(--at-ink2); margin-top: 6px; }
 
 /* ===== 管理面板 ===== */
 .at-manage-body { display: flex; flex-direction: column; }
@@ -2185,7 +2341,7 @@ init()
 }
 .at-manage-row-text { font-size: 14px; color: var(--at-ink2); font-weight: 600; }
 .at-manage-danger-text { color: var(--at-danger); }
-.at-manage-row-arrow { font-size: 16px; color: var(--at-mist); }
+.at-manage-row-arrow { font-size: 16px; color: var(--at-ink2); }
 .at-manage-divider { height: 10px; }
-.at-manage-note { font-size: 11px; color: var(--at-mist); line-height: 1.7; margin-top: 14px; }
+.at-manage-note { font-size: 11px; color: var(--at-ink2); line-height: 1.7; margin-top: 14px; }
 </style>

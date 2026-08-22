@@ -82,11 +82,17 @@ assert.match(
 	'atelier shelf must expose a page-level tap target for 我的墨相 so custom-component events cannot swallow the enter path'
 )
 assert.match(page, /import PortraitBatchSheetComponent from '@\/components\/PersonaBatchSheet\.uvue'/, 'atelier page must import the batch sheet')
-assert.match(page, /至少确认一笔后才能写下成稿/, 'atelier page must block publishing without confirmed fields')
+assert.match(page, /至少确认[\s\S]{0,40}笔后才能写下成稿/, 'atelier page must block publishing without confirmed fields')
 assert.match(page, /墨相/, 'page must name the module 墨相')
 assert.match(page, /我的墨相/, 'page must name the personal subject 我的墨相')
 assert.match(page, /愿遇之相/, 'page must name the ideal subject 愿遇之相')
 assert.match(page, /写下成稿/, 'page must use 写下成稿 as the publish action')
+assert.match(api, /skipProfileQuestion/, 'ai-profile api must expose skipProfileQuestion')
+assert.match(api, /\/skip-question/, 'skip path must POST to /profile-sessions/{id}/skip-question')
+assert.match(page, /不想答/, 'atelier question bubble must offer 不想答')
+assert.match(page, /skipCurrentQuestion/, 'atelier page must skip the current interview question')
+assert.match(page, /at-dim-ic/, 'letter dimensions must render iconfont classes, not raw emoji')
+assert.doesNotMatch(page, /relationship:\s*'♡'/, 'letter dimension fallback must not keep emoji icons')
 assert.match(page, /删除画像/, 'danger path must use literal 删除画像')
 assert.match(page, /if \(session\.value != null\)/, 'revision restore must guard against a missing session')
 const restoreBlock = page.slice(page.indexOf('restoreProfileRevision(revisionId)'))
@@ -104,7 +110,7 @@ assert.match(page, /menuButtonSpacing/, 'atelier custom nav must reserve right p
 assert.match(page, /navPadTop/, 'atelier custom nav must align with the capsule top')
 assert.doesNotMatch(
 	page,
-	/\.at-nav \{[\s\S]*?height:\s*44px/,
+	/\.at-nav \{[^}]*height:\s*44px/,
 	'atelier nav must not use a 44px box height that collapses under border-box + statusBar padding'
 )
 assert.match(

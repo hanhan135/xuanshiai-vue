@@ -1,7 +1,7 @@
 <template>
 	<!-- 往稿:画像 revision 元数据 + narrative history_observations 的诚实展示。
 	     后端不提供历史版本字段明细,这里只展示真实返回的元数据与观察笔记。 -->
-	<XsaSheet :visible="visible" title="往稿" @close="emit('close')">
+	<XsaSheet :visible="visible" title="往稿" theme="atelier" @close="emit('close')">
 		<view class="pbs-body">
 			<text class="pbs-subtitle">每一稿只保留写下的时间和观察笔记,不保留该稿的完整字段明细。</text>
 

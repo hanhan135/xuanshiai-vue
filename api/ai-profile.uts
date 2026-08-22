@@ -99,6 +99,16 @@ export async function resumeProfileSession(sessionId: string): Promise<any> {
   })
 }
 
+/** 跳过当前问题(不确认该字段,本次会话不再追问,进度不变) */
+export async function skipProfileQuestion(sessionId: string, fieldKey: string): Promise<any> {
+  return request({
+    url: '/ai/profile-sessions/' + sessionId + '/skip-question',
+    method: 'POST',
+    data: { field_key: fieldKey },
+    headers: { 'Idempotency-Key': genIdempotencyKey() }
+  })
+}
+
 /** 查询草稿字段 */
 export async function getProfileDraft(draftId: string): Promise<any> {
   return request({ url: '/ai/profile-drafts/' + draftId, method: 'GET' })
@@ -215,7 +225,15 @@ export async function pollExtractionAndLoadDraft(taskId: string, draftId: string
     }
     const status = String(taskRes.data.status != null ? taskRes.data.status : '')
     if (status == 'succeeded') {
-      const draftRes = await getProfileDraft(draftId)
+      let resolvedDraftId = draftId
+      const resultRef = taskRes.data.result_ref != null ? String(taskRes.data.result_ref) : ''
+      if (resultRef.indexOf('profile-draft:') == 0) {
+        resolvedDraftId = resultRef.substring('profile-draft:'.length)
+      }
+      if (resolvedDraftId == '') {
+        return { success: false, draft: null, error: '草稿尚未生成,请稍后重试' }
+      }
+      const draftRes = await getProfileDraft(resolvedDraftId)
       if (!draftRes.success || draftRes.data == null) {
         return { success: false, draft: null, error: '草稿拉取失败' }
       }

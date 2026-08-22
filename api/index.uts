@@ -213,6 +213,7 @@ export {
   deleteProfileSession,
   pauseProfileSession,
   resumeProfileSession,
+  skipProfileQuestion,
   getProfileDraft,
   patchProfileDraft,
   publishProfileDraft,

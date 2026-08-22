@@ -22,3 +22,5 @@ mock-local/
 test-local-mock-login.js
 skills-lock.json
 demo/
+open-in-hbuilderx.bat
+open-wechat-devtools.bat
