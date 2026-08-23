@@ -226,7 +226,9 @@ assert.match(api, /shouldContinue/, 'poll functions must accept shouldContinue c
 assert.match(page, /\(\) => alive\)/, 'polling call sites must pass alive callback')
 
 // ===== init 并行拉取:Promise.all 而非顺序 await =====
-const initBlock = page.slice(page.indexOf('const init = async'))
-assert.match(initBlock.slice(0, 200), /Promise\.all/, 'init must use Promise.all for parallel narrative fetch, not sequential await')
+	const initBlock = page.slice(page.indexOf('const init = async'))
+	assert.match(initBlock.slice(0, 200), /Promise\.all/, 'init must use Promise.all for parallel narrative fetch, not sequential await')
 
-console.log('ai profile ink-portrait contract passed')
+	assert.doesNotMatch(page, /const pendingCount = computed/, 'unused pendingCount must stay deleted')
+
+	console.log('ai profile ink-portrait contract passed')

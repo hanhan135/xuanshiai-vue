@@ -4,8 +4,9 @@
  * 幂等键自动生成;异步任务通过 GET /ai/tasks/{task_id} 轮询。
  */
 
-import { request } from './request.uts'
-import { getAccessToken, buildApiUrl, resolveMediaUrl } from './config.uts'
+	import { request } from './request.uts'
+	import { getAccessToken, buildApiUrl, resolveMediaUrl } from './config.uts'
+	import { sleep } from '@/utils/sleep.uts'
 /** 画像主体:关于我 / 关于对方 */
 export type ProfileSubject = 'personal' | 'ideal_partner'
 
@@ -330,11 +331,7 @@ export async function revokeProfileTextConsent(expectedPrivacyRevision: number):
   })
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(() => resolve(), ms))
-}
-
-/**
+	/**
  * 语音转写:上传音频到 /voice/transcribe → 拿 task_id → 轮询 /ai/tasks/{id}
  * → status=succeeded 时从 result_payload.transcript 取转写文本。
  * 参数:音频临时文件路径 + 当前问题文本 + 字段 key。返回 { success, text, error }。

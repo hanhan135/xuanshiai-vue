@@ -1,0 +1,7 @@
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(() => resolve(), ms))
+}
+
+export function estimateSpeakDuration(text: string): number {
+  return Math.min(5000, Math.max(2000, text.length * 250))
+}

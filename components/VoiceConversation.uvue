@@ -55,8 +55,9 @@
 
 <script setup lang="uts">
 import VoiceWaveform from './VoiceWaveform.uvue'
-import { VoiceWS } from '@/api/voice-ws.uts'
-import { resolveMediaUrl } from '@/api/config.uts'
+	import { VoiceWS } from '@/api/voice-ws.uts'
+	import { resolveMediaUrl } from '@/api/config.uts'
+	import { estimateSpeakDuration } from '@/utils/sleep.uts'
 
 interface Props {
 	sessionId?: string
@@ -214,7 +215,7 @@ const playTTS = (audioUrl: string, durationMs: number) => {
 	const resolvedUrl = resolveMediaUrl(audioUrl)
 	if (resolvedUrl == '') {
 		// 无音频 URL:fallback 计时器模拟
-		const duration = durationMs > 0 ? durationMs : estimateDuration(aiReplyText.value)
+		const duration = durationMs > 0 ? durationMs : estimateSpeakDuration(aiReplyText.value)
 		setTimeout(() => {
 			convState.value = 'idle'
 		}, duration) as any
@@ -228,7 +229,7 @@ const playTTS = (audioUrl: string, durationMs: number) => {
 	})
 	audioContext.onError(() => {
 		destroyAudioContext()
-		const duration = durationMs > 0 ? durationMs : estimateDuration(aiReplyText.value)
+		const duration = durationMs > 0 ? durationMs : estimateSpeakDuration(aiReplyText.value)
 		setTimeout(() => {
 			convState.value = 'idle'
 		}, duration) as any
@@ -249,12 +250,7 @@ const destroyAudioContext = () => {
 	}
 }
 
-const estimateDuration = (text: string): number => {
-	const len = text.length
-	return Math.min(5000, Math.max(2000, len * 250))
-}
-
-const arrayBufferToBase64 = (buffer: any): string => {
+	const arrayBufferToBase64 = (buffer: any): string => {
 	try {
 		// UniApp 环境下使用 wx.arrayBufferToBase64 或手动编码
 		// 微信小程序提供 uni.arrayBufferToBase64

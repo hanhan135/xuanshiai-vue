@@ -66,8 +66,9 @@
 
 <script setup lang="uts">
 import VoiceWaveform from './VoiceWaveform.uvue'
-import { transcribeAudio, synthesizeSpeech } from '@/api/ai-profile.uts'
-import { USE_MOCK } from '@/api/config.uts'
+	import { transcribeAudio, synthesizeSpeech } from '@/api/ai-profile.uts'
+	import { USE_MOCK } from '@/api/config.uts'
+	import { estimateSpeakDuration } from '@/utils/sleep.uts'
 
 interface Props {
 	questionText?: string
@@ -177,18 +178,13 @@ const destroyAudioContext = () => {
 	}
 }
 
-const skipSpeaking = () => {
-	stopSpeaking()
-	recorderState.value = 'idle'
-	emit('aiSpeakEnd')
-}
+	const skipSpeaking = () => {
+		stopSpeaking()
+		recorderState.value = 'idle'
+		emit('aiSpeakEnd')
+	}
 
-const estimateSpeakDuration = (text: string): number => {
-	const len = text.length
-	return Math.min(5000, Math.max(2000, len * 250))
-}
-
-const initRecorder = () => {
+	const initRecorder = () => {
 	if (recorderManager != null) return
 	recorderManager = uni.getRecorderManager()
 	recorderManager.onStart(() => {

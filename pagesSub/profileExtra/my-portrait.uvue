@@ -583,8 +583,9 @@ import {
 	revokeProfileTextConsent,
 	ENUM_FIELDS,
 	ENUM_OPTIONS
-} from '@/api/ai-profile.uts'
-import VoiceRecorder from '@/components/VoiceRecorder.uvue'
+	} from '@/api/ai-profile.uts'
+	import { sleep } from '@/utils/sleep.uts'
+	import VoiceRecorder from '@/components/VoiceRecorder.uvue'
 import VoiceConversation from '@/components/VoiceConversation.uvue'
 import PersonaBottle from '@/components/PersonaBottle.uvue'
 import PersonaIngredient from '@/components/PersonaIngredient.uvue'
@@ -697,16 +698,11 @@ const inputPlaceholder = computed(() => {
 			if (canPublish.value) return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，可以写下成稿'
 			return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，至少再确认 ' + publishRemain.value + ' 笔'
 		})
-		const progressLabel = computed(() => {
-			return '第 ' + answeredCount.value + ' / ' + totalQuestionCount + ' 题 · 已确认 ' + confirmedCount.value + ' 笔'
-		})
+			const progressLabel = computed(() => {
+				return '第 ' + answeredCount.value + ' / ' + totalQuestionCount + ' 题 · 已确认 ' + confirmedCount.value + ' 笔'
+			})
 
-const pendingCount = computed(() => {
-	if (draft.value == null || !Array.isArray(draft.value.fields)) return 0
-	return draft.value.fields.filter((f: any) => f.confirmation_status == 'suggested').length
-})
-
-	const progressValue = computed(() => {
+		const progressValue = computed(() => {
 		if (totalQuestionCount <= 0) return 0
 		return answeredCount.value / totalQuestionCount
 	})
@@ -1560,7 +1556,7 @@ const publishDraft = async () => {
 				narrReady = true
 				break
 			}
-			await sleepMs(3000)
+				await sleep(3000)
 			if (!alive) return
 		}
 
@@ -1916,13 +1912,9 @@ function scrollToBottom() {
 	})
 }
 
-const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
+	const onAnswerInput = (e: any) => { answerText.value = e.detail.value }
 
-function sleepMs(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(() => resolve(), ms))
-}
-
-const goEditProfile = () => {
+	const goEditProfile = () => {
 	uni.navigateTo({
 		url: '/pagesSub/userExtra/user/edit',
 		fail: () => { uni.showToast({ title: '页面打开失败', icon: 'none' }) }
