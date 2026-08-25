@@ -1,0 +1,81 @@
+﻿import { request } from './request.uts'
+import { USE_MOCK } from './config.uts'
+import { mockAdvisorSession, mockAdvisorAdvice, mockAdvisorFeedback } from '@/mock/ai-advisor.uts'
+
+export type AdvisorScenario = 'opening' | 'reply' | 'topic_extension' | 'rescue' | 'care' | 'compliment' | 'values' | 'intimacy' | 'closing' | 'analyze'
+export type AdvisorTone = 'natural' | 'warm' | 'humorous' | 'mature'
+
+export const ADVISOR_SCENARIOS = [
+  { value: 'opening', label: '初次开场' },
+  { value: 'reply', label: '回复消息' },
+  { value: 'topic_extension', label: '延伸话题' },
+  { value: 'rescue', label: '冷场救场' },
+  { value: 'care', label: '日常关心' },
+  { value: 'compliment', label: '真诚夸赞' },
+  { value: 'values', label: '价值观沟通' },
+  { value: 'intimacy', label: '关系推进' },
+  { value: 'closing', label: '自然收尾' },
+  { value: 'analyze', label: '分析语气' }
+]
+
+export const ADVISOR_TONES = [
+  { value: 'natural', label: '自然' },
+  { value: 'warm', label: '温暖' },
+  { value: 'humorous', label: '轻松' },
+  { value: 'mature', label: '成熟' }
+]
+
+export async function createAdvisorSession(title: string = '聊天回复建议', chatSessionId: number = 0): Promise<any> {
+  return request({
+    url: '/ai/advisor/sessions',
+    method: 'POST',
+    data: { title: title, advisor_type: 'relationship', chat_session_id: chatSessionId > 0 ? chatSessionId : null },
+    mockData: USE_MOCK ? mockAdvisorSession : null
+  })
+}
+
+export async function getAdvisorSessions(page: number = 1, pageSize: number = 20): Promise<any> {
+  return request({
+    url: '/ai/advisor/sessions',
+    method: 'GET',
+    data: { page: page, page_size: pageSize },
+    mockData: USE_MOCK ? { items: [mockAdvisorSession], page: page, page_size: pageSize, total: 1, has_more: false } : null
+  })
+}
+
+export async function getAdvisorAdvice(sessionId: number, payload: any): Promise<any> {
+  return request({
+    url: '/ai/advisor/sessions/' + sessionId + '/advice',
+    method: 'POST',
+    data: payload,
+    mockData: USE_MOCK ? mockAdvisorAdvice : null
+  })
+}
+
+export async function deleteAdvisorSession(sessionId: number): Promise<any> {
+  return request({
+    url: '/ai/advisor/sessions/' + sessionId,
+    method: 'DELETE',
+    mockData: USE_MOCK ? null : null
+  })
+}
+
+export async function submitAdvisorFeedback(messageId: number, feedbackType: string): Promise<any> {
+  return request({
+    url: '/ai/advisor/messages/' + messageId + '/feedback',
+    method: 'POST',
+    data: { feedback_type: feedbackType },
+    mockData: USE_MOCK ? { message_id: messageId, feedback_type: feedbackType, recorded: mockAdvisorFeedback.recorded } : null
+  })
+}
+
+export function advisorErrorMessage(code: number, fallback: string = '暂时无法生成建议'): string {
+  if (code == 401) return '登录状态已失效，请重新登录'
+  if (code == 403) return 'AI 军师仅对有效会员开放，或当前聊天无权访问'
+  if (code == 404) return '军师会话已不存在，请重新打开'
+  if (code == 422) return '这段内容暂时不适合生成沟通建议，请换一种表达'
+  if (code == 429) return '今日 AI 军师额度已用完，请明天再试'
+  if (code == 503 || code == -1) return 'AI 军师暂时不可用，请稍后重试'
+  return fallback
+}
+

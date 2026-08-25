@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Message APIs.
  * Mock mode keeps the local demo data. Real mode talks to FastAPI social and
  * discovery endpoints, while preserving the page-facing data shape.
@@ -142,6 +142,11 @@ async function resolveSessionByTargetUser(targetUserId: number): Promise<any> {
     }
   }
   return failRes('当前没有可用聊天会话', 'SESSION_NOT_FOUND')
+}
+
+export async function getChatSessionId(targetUserId: number): Promise<any> {
+  if (USE_MOCK) return okRes({ id: targetUserId > 0 ? targetUserId : 101 })
+  return await resolveSessionByTargetUser(targetUserId)
 }
 
 function mapApplication(row: any, direction: string): any {
@@ -337,3 +342,4 @@ export async function handleApplication(applicationId: number, action: string) {
     application: res.data
   })
 }
+

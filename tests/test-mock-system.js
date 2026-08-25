@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Mock 数据系统测试脚本
  * 测试 API 层是否能正常返回 Mock 数据
  */
@@ -47,7 +47,8 @@ try {
     'mock/matchmaker.uts',
     'mock/help.uts',
     'mock/spotlight.uts',
-    'mock/ai-avatar.uts'
+    'mock/ai-avatar.uts',
+    'mock/ai-advisor.uts'
   ]
 
   mockFiles.forEach(file => {
@@ -79,7 +80,8 @@ try {
     'api/matchmaker.uts',
     'api/help.uts',
     'api/spotlight.uts',
-    'api/ai-avatar.uts'
+    'api/ai-avatar.uts',
+    'api/ai-advisor.uts'
   ]
 
   apiFiles.forEach(file => {
@@ -175,7 +177,33 @@ try {
   console.log(`   ❌ AI 分身检查失败: ${error.message}\n`)
 }
 
-// 6. 总结
+// 6. AI 军师前端闭环检查
+console.log('6. 测试 AI 军师前端闭环...')
+try {
+  const fs = require('fs')
+  const path = require('path')
+  const apiContent = fs.readFileSync(path.join(__dirname, '../api/ai-advisor.uts'), 'utf-8')
+  const mockContent = fs.readFileSync(path.join(__dirname, '../mock/ai-advisor.uts'), 'utf-8')
+  const chatContent = fs.readFileSync(path.join(__dirname, '../pagesSub/chat/detail.uvue'), 'utf-8')
+  const sheetContent = fs.readFileSync(path.join(__dirname, '../components/XsaAiAdvisorSheet.uvue'), 'utf-8')
+  const checks = [
+    ['军师接口封装', apiContent.includes('/ai/advisor/sessions') && apiContent.includes('/advice')],
+    ['结构化建议 Mock', mockContent.includes('suggestions') && mockContent.includes('risk_level')],
+    ['聊天页入口', chatContent.includes('openAiAdvisor') && chatContent.includes('AI军师')],
+    ['场景和语气选择', sheetContent.includes('ADVISOR_SCENARIOS') && sheetContent.includes('ADVISOR_TONES')],
+    ['复制而不自动发送', sheetContent.includes('setClipboardData') && !sheetContent.includes('sendMessageApi')],
+    ['错误状态处理', sheetContent.includes('advisorErrorMessage') && sheetContent.includes('errorMessage')]
+  ]
+  checks.forEach(([name, passed]) => {
+    console.log(`   ${passed ? '✅' : '❌'} ${name}`)
+    if (!passed) process.exitCode = 1
+  })
+  console.log('')
+} catch (error) {
+  process.exitCode = 1
+  console.log(`   ❌ AI 军师检查失败: ${error.message}\n`)
+}
+// 7. 总结
 console.log('====================================')
 console.log('测试完成！')
 console.log('====================================\n')
@@ -197,3 +225,6 @@ console.log('   - 当前项目可能需要在 HBuilderX 中运行')
 console.log('   - uni-app 的命令行工具有时会有路径配置问题')
 console.log('   - Mock 数据系统的架构是正确的，只是运行环境的问题')
 console.log('')
+
+
+
