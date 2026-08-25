@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 	<view class="chat-page">
 		<!-- 消息列表 -->
 		<scroll-view
@@ -264,7 +264,10 @@
 							</view>
 							<text class="menu-text">交换电话</text>
 						</view>
-						<view class="menu-item" @click="openChatReport">
+						<view class="menu-item" @click="openAiAdvisor">
+							<view class="menu-icon"><text class="icon">✦</text></view>
+							<text class="menu-text">AI军师</text>
+						</view>						<view class="menu-item" @click="openChatReport">
 							<view class="menu-icon">
 								<text class="icon">⚑</text>
 							</view>
@@ -275,6 +278,13 @@
 			</view>
 </view>
 
+		<XsaAiAdvisorSheet
+			v-if="!isAiAvatarMode"
+			:visible="aiAdvisorVisible"
+			:target-user-id="userId"
+			:initial-message="aiAdvisorInitialMessage"
+			@close="aiAdvisorVisible = false"
+		/>
 		<XsaReportSheet
 			v-if="!isAiAvatarMode"
 			:visible="reportVisible"
@@ -305,6 +315,7 @@
 			clearAiAvatarConversation
 		} from '@/api';
 		import XsaReportSheet from '@/components/XsaReportSheet.uvue'
+		import XsaAiAdvisorSheet from '@/components/XsaAiAdvisorSheet.uvue'
 		import {
 		createMatchedConversation,
 		getMatchedConversation,
@@ -344,6 +355,8 @@
 let contactExchangeRecords = ref([] as any[])
 			let contactExchangeDailyKeys = ref([] as any[])
 			let reportVisible = ref(false)
+			let aiAdvisorVisible = ref(false)
+			let aiAdvisorInitialMessage = ref('')
 			let chatFeatureUnlocks = ref({ album: false, camera: false, profile: false } as any)
 
 		const wechatExchangeDisabled = computed(() => {
@@ -815,6 +828,20 @@ if (options && options.userId) {
 		}
 	}
 
+	const openAiAdvisor = () => {
+		showMore.value = false
+		let latestPeerMessage = ''
+		const rows = messages.value as any[]
+		for (let index = rows.length - 1; index >= 0; index--) {
+			const row = rows[index]
+			if (row != null && row.isMine !== true && row.type === 'text' && row.content != null && String(row.content).trim().length > 0) {
+				latestPeerMessage = String(row.content).trim()
+				break
+			}
+		}
+		aiAdvisorInitialMessage.value = latestPeerMessage.length > 0 ? latestPeerMessage : inputText.value.trim()
+		aiAdvisorVisible.value = true
+	}
 	const sendMessage = async () => {
 		if (!inputText.value.trim()) {
 			return
@@ -2442,3 +2469,6 @@ if (options && options.userId) {
 	color: var(--ink2);
 }
 </style>
+
+
+

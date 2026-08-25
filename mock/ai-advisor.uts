@@ -1,0 +1,32 @@
+﻿export const mockAdvisorSession = {
+  id: 9001,
+  advisor_type: 'relationship',
+  chat_session_id: 101,
+  title: '聊天回复建议',
+  message_count: 0,
+  created_at: '2026-08-25T12:00:00',
+  updated_at: '2026-08-25T12:00:00'
+}
+
+export const mockAdvisorAdvice = {
+  id: 9101,
+  session_id: 9001,
+  scenario: 'reply',
+  analysis: '对方的表达比较开放，适合先接住情绪，再用一个轻量问题延续话题。',
+  suggestions: [
+    { content: '听起来你今天过得挺充实的，哪一段让你印象最深？', style: 'natural', reason: '先回应对方，再给出容易回答的问题。' },
+    { content: '这个经历蛮有意思的，换作是我可能也会记很久。你后来怎么处理的？', style: 'warm', reason: '表达共情，同时自然引出后续内容。' },
+    { content: '我被你这句话勾起好奇心了，展开讲讲？', style: 'humorous', reason: '语气轻松，适合关系还在了解阶段。' }
+  ],
+  risk_level: 'none',
+  risk_notice: null,
+  next_step: '优先选择一条最像你平时说话的回复，发送后观察对方是否愿意继续展开。',
+  disclaimer: '建议仅供沟通参考，不代表对方真实想法，也不会替你自动发送消息。',
+  created_at: '2026-08-25T12:00:01'
+}
+
+export const mockAdvisorFeedback = {
+  message_id: 9101,
+  feedback_type: 'copied',
+  recorded: true
+}

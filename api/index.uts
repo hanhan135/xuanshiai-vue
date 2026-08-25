@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API 统一导出
  * import { getRecommendUser, getMessageList } from '@/api'
  */
@@ -69,11 +69,22 @@ export {
 export {
   getMessageList,
   getChatMessages,
+  getChatSessionId,
   sendMessage,
   handleContactExchangeRequest,
   getApplications,
   handleApplication
 } from './message.uts'
+export {
+  ADVISOR_SCENARIOS,
+  ADVISOR_TONES,
+  createAdvisorSession,
+  getAdvisorSessions,
+  getAdvisorAdvice,
+  deleteAdvisorSession,
+  submitAdvisorFeedback,
+  advisorErrorMessage
+} from './ai-advisor.uts'
 
 // 社区相关
 export {
@@ -244,3 +255,7 @@ export {
   type FieldConfirmationStatus,
   type FieldPatchAction
 } from './ai-profile.uts'
+
+
+
+
