@@ -24,3 +24,5 @@ skills-lock.json
 demo/
 open-in-hbuilderx.bat
 open-wechat-devtools.bat
+# local worktrees
+.worktrees/

@@ -15,6 +15,13 @@
 			<view class="pb-body">
 				<view class="pb-top-line"></view>
 				<view class="pb-liquid" :style="{ height: liquidHeight }"></view>
+				<!-- 竖排签文:已成稿写标题,其余状态写状态短语 -->
+				<view class="pb-vertical" :class="{ 'pb-vertical-light': state == 'bottled', 'pb-vertical-faint': state == 'empty' }">
+					<text v-for="(ch, index) in verticalChars" :key="index" class="pb-vertical-char">{{ ch }}</text>
+				</view>
+				<view v-if="footNote != ''" class="pb-foot">
+					<text class="pb-foot-text">{{ footNote }}</text>
+				</view>
 				<view v-if="state == 'bottled'" class="pb-seal">
 					<text class="pb-seal-text">成</text>
 				</view>
@@ -23,7 +30,7 @@
 
 		<!-- 新变化标记 -->
 		<view v-if="hasChange && state == 'bottled'" class="pb-ribbon">
-			<text class="pb-ribbon-text">新变化</text>
+			<text class="pb-ribbon-text">{{ changeText != '' ? changeText : '新变化' }}</text>
 		</view>
 
 		<!-- 标签 -->
@@ -43,6 +50,8 @@ interface Props {
 	sub?: string
 	hasChange?: boolean
 	active?: boolean
+	footNote?: string
+	changeText?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -52,7 +61,9 @@ const props = withDefaults(defineProps<Props>(), {
 	title: '',
 	sub: '',
 	hasChange: false,
-	active: false
+	active: false,
+	footNote: '',
+	changeText: ''
 })
 
 const emit = defineEmits<{
@@ -63,6 +74,22 @@ const liquidHeight = computed(() => {
 	const f = Number(props.fill)
 	const clamped = Math.min(Math.max(f, 0.06), 1)
 	return Math.round(clamped * 100) + '%'
+})
+
+/** 竖排签文:已成稿写标题,其余状态写状态短语,最多 6 字 */
+const verticalChars = computed(() => {
+	let t = ''
+	if (props.state == 'bottled') t = props.title
+	else if (props.state == 'mixing') t = '落笔中'
+	else if (props.state == 'curing') t = '正在成稿'
+	else if (props.state == 'cleanup') t = '清理中'
+	else t = '尚未落笔'
+	if (t.length > 6) t = t.substring(0, 5) + '…'
+	const out: string[] = []
+	for (let i = 0; i < t.length; i++) {
+		out.push(t.charAt(i))
+	}
+	return out
 })
 </script>
 
@@ -124,6 +151,52 @@ const liquidHeight = computed(() => {
 	background: var(--at-ink, #2E2418);
 	opacity: 0.55;
 	z-index: 3;
+}
+
+/* ===== 竖排签文 ===== */
+.pb-vertical {
+	position: absolute;
+	top: 22px;
+	bottom: 20px;
+	left: 0;
+	right: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	z-index: 2;
+}
+.pb-vertical-char {
+	font-size: 13px;
+	line-height: 16px;
+	font-weight: 600;
+	color: var(--at-ink, #2E2418);
+	font-family: var(--serif, serif);
+	text-align: center;
+}
+.pb-vertical-light .pb-vertical-char {
+	color: #FFF6E8;
+}
+.pb-vertical-faint .pb-vertical-char {
+	opacity: 0.28;
+}
+
+/* ===== 纸面底部小字(稿数/确认笔数) ===== */
+.pb-foot {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 5px;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	z-index: 2;
+}
+.pb-foot-text {
+	font-size: 9px;
+	line-height: 12px;
+	color: rgba(255, 246, 232, 0.85);
+	letter-spacing: 1px;
 }
 
 /* ===== 墨色填充 ===== */
@@ -204,9 +277,18 @@ const liquidHeight = computed(() => {
 	padding: 2px 8px;
 	border-radius: 999px 999px 999px 0;
 	background: var(--at-danger, #B4543E);
+	max-width: 112px;
 	animation: pb-ribbon-pulse 2.4s ease-in-out infinite;
 }
-.pb-ribbon-text { font-size: 10px; color: #FFF6E8; font-weight: 700; }
+.pb-ribbon-text {
+	font-size: 10px;
+	color: #FFF6E8;
+	font-weight: 700;
+	max-width: 96px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 @keyframes pb-ribbon-pulse {
 	0%, 100% { transform: scale(1); opacity: 1; }
 	50% { transform: scale(1.06); opacity: 0.85; }

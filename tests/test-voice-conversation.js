@@ -35,6 +35,14 @@ assert.match(wsApi, /disconnect/, 'VoiceWS must have disconnect method')
 assert.match(wsApi, /JSON\.parse/, 'VoiceWS must parse incoming JSON messages')
 assert.match(wsApi, /JSON\.stringify/, 'VoiceWS must stringify outgoing messages')
 
+// ===== 新增:ai_reasoning / ai_content / revise_text / listen =====
+assert.match(wsApi, /ai_reasoning/, 'VoiceWS must handle ai_reasoning messages')
+assert.match(wsApi, /ai_content/, 'VoiceWS must handle ai_content messages')
+assert.match(wsApi, /revise_text/, 'VoiceWS must send revise_text')
+assert.match(wsApi, /sendListen/, 'VoiceWS must have sendListen method')
+assert.match(wsApi, /type: 'listen'/, 'sendListen must send listen')
+assert.match(wsApi, /sendReviseText/, 'VoiceWS must have sendReviseText method')
+
 // ===== components/VoiceConversation.uvue: 实时对话组件 =====
 assert.match(component, /VoiceWaveform/, 'VoiceConversation must use VoiceWaveform component')
 assert.match(component, /VoiceWS/, 'VoiceConversation must import VoiceWS')
@@ -55,6 +63,17 @@ assert.match(component, /transcribed/, 'VoiceConversation must emit transcribed 
 assert.match(component, /aiReply/, 'VoiceConversation must emit aiReply event')
 assert.match(component, /onUnmounted/, 'VoiceConversation must clean up on unmount')
 
+// ===== 新增:听写纸与按需播报 =====
+assert.match(component, /atelier-dark/, 'VoiceConversation waveform must use atelier-dark')
+assert.match(component, /finalText/, 'VoiceConversation must keep final transcript on the paper')
+assert.match(component, /听它读/, 'VoiceConversation must offer listen action')
+assert.match(component, /sendListen/, 'listen action must call sendListen')
+assert.match(component, /sendReviseText/, 'revise action must call sendReviseText')
+assert.ok(
+  !/partialText\.value = ''[\s\S]{0,80}emit\('transcribed'/.test(component),
+  'final transcript must not clear the paper before emit transcribed'
+)
+
 // ===== pagesSub/profileExtra/my-portrait.uvue: 实时对话模式集成 =====
 assert.match(page, /VoiceConversation/, 'my-portrait must import VoiceConversation component')
 assert.match(page, /conversationMode/, 'my-portrait must have conversationMode state')
@@ -64,5 +83,10 @@ assert.match(page, /像朋友一样聊天/, 'my-portrait conversation mode must 
 assert.match(page, /onConversationTranscribed/, 'my-portrait must handle onConversationTranscribed event')
 assert.match(page, /onConversationAIReply/, 'my-portrait must handle onConversationAIReply event')
 assert.match(page, /conversationRef/, 'my-portrait must have conversationRef for component reference')
+
+// ===== 新增:听它读与改字重跑 =====
+assert.match(page, /听它读/, 'portrait overlay must offer listen')
+assert.match(page, /listenConvReview/, 'portrait must wire listenConvReview handler')
+assert.match(page, /revise\(/, 'editing transcript must revise the live reply')
 
 console.log('✅ test-voice-conversation.js: all assertions passed')

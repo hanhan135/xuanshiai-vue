@@ -64,33 +64,39 @@
 
 		<!-- ===== 墨案(首页) ===== -->
 		<view v-else-if="viewMode == 'shelf'" class="at-shelf">
-			<text class="at-shelf-intro">每个人都有一副自己的样子。</text>
-			<text class="at-shelf-intro2">说说你自己,AI 帮你落成可以确认的一笔。</text>
+			<view class="at-shelf-head">
+				<text class="at-shelf-intro">每个人都有一副自己的样子。</text>
+				<text class="at-shelf-intro2">说说你自己,AI 帮你落成可以确认的一笔。</text>
+			</view>
 
-				<view class="at-bottles">
-					<view class="at-bottle-hit" @tap="enterSubject('personal')">
-						<PersonaBottle
-							:state="bottleState('personal')"
-							variant="me"
-							:fill="bottleFill('personal')"
-							:title="bottleTitle('personal')"
-							:sub="bottleSub('personal')"
-							:hasChange="bottleHasChange('personal')"
-							:active="subject == 'personal'"
-						/>
-					</view>
-					<view class="at-bottle-hit" @tap="enterSubject('ideal_partner')">
-						<PersonaBottle
-							:state="bottleState('ideal_partner')"
-							variant="ta"
-							:fill="bottleFill('ideal_partner')"
-							:title="bottleTitle('ideal_partner')"
-							:sub="bottleSub('ideal_partner')"
-							:hasChange="bottleHasChange('ideal_partner')"
-							:active="subject == 'ideal_partner'"
-						/>
-					</view>
+			<view class="at-bottles">
+				<view class="at-bottle-hit" @tap="enterSubject('personal')">
+					<PersonaBottle
+						:state="bottleState('personal')"
+						variant="me"
+						:fill="bottleFill('personal')"
+						:title="bottleTitle('personal')"
+						:sub="bottleSub('personal')"
+						:hasChange="bottleHasChange('personal')"
+						:active="subject == 'personal'"
+						:footNote="bottleFootNote('personal')"
+						:changeText="bottleChangeText('personal')"
+					/>
 				</view>
+				<view class="at-bottle-hit" @tap="enterSubject('ideal_partner')">
+					<PersonaBottle
+						:state="bottleState('ideal_partner')"
+						variant="ta"
+						:fill="bottleFill('ideal_partner')"
+						:title="bottleTitle('ideal_partner')"
+						:sub="bottleSub('ideal_partner')"
+						:hasChange="bottleHasChange('ideal_partner')"
+						:active="subject == 'ideal_partner'"
+						:footNote="bottleFootNote('ideal_partner')"
+						:changeText="bottleChangeText('ideal_partner')"
+					/>
+				</view>
+			</view>
 
 			<view class="at-shelf-note">
 				<text class="at-shelf-note-text">AI 只整理你确认过的话 · 十个画像字段 · 随时删除</text>
@@ -101,6 +107,18 @@
 				<text class="at-shelf-insight-label">{{ insightPreviewLabel }} · AI 的理解</text>
 				<text class="at-shelf-insight-text">{{ insightPreview }}</text>
 				<text class="at-shelf-insight-more">查看成稿 ›</text>
+			</view>
+
+			<!-- 墨相师入口 -->
+			<view class="at-shelf-master" @tap="goMoxiangMaster">
+				<view class="at-shelf-master-figure">
+					<text class="at-shelf-master-seal">墨</text>
+				</view>
+				<view class="at-shelf-master-info">
+					<text class="at-shelf-master-name">墨相师</text>
+					<text class="at-shelf-master-desc">AI 引路人 · 陪你看见自己</text>
+				</view>
+				<text class="at-shelf-master-arrow">›</text>
 			</view>
 		</view>
 
@@ -131,10 +149,15 @@
 						<text class="at-progress-text">{{ progressLabel }}</text>
 					</view>
 					<view v-if="letterReady" class="at-letter-body">
+					<view class="at-letter-paper">
 						<view class="at-letter-head">
 						<text class="at-letter-title">{{ narrative != null && narrative.persona_title != null ? narrative.persona_title : '' }}</text>
 						<view v-if="letterTags.length > 0" class="at-letter-tags">
 							<text v-for="tag in letterTags" :key="tag" class="at-letter-tag">{{ tag }}</text>
+						</view>
+						<!-- 成稿朱印:DESIGN.md 规定"已写成稿后出现朱文小印" -->
+						<view class="at-letter-seal">
+							<text class="at-letter-seal-text">成</text>
 						</view>
 					</view>
 
@@ -189,6 +212,7 @@
 						</view>
 					</view>
 					<view class="at-letter-foot-space"></view>
+					</view>
 				</view>
 
 				<!-- 成稿未就绪(pending / 空) -->
@@ -402,8 +426,8 @@
 					<!-- 写下成稿 -->
 					<view v-if="draft != null && !extracting && !publishing" class="at-publish-row">
 						<text class="at-publish-info">{{ publishHint }}</text>
-						<view class="at-publish-btn" :class="{ 'at-publish-btn-disabled': !canPublish }" @tap="publishDraft">
-							<text class="at-publish-text">{{ canPublish ? '写下成稿' : '还差 ' + publishRemain + ' 笔' }}</text>
+						<view v-if="canPublish" class="at-publish-btn" @tap="publishDraft">
+							<text class="at-publish-text">写下成稿</text>
 						</view>
 					</view>
 				</view>
@@ -444,6 +468,9 @@
 						:disable-default-padding="true"
 					/>
 					<view class="at-conv-review-foot">
+						<view class="at-conv-review-listen" @tap="listenConvReview">
+							<text class="at-conv-review-listen-text">听它读</text>
+						</view>
 						<view class="at-conv-review-retry" @tap="redoConvReview">
 							<text class="at-conv-review-retry-text">重新说</text>
 						</view>
@@ -688,7 +715,7 @@ const inputPlaceholder = computed(() => {
 			}).length
 		})
 		const totalQuestionCount = 10
-		const minPublishCount = 3
+		const minPublishCount = 5
 		const canPublish = computed(() => confirmedCount.value >= minPublishCount)
 		const publishRemain = computed(() => {
 			const remain = minPublishCount - confirmedCount.value
@@ -696,7 +723,7 @@ const inputPlaceholder = computed(() => {
 		})
 		const publishHint = computed(() => {
 			if (canPublish.value) return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，可以写下成稿'
-			return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，至少再确认 ' + publishRemain.value + ' 笔'
+			return '已确认 ' + confirmedCount.value + ' / ' + totalQuestionCount + ' 笔，不足半数，暂不能写下成稿'
 		})
 			const progressLabel = computed(() => {
 				return '第 ' + answeredCount.value + ' / ' + totalQuestionCount + ' 题 · 已确认 ' + confirmedCount.value + ' 笔'
@@ -867,6 +894,29 @@ function bottleHasChange(sub: string): boolean {
 	return narr != null && narr.status == 'published' && narr.recent_change != null
 }
 
+/** 纸面底部小字:已成稿显示稿号,落笔中显示确认笔数 */
+function bottleFootNote(sub: string): string {
+	const state = bottleState(sub)
+	if (state == 'bottled') {
+		const info = sessionCacheFor(sub)
+		const revNo = info != null && info.profile_revision > 0 ? info.profile_revision : 0
+		return revNo > 0 ? '第 ' + revNo + ' 稿' : ''
+	}
+	if (state == 'mixing') {
+		if (subject.value == sub && draft.value != null) return '已确认 ' + confirmedCount.value + ' 笔'
+	}
+	return ''
+}
+
+/** 新变化角标的具体文案:取摘要前 4 字 */
+function bottleChangeText(sub: string): string {
+	const narr = narrativeFor(sub)
+	if (narr == null || narr.status != 'published' || narr.recent_change == null) return ''
+	const s = narr.recent_change.summary != null ? String(narr.recent_change.summary) : ''
+	if (s == '') return ''
+	return '新变化·' + (s.length > 4 ? s.substring(0, 4) + '…' : s)
+}
+
 // ===== 导航 =====
 
 const navBack = () => {
@@ -887,6 +937,13 @@ const backToShelf = () => {
 const openInsightSubject = () => {
 	const sub = insightPreviewLabel.value == '我的墨相' ? 'personal' : 'ideal_partner'
 	enterSubject(sub, true)
+}
+
+const goMoxiangMaster = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait-master',
+		fail: () => { uni.showToast({ title: '墨相师页面打开失败', icon: 'none' }) }
+	})
 }
 
 const switchPane = (pane: string) => {
@@ -1380,11 +1437,26 @@ const onConversationTranscribed = (text: string) => {
 	convReviewShow.value = true
 }
 
+let reviseTimer: number = 0
 const onConvReviewInput = (e: any) => {
 	convReview.value = e.detail.value
+	// 停顿后改字触发重跑回复,让 AI 按新文本重新落墨
+	if (reviseTimer != 0) clearTimeout(reviseTimer as any)
+	reviseTimer = setTimeout(() => {
+		const text = convReview.value.trim()
+		if (text != '' && conversationRef.value != null) {
+			conversationRef.value.revise(text)
+		}
+	}, 600) as any
+}
+
+const listenConvReview = () => {
+	if (conversationRef.value != null) conversationRef.value.listen()
 }
 
 const redoConvReview = () => {
+	// 重新说:重置组件,清掉纸面与回复缓存,关确认卡
+	if (conversationRef.value != null) conversationRef.value.reset()
 	convReview.value = ''
 	convReviewShow.value = false
 }
@@ -1491,10 +1563,20 @@ const publishInBackground = () => {
 	uni.showToast({ title: '成稿在后台继续,完成后会在这里告诉你', icon: 'none' })
 }
 
+/** narrative task 的 stage → 用户可见文案映射。taskStatus 用于失败/超时兜底。 */
+const _narrativeStageText = (stage: string, taskStatus: string): string => {
+	if (stage == 'reading_fields') return '正在回顾你的回答…'
+	if (stage == 'calling_llm') return 'AI 正在解读…'
+	if (stage == 'writing_summary') return '正在写下理解…'
+	if (taskStatus == 'failed') return '理解仍在整理,请稍后查看'
+	if (taskStatus == 'timeout') return '理解仍在整理,请稍后查看'
+	return '正在写下理解…'
+}
+
 const publishDraft = async () => {
 	if (draft.value == null || publishing.value) return
 		if (!canPublish.value) {
-			uni.showToast({ title: '至少确认 ' + minPublishCount + ' 笔后才能写下成稿', icon: 'none' })
+			uni.showToast({ title: '已确认字段不足半数，暂不能写下成稿', icon: 'none' })
 			return
 		}
 	publishing.value = true
@@ -1546,18 +1628,30 @@ const publishDraft = async () => {
 		}
 		curingLines.value.push('第 ' + (revisionNo > 0 ? revisionNo : 1) + ' 稿已生成')
 
-		// narrative 由 Worker 异步生成:有界轮询 pending → published
+		// narrative 由 Worker 异步生成:优先用 narrative_task_id 走标准任务轮询,
+		// 兼容旧后端无 task_id 时回退到业务接口轮询(扩大窗口)。
 		curingCurrentText.value = '正在写下理解...'
 		let narrReady = false
-		for (let i = 0; i < 5; i++) {
-			await loadNarrative(subject.value)
+		const narrativeTaskId = res.data.narrative_task_id != null ? String(res.data.narrative_task_id) : ''
+		if (narrativeTaskId != '') {
+			const narrTaskRes = await pollTaskUntilTerminal(narrativeTaskId, 40, () => alive)
 			if (!alive) return
-			if (narrative.value != null && narrative.value.status == 'published') {
+			const stage = narrTaskRes.task != null && narrTaskRes.task.stage != null ? String(narrTaskRes.task.stage) : ''
+			if (narrTaskRes.done && narrTaskRes.status == 'succeeded') {
 				narrReady = true
-				break
 			}
-				await sleep(3000)
-			if (!alive) return
+			curingCurrentText.value = _narrativeStageText(stage, narrTaskRes.status)
+		} else {
+			for (let i = 0; i < 20; i++) {
+				await loadNarrative(subject.value)
+				if (!alive) return
+				if (narrative.value != null && narrative.value.status == 'published') {
+					narrReady = true
+					break
+				}
+				await sleep(2000)
+				if (!alive) return
+			}
 		}
 
 		publishing.value = false
@@ -2072,25 +2166,56 @@ init()
 .at-gate-skip-text { font-size: 13px; color: var(--at-ink2); }
 
 /* ===== 墨案 ===== */
-.at-shelf { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 26px 20px 40px; }
-.at-shelf-intro { font-size: 22px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); text-align: center; }
-.at-shelf-intro2 { font-size: 14px; color: var(--at-ink2); margin-top: 8px; text-align: center; font-family: var(--serif); }
+.at-shelf { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 22px 20px 40px; }
+/* 入场:墨案在铺纸后缓缓落定(仅 transform/opacity,失败不挡信息) */
+.at-shelf-head { display: flex; flex-direction: column; align-items: center; animation: at-shelf-enter 0.5s ease-out both; }
+.at-shelf-intro { font-size: 23px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); text-align: center; letter-spacing: -0.01em; }
+.at-shelf-intro2 { font-size: 13px; color: var(--at-ink2); margin-top: 10px; text-align: center; font-family: var(--serif); line-height: 1.7; }
 .at-bottles {
 	display: flex; flex-direction: row; justify-content: center; gap: 14px;
-	margin-top: 34px; padding: 26px 18px 20px;
+	margin-top: 30px; padding: 26px 18px 22px;
 	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 20px;
 	align-self: stretch;
+	box-shadow: 0 2px 16px rgba(46, 36, 24, 0.05);
+	animation: at-shelf-enter 0.5s ease-out 0.08s both;
 }
 .at-bottle-hit { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.at-shelf-note { margin-top: 18px; padding: 5px 14px; border-radius: 999px; background: rgba(230, 218, 196, 0.4); }
+.at-shelf-note {
+	margin-top: 18px; padding: 5px 14px; border-radius: 999px; background: rgba(230, 218, 196, 0.4);
+	animation: at-shelf-enter 0.5s ease-out 0.16s both;
+}
 .at-shelf-note-text { font-size: 11px; color: var(--at-ink2); }
 .at-shelf-insight {
 	margin-top: 26px; padding: 16px 18px; border-radius: 16px;
 	background: var(--at-card); border: 1px solid var(--at-line); align-self: stretch;
+	animation: at-shelf-enter 0.5s ease-out 0.24s both;
 }
 .at-shelf-insight-label { font-size: 11px; color: var(--at-amber-deep); font-weight: 700; }
 .at-shelf-insight-text { font-size: 14px; color: var(--at-ink); line-height: 1.7; margin-top: 8px; font-family: var(--serif); }
 .at-shelf-insight-more { font-size: 12px; color: var(--at-amber-deep); font-weight: 600; margin-top: 10px; }
+@keyframes at-shelf-enter {
+	from { transform: translateY(10px); opacity: 0; }
+	to { transform: translateY(0); opacity: 1; }
+}
+
+/* ===== 墨相师入口 ===== */
+.at-shelf-master {
+	margin-top: 16px; padding: 14px 18px; border-radius: 16px;
+	background: var(--at-card); border: 1px solid var(--at-line);
+	display: flex; flex-direction: row; align-items: center; align-self: stretch;
+}
+.at-shelf-master-figure {
+	width: 44px; height: 44px; border-radius: 999px;
+	background: radial-gradient(circle at 42% 38%, rgba(255, 252, 245, 0.96), rgba(240, 230, 210, 0.88));
+	border: 1px solid rgba(180, 118, 43, 0.25);
+	display: flex; align-items: center; justify-content: center;
+	box-shadow: 0 2px 8px rgba(46, 36, 24, 0.06);
+}
+.at-shelf-master-seal { font-size: 20px; font-weight: 700; color: var(--at-amber); font-family: var(--serif); }
+.at-shelf-master-info { flex: 1; margin-left: 12px; display: flex; flex-direction: column; }
+.at-shelf-master-name { font-size: 15px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); }
+.at-shelf-master-desc { font-size: 11px; color: var(--at-mist); margin-top: 2px; }
+.at-shelf-master-arrow { font-size: 20px; color: var(--at-mist); }
 
 /* ===== 主体子导航 ===== */
 .at-subject { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -2112,14 +2237,31 @@ init()
 
 /* ===== 成稿 ===== */
 .at-letter { flex: 1; }
-.at-letter-body { padding: 18px 20px 30px; display: flex; flex-direction: column; }
-.at-letter-head { display: flex; flex-direction: column; align-items: center; padding: 12px 0 4px; }
+.at-letter-body { padding: 16px 18px 30px; display: flex; flex-direction: column; }
+/* 成稿纸面:把已写成稿的内容落在一张纸上,建立"这是一份成品"的材质感 */
+.at-letter-paper {
+	background: var(--at-card); border: 1px solid var(--at-line); border-radius: 16px;
+	padding: 6px 18px 8px;
+	box-shadow: 0 2px 14px rgba(46, 36, 24, 0.04);
+}
+.at-letter-head { display: flex; flex-direction: column; align-items: center; padding: 16px 0 6px; position: relative; }
 .at-letter-title { font-size: 26px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); text-align: center; }
 .at-letter-tags { display: flex; flex-direction: row; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 12px; }
 .at-letter-tag {
 	padding: 3px 12px; border-radius: 999px;
 	background: rgba(180, 118, 43, 0.1); color: var(--at-amber-deep); font-size: 12px;
 }
+/* 成稿朱印:右上角小印,呼应 PersonaBottle 的"成" */
+.at-letter-seal {
+	position: absolute; top: 14px; right: 2px;
+	width: 28px; height: 28px; border-radius: 3px;
+	background: radial-gradient(circle at 40% 35%, #C97B57, #A05A3E);
+	display: flex; align-items: center; justify-content: center;
+	box-shadow: 0 1px 3px rgba(160, 90, 62, 0.35);
+	animation: at-seal-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.at-letter-seal-text { font-size: 13px; color: #FFF6E8; font-weight: 700; font-family: var(--serif); }
+@keyframes at-seal-in { from { transform: scale(0) rotate(-8deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
 .at-letter-block { margin-top: 22px; }
 .at-block-label { font-size: 11px; color: var(--at-ink2); font-weight: 700; letter-spacing: 0.12em; }
 .at-block-serif { font-size: 15px; color: var(--at-ink); line-height: 1.9; margin-top: 8px; font-family: var(--serif); text-align: justify; }
@@ -2143,9 +2285,13 @@ init()
 .at-change-block { padding: 14px 16px; background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px; }
 .at-change-summary { font-size: 14px; color: var(--at-amber-deep); font-weight: 700; margin-top: 8px; line-height: 1.5; }
 .at-change-obs { font-size: 13px; color: var(--at-ink2); line-height: 1.7; margin-top: 6px; }
-.at-conclusion-block { padding: 16px; background: linear-gradient(160deg, var(--at-card), rgba(230, 218, 196, 0.3)); border-radius: 14px; border: 1px solid var(--at-line); }
+.at-conclusion-block {
+	padding: 18px 16px; background: linear-gradient(160deg, var(--at-card), rgba(230, 218, 196, 0.35));
+	border-radius: 14px; border: 1px solid var(--at-line);
+}
+.at-conclusion-block .at-block-serif { margin-top: 10px; }
 
-.at-letter-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 30px; }
+.at-letter-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 32px; }
 .at-letter-btn {
 	padding: 12px 0; border-radius: 999px; border: 1px solid var(--at-line);
 	display: flex; align-items: center; justify-content: center; background: var(--at-card);
@@ -2329,8 +2475,8 @@ init()
 	padding: 0 22px calc(30px + env(safe-area-inset-bottom));
 }
 .at-voice-hint {
-	font-size: 11px; color: rgba(246, 238, 224, 0.72);
-	text-align: center; line-height: 1.7; margin-top: 22px;
+	font-size: 12px; color: rgba(246, 238, 224, 0.72);
+	text-align: center; line-height: 1.7; margin-top: 24px; max-width: 280px;
 }
 
 /* 实时转写确认卡 */
@@ -2342,6 +2488,8 @@ init()
 .at-conv-review-label { font-size: 11px; color: #E8B54F; font-weight: 700; margin-bottom: 7px; }
 .at-conv-review-input { width: 100%; min-height: 56px; font-size: 14px; color: #F6EEE0; line-height: 1.6; }
 .at-conv-review-foot { display: flex; flex-direction: row; justify-content: flex-end; gap: 8px; margin-top: 9px; }
+.at-conv-review-listen { padding: 11px 18px; border-radius: 999px; background: rgba(232, 181, 79, 0.16); }
+.at-conv-review-listen-text { font-size: 12px; font-weight: 700; color: #E8B54F; }
 .at-conv-review-retry { padding: 11px 18px; border-radius: 999px; border: 1px solid rgba(246, 238, 224, 0.28); }
 .at-conv-review-retry-text { font-size: 12px; font-weight: 600; color: rgba(246, 238, 224, 0.85); }
 .at-conv-review-confirm { padding: 11px 18px; border-radius: 999px; background: var(--at-amber-deep); }
