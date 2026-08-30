@@ -1,11 +1,10 @@
 ﻿/** API configuration for the deployed FastAPI service. */
 
 export const USE_MOCK = false
-// Local FastAPI backend: E:\\Xuanshiai\\xuanshiai\\app\\main.py
-export const API_BASE_URL = 'http://127.0.0.1:8000'
+export const API_BASE_URL = 'http://192.168.10.12:8000'
 export const ROLE_APPLICATION_USE_MOCK = false
 export const PAPER_PLANE_CHANCE_USE_MOCK = true
-export const LAN_API_BASE_URL = 'http://127.0.0.1:8000'
+export const LAN_API_BASE_URL = 'http://192.168.10.12:8000'
 
 // FastAPI mounts its router directly at /api/v1.
 export const API_PREFIX = '/api/v1'
@@ -76,6 +75,3 @@ export function resolveMediaUrl(value: any): string {
   if (p.charAt(0) == '/') return API_BASE_URL + p
   return p
 }
-
-
-
