@@ -1,4 +1,4 @@
-/** API configuration for the deployed FastAPI service. */
+﻿/** API configuration for the deployed FastAPI service. */
 
 export const USE_MOCK = false
 export const API_BASE_URL = 'http://192.168.10.12:8000'
