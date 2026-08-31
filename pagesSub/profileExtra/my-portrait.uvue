@@ -108,18 +108,6 @@
 				<text class="at-shelf-insight-text">{{ insightPreview }}</text>
 				<text class="at-shelf-insight-more">查看成稿 ›</text>
 			</view>
-
-			<!-- 墨相师入口 -->
-			<view class="at-shelf-master" @tap="goMoxiangMaster">
-				<view class="at-shelf-master-figure">
-					<text class="at-shelf-master-seal">墨</text>
-				</view>
-				<view class="at-shelf-master-info">
-					<text class="at-shelf-master-name">墨相师</text>
-					<text class="at-shelf-master-desc">AI 引路人 · 陪你看见自己</text>
-				</view>
-				<text class="at-shelf-master-arrow">›</text>
-			</view>
 		</view>
 
 		<!-- ===== 主体空间 ===== -->
@@ -937,13 +925,6 @@ const backToShelf = () => {
 const openInsightSubject = () => {
 	const sub = insightPreviewLabel.value == '我的墨相' ? 'personal' : 'ideal_partner'
 	enterSubject(sub, true)
-}
-
-const goMoxiangMaster = () => {
-	uni.navigateTo({
-		url: '/pagesSub/profileExtra/my-portrait-master',
-		fail: () => { uni.showToast({ title: '墨相师页面打开失败', icon: 'none' }) }
-	})
 }
 
 const switchPane = (pane: string) => {
@@ -2197,25 +2178,6 @@ init()
 	from { transform: translateY(10px); opacity: 0; }
 	to { transform: translateY(0); opacity: 1; }
 }
-
-/* ===== 墨相师入口 ===== */
-.at-shelf-master {
-	margin-top: 16px; padding: 14px 18px; border-radius: 16px;
-	background: var(--at-card); border: 1px solid var(--at-line);
-	display: flex; flex-direction: row; align-items: center; align-self: stretch;
-}
-.at-shelf-master-figure {
-	width: 44px; height: 44px; border-radius: 999px;
-	background: radial-gradient(circle at 42% 38%, rgba(255, 252, 245, 0.96), rgba(240, 230, 210, 0.88));
-	border: 1px solid rgba(180, 118, 43, 0.25);
-	display: flex; align-items: center; justify-content: center;
-	box-shadow: 0 2px 8px rgba(46, 36, 24, 0.06);
-}
-.at-shelf-master-seal { font-size: 20px; font-weight: 700; color: var(--at-amber); font-family: var(--serif); }
-.at-shelf-master-info { flex: 1; margin-left: 12px; display: flex; flex-direction: column; }
-.at-shelf-master-name { font-size: 15px; font-weight: 700; color: var(--at-ink); font-family: var(--serif); }
-.at-shelf-master-desc { font-size: 11px; color: var(--at-mist); margin-top: 2px; }
-.at-shelf-master-arrow { font-size: 20px; color: var(--at-mist); }
 
 /* ===== 主体子导航 ===== */
 .at-subject { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

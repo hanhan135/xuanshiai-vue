@@ -3,10 +3,22 @@
 		<!-- 导航栏 -->
 		<view class="mm-nav">
 			<view class="mm-nav-back" @tap="navBack">
-				<text class="mm-nav-back-text">‹</text>
+				<text class="mm-nav-back-text">✕</text>
 			</view>
 			<text class="mm-nav-title">墨相师</text>
 			<view class="mm-nav-side"></view>
+		</view>
+
+		<!-- 建构进度(仅建构模式显示) -->
+		<view v-if="buildMode" class="mm-progress">
+			<view class="mm-progress-track">
+				<view class="mm-progress-fill" :style="'width:' + progress.percent + '%'"></view>
+			</view>
+			<text class="mm-progress-text">{{ progress.hardDone }}/{{ progress.hardTotal }} 基础信息 · {{ progress.percent }}%</text>
+		</view>
+		<!-- 发布就绪 -->
+		<view v-if="gateMet" class="mm-ready" @tap="goPortrait">
+			<text class="mm-ready-text">基础信息已齐，去成稿 ›</text>
 		</view>
 
 		<!-- 角色形象区 -->
@@ -69,6 +81,48 @@
 							<view class="mm-dot"></view>
 							<view class="mm-dot"></view>
 							<view class="mm-dot"></view>
+						</view>
+					</view>
+
+					<!-- 确认卡片(建构模式) -->
+					<view v-if="msg.role == 'card' && msg.card != null" class="mm-msg mm-msg-left">
+						<view class="mm-msg-avatar">
+							<MoxiangMasterAvatar state="thinking" />
+						</view>
+						<view class="mm-card">
+							<view class="mm-card-head" @tap="toggleCard(msg)">
+								<text class="mm-card-title">我记下这些了（{{ msg.card.items.length }}）</text>
+								<text class="mm-card-fold">{{ msg.collapsed == true ? '展开' : '收起' }}</text>
+							</view>
+							<view v-if="msg.collapsed != true" class="mm-card-list">
+								<view v-for="item in msg.card.items" :key="item.fieldKey" class="mm-card-item">
+									<text v-if="item.category != ''" class="mm-card-cat">{{ item.category }}</text>
+									<text v-if="item.content != ''" class="mm-card-content">{{ item.content }}</text>
+									<text v-if="item.displayValue != ''" class="mm-card-value">{{ item.displayValue }}</text>
+									<view class="mm-card-actions">
+										<view class="mm-card-btn" @tap="startEdit(item)">
+											<text class="mm-card-btn-text">改</text>
+										</view>
+										<view class="mm-card-btn" @tap="deleteItem(msg.card, item)">
+											<text class="mm-card-btn-text">删</text>
+										</view>
+									</view>
+									<view v-if="editingKey == item.fieldKey" class="mm-card-edit">
+										<textarea class="mm-card-textarea" v-model="editText" :maxlength="200" placeholder="改成…" />
+										<view class="mm-card-actions">
+											<view class="mm-card-btn mm-card-btn-primary" @tap="submitEdit(msg.card, item)">
+												<text class="mm-card-btn-text-primary">保存</text>
+											</view>
+											<view class="mm-card-btn" @tap="cancelEdit">
+												<text class="mm-card-btn-text">取消</text>
+											</view>
+										</view>
+									</view>
+								</view>
+								<view class="mm-card-confirm" @tap="confirmAll(msg.card)">
+									<text class="mm-card-confirm-text">都记对了</text>
+								</view>
+							</view>
 						</view>
 					</view>
 				</view>
@@ -143,8 +197,9 @@
 
 <script setup lang="uts">
 import MoxiangMasterAvatar from '@/components/MoxiangMasterAvatar.uvue'
-import { MasterWS } from '@/api/voice-master-ws.uts'
+import { MasterWS, MasterProgress, ConfirmCardPayload, ConfirmCardItem } from '@/api/voice-master-ws.uts'
 import { resolveMediaUrl } from '@/api/config.uts'
+import { getProfileDraft, patchProfileDraft, fieldAction } from '@/api/ai-profile.uts'
 
 // ===== 状态 =====
 const connecting = ref(true)
@@ -158,6 +213,16 @@ const lastTTSUrl = ref('')
 const lastTTSDuration = ref(0)
 const scrollAnchor = ref('')
 const messages = ref([] as any[])
+
+// ===== 建构模式状态 =====
+const buildMode = ref(false)
+const gateMet = ref(false)
+const initProgress: MasterProgress = { percent: 0, hardDone: 0, hardTotal: 0, entryScore: 0, gateMet: false }
+const progress = ref<MasterProgress>(initProgress)
+// 活动确认卡片载荷:非渲染态,仅供动作取 draftId/expectedRevision(与 ws 同生命周期管理)
+let draftState: ConfirmCardPayload | null = null
+const editingKey = ref('')
+const editText = ref('')
 
 let ws: MasterWS | null = null
 let recorderManager: any = null
@@ -182,6 +247,8 @@ function connectWS() {
 	ws = new MasterWS({
 		onSessionReady: () => {
 			connecting.value = false
+			// 建构会话已建立:显示建构 UI(连接失败/降级态保持零渲染)
+			buildMode.value = true
 			// 开场白已在 session_start 后由后端推送(ai_reply)
 		},
 		onPartialTranscript: (text: string) => {
@@ -229,6 +296,26 @@ function connectWS() {
 			masterState.value = 'speaking'
 			playAudio(audioUrl)
 		},
+		onProgress: (p: MasterProgress) => {
+			progress.value = p
+			if (p.gateMet) {
+				gateMet.value = true
+			}
+		},
+		onConfirmCard: (card: ConfirmCardPayload) => {
+			draftState = card
+			editingKey.value = ''
+			editText.value = ''
+			addCardMessage(card)
+		},
+		onPublishReady: (summary: string) => {
+			// 重连重放可能重复推送:发布入口只置一次,summary 只进流一次
+			const first = !gateMet.value
+			gateMet.value = true
+			if (first && summary != '') {
+				addMessage('master', summary, true)
+			}
+		},
 		onError: (code: string, message: string) => {
 			if (connecting.value) {
 				connectError.value = message
@@ -247,6 +334,8 @@ function connectWS() {
 			}
 		}
 	})
+	// 进入画像建构模式:onOpen 的 session_start 携带 mode=profile_build(重连自动重放)
+	ws.startBuildMode('personal', 'profile-text-v1')
 	ws.connect()
 }
 
@@ -276,6 +365,159 @@ function scrollToBottom() {
 			scrollAnchor.value = 'msg-' + last.id
 		}
 	})
+}
+
+// ===== 建构模式:确认卡片 =====
+function addCardMessage(card: ConfirmCardPayload) {
+	// 同一会话只有一张活动卡片:新卡片到达时移除旧卡片,避免陈旧确认入口残留
+	for (let i = messages.value.length - 1; i >= 0; i--) {
+		const m = messages.value[i]
+		if (m.role == 'card') {
+			messages.value.splice(i, 1)
+		}
+	}
+	messages.value.push({
+		id: Date.now() + Math.floor(Math.random() * 1000),
+		role: 'card',
+		text: '',
+		canListen: false,
+		card: card,
+		collapsed: false
+	})
+	scrollToBottom()
+}
+
+function findCardMsgIndex(cardId: string) : number {
+	for (let i = 0; i < messages.value.length; i++) {
+		const m = messages.value[i]
+		if (m.role == 'card' && m.card != null && m.card.cardId == cardId) return i
+	}
+	return -1
+}
+
+function removeCardMessage(cardId: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx >= 0) {
+		messages.value.splice(idx, 1)
+	}
+}
+
+function removeCardItem(cardId: string, fieldKey: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx < 0) return
+	const card = messages.value[idx].card
+	const items: any[] = card.items != null ? (card.items as any[]) : []
+	const next: any[] = []
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].fieldKey != fieldKey) {
+			next.push(items[i])
+		}
+	}
+	card.items = next
+	if (next.length == 0) {
+		// 全部删完:卡片随之下线
+		removeCardMessage(cardId)
+	}
+}
+
+function updateCardItemValue(cardId: string, fieldKey: string, newText: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx < 0) return
+	const card = messages.value[idx].card
+	const items: any[] = card.items != null ? (card.items as any[]) : []
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].fieldKey == fieldKey) {
+			items[i].displayValue = newText
+		}
+	}
+}
+
+function toggleCard(msg: any) {
+	msg.collapsed = msg.collapsed != true
+}
+
+function currentRevision() : number {
+	const ds = draftState
+	return ds != null ? ds.expectedRevision : 0
+}
+
+// 乐观锁刷新链:后端每次 PATCH 都推进 expected_revision,成功动作后从草稿读最新值
+async function refreshDraftState(draftId: string) {
+	const res = await getProfileDraft(draftId)
+	const ds = draftState
+	if (res.success && res.data != null && ds != null && ds.draftId == draftId) {
+		const rev = res.data.expected_revision
+		if (rev != null) {
+			ds.expectedRevision = Number(rev)
+		}
+	}
+}
+
+async function confirmAll(card: ConfirmCardPayload) {
+	const rev = currentRevision()
+	const actions: any[] = []
+	for (let i = 0; i < card.items.length; i++) {
+		actions.push(fieldAction(card.items[i].fieldKey, 'confirm', null, rev))
+	}
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		removeCardMessage(card.cardId)
+		uni.showToast({ title: '都记对了', icon: 'none' })
+		refreshDraftState(card.draftId)
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '确认失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+async function deleteItem(card: ConfirmCardPayload, item: ConfirmCardItem) {
+	const rev = currentRevision()
+	const actions: any[] = [fieldAction(item.fieldKey, 'delete', null, rev)]
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		removeCardItem(card.cardId, item.fieldKey)
+		uni.showToast({ title: '已删除', icon: 'none' })
+		refreshDraftState(card.draftId)
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '删除失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+// ===== 建构模式:内联修改 =====
+function startEdit(item: ConfirmCardItem) {
+	editingKey.value = item.fieldKey
+	editText.value = item.displayValue != '' ? item.displayValue : item.content
+}
+
+function cancelEdit() {
+	editingKey.value = ''
+	editText.value = ''
+}
+
+async function submitEdit(card: ConfirmCardPayload, item: ConfirmCardItem) {
+	const newText = editText.value.trim()
+	if (newText == '') {
+		uni.showToast({ title: '内容不能为空', icon: 'none' })
+		return
+	}
+	const rev = currentRevision()
+	const actions: any[] = [fieldAction(item.fieldKey, 'replace', newText, rev)]
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		updateCardItemValue(card.cardId, item.fieldKey, newText)
+		cancelEdit()
+		uni.showToast({ title: '已更新', icon: 'none' })
+		refreshDraftState(card.draftId)
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '修改失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+// ===== 建构模式:发布引导 =====
+function goPortrait() {
+	uni.navigateTo({ url: '/pagesSub/profileExtra/my-portrait' })
 }
 
 // ===== 文字模式 =====
@@ -433,7 +675,13 @@ function navBack() {
 		ws.disconnect()
 		ws = null
 	}
-	uni.navigateBack({ delta: 1 })
+	// 页面栈兜底:直开/分享进入时栈内仅当前页,navigateBack 无效则回首页
+	const pages = getCurrentPages()
+	if (pages.length > 1) {
+		uni.navigateBack({ delta: 1 })
+	} else {
+		uni.reLaunch({ url: '/pages/index/index' })
+	}
 }
 
 // ===== 生命周期 =====
@@ -473,8 +721,14 @@ onUnmounted(() => {
 	padding-top: var(--status-bar-height, 0px);
 	background: #F7F1E5;
 }
-.mm-nav-back { padding: 0 8px; }
-.mm-nav-back-text { font-size: 28px; color: #2E2418; }
+.mm-nav-back {
+	width: 44px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-nav-back-text { font-size: 20px; color: #2E2418; }
 .mm-nav-title {
 	font-size: 17px;
 	font-weight: 700;
@@ -724,4 +978,125 @@ onUnmounted(() => {
 	justify-content: center;
 }
 .mm-listen-btn-text { font-size: 13px; color: #B4762B; }
+
+/* ===== 建构进度(仅建构模式显示) ===== */
+.mm-progress {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 16px 0;
+}
+.mm-progress-track {
+	height: 6px;
+	border-radius: 999px;
+	background: rgba(180, 118, 43, 0.15);
+	overflow: hidden;
+}
+.mm-progress-fill {
+	height: 6px;
+	border-radius: 999px;
+	background: #B4762B;
+}
+.mm-progress-text {
+	margin-top: 6px;
+	font-size: 11px;
+	color: #9A8C77;
+	text-align: center;
+}
+
+/* ===== 发布就绪 ===== */
+.mm-ready {
+	margin: 8px 16px 0;
+	padding: 10px 0;
+	border-radius: 10px;
+	background: rgba(180, 118, 43, 0.12);
+	border: 1px solid rgba(180, 118, 43, 0.3);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-ready-text { font-size: 13px; color: #B4762B; font-weight: 700; }
+
+/* ===== 确认卡片 ===== */
+.mm-card {
+	max-width: 78%;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	border-radius: 12px;
+	padding: 12px;
+}
+.mm-card-head {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+}
+.mm-card-title { font-size: 14px; font-weight: 700; color: #2E2418; }
+.mm-card-fold { font-size: 11px; color: #9A8C77; }
+.mm-card-list { display: flex; flex-direction: column; }
+.mm-card-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid #F0E7D5;
+}
+.mm-card-cat {
+	font-size: 11px;
+	color: #B4762B;
+	background: rgba(180, 118, 43, 0.1);
+	border-radius: 999px;
+	padding: 2px 8px;
+}
+.mm-card-content {
+	margin-top: 6px;
+	font-size: 13px;
+	color: #2E2418;
+	line-height: 1.5;
+}
+.mm-card-value { margin-top: 4px; font-size: 12px; color: #5C4F3D; }
+.mm-card-actions {
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+	margin-top: 8px;
+}
+.mm-card-btn {
+	padding: 4px 14px;
+	border-radius: 999px;
+	background: rgba(180, 118, 43, 0.1);
+	border: 1px solid rgba(180, 118, 43, 0.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-card-btn-text { font-size: 12px; color: #B4762B; }
+.mm-card-btn-primary { background: #B4762B; }
+.mm-card-btn-text-primary { font-size: 12px; color: #FFFCF5; font-weight: 700; }
+.mm-card-edit {
+	display: flex;
+	flex-direction: column;
+	margin-top: 8px;
+}
+.mm-card-textarea {
+	width: 100%;
+	height: 72px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: #F7F1E5;
+	border: 1px solid #E6DAC4;
+	font-size: 13px;
+	color: #2E2418;
+}
+.mm-card-confirm {
+	margin-top: 12px;
+	height: 36px;
+	border-radius: 8px;
+	background: #B4762B;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-card-confirm-text { font-size: 13px; color: #FFFCF5; font-weight: 700; }
+
 </style>

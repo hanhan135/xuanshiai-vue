@@ -2,9 +2,36 @@
  * 墨相师·AI 引路人 对话 WebSocket 封装
  * 支持语音(半双工实时 ASR)和文字(直接发送文本)双模式
  * 流式回复:ai_content 增量推送
+ * 建构模式:session_start 携带 mode=profile_build,接收 progress/confirm_card/publish_ready 推送
  */
 
 import { buildWsUrl, getAccessToken } from './config.uts'
+
+/** 建构模式进度推送(progress) */
+export interface MasterProgress {
+	percent: number
+	hardDone: number
+	hardTotal: number
+	entryScore: number
+	gateMet: boolean
+}
+
+/** 确认卡片单条待确认字段(confirm_card.items) */
+export interface ConfirmCardItem {
+	fieldKey: string
+	kind: string
+	category: string
+	content: string
+	displayValue: string
+}
+
+/** 确认卡片载荷(confirm_card) */
+export interface ConfirmCardPayload {
+	cardId: string
+	draftId: string
+	expectedRevision: number
+	items: ConfirmCardItem[]
+}
 
 export interface MasterWSCallbacks {
 	onSessionReady?: () => void
@@ -14,6 +41,9 @@ export interface MasterWSCallbacks {
 	onAIContent?: (text: string) => void
 	onAIReply?: (text: string) => void
 	onTTSAudio?: (audioUrl: string, durationMs: number) => void
+	onProgress?: (p: MasterProgress) => void
+	onConfirmCard?: (card: ConfirmCardPayload) => void
+	onPublishReady?: (summary: string) => void
 	onError?: (code: string, message: string) => void
 	onClose?: () => void
 }
@@ -25,6 +55,9 @@ export class MasterWS {
 	private reconnectAttempts = 0
 	private maxReconnect = 3
 	private manuallyClosed = false
+	// 建构模式参数:非空时 session_start 携带 mode/subject/consentVersion
+	private buildSubject = ''
+	private buildConsentVersion = ''
 
 	constructor(callbacks: MasterWSCallbacks) {
 		this.callbacks = callbacks
@@ -57,7 +90,7 @@ export class MasterWS {
 			console.log('✅ [MasterWS] connected')
 			this.connected = true
 			this.reconnectAttempts = 0
-			this.send({ type: 'session_start' })
+			this.sendSessionStart()
 		})
 		this.socketTask.onMessage((res: any) => {
 			this.handleMessage(res.data)
@@ -81,6 +114,30 @@ export class MasterWS {
 			console.error('❌ [MasterWS] error', err)
 			this.callbacks.onError?.('WS_ERROR', '连接异常')
 		})
+	}
+
+	// ===== 建构模式 =====
+	// 进入画像建构模式:连接已建立时立即发送带 mode 的 session_start;
+	// 未建立时仅记录参数,由 onOpen 统一发送(重连后也会按建构模式重放)
+	startBuildMode(subject: string, consentVersion: string) {
+		this.buildSubject = subject
+		this.buildConsentVersion = consentVersion
+		if (this.connected) {
+			this.sendSessionStart()
+		}
+	}
+
+	private sendSessionStart() {
+		if (this.buildSubject != '') {
+			this.send({
+				type: 'session_start',
+				mode: 'profile_build',
+				subject: this.buildSubject,
+				consentVersion: this.buildConsentVersion
+			})
+		} else {
+			this.send({ type: 'session_start' })
+		}
 	}
 
 	private handleMessage(data: any) {
@@ -128,12 +185,59 @@ export class MasterWS {
 					String(msg.message != null ? msg.message : '墨相师对话出错')
 				)
 				break
+			case 'progress':
+				this.handleProgress(msg)
+				break
+			case 'confirm_card':
+				this.handleConfirmCard(msg)
+				break
+			case 'publish_ready':
+				this.callbacks.onPublishReady?.(String(msg.summary != null ? msg.summary : ''))
+				break
 		}
+	}
+
+	// 建构模式进度推送:{"type":"progress","percent":40.0,"hard_done":1,"hard_total":3,"entry_score":1.5,"gate_met":false}
+	private handleProgress(msg: any) {
+		const p: MasterProgress = {
+			percent: Number(msg.percent != null ? msg.percent : 0),
+			hardDone: Number(msg.hard_done != null ? msg.hard_done : 0),
+			hardTotal: Number(msg.hard_total != null ? msg.hard_total : 0),
+			entryScore: Number(msg.entry_score != null ? msg.entry_score : 0),
+			gateMet: msg.gate_met == true
+		}
+		this.callbacks.onProgress?.(p)
+	}
+
+	// 确认卡片推送:{"type":"confirm_card","card_id":"c-...","draft_id":"d-...","expected_revision":3,"items":[...]}
+	private handleConfirmCard(msg: any) {
+		const rawItems: any[] = msg.items != null ? (msg.items as any[]) : []
+		const items: ConfirmCardItem[] = []
+		for (let i = 0; i < rawItems.length; i++) {
+			const it = rawItems[i]
+			const item: ConfirmCardItem = {
+				fieldKey: String(it.field_key != null ? it.field_key : ''),
+				kind: String(it.kind != null ? it.kind : ''),
+				category: String(it.category != null ? it.category : ''),
+				content: String(it.content != null ? it.content : ''),
+				displayValue: String(it.display_value != null ? it.display_value : '')
+			}
+			items.push(item)
+		}
+		const card: ConfirmCardPayload = {
+			cardId: String(msg.card_id != null ? msg.card_id : ''),
+			draftId: String(msg.draft_id != null ? msg.draft_id : ''),
+			expectedRevision: Number(msg.expected_revision != null ? msg.expected_revision : 0),
+			items: items
+		}
+		this.callbacks.onConfirmCard?.(card)
 	}
 
 	// ===== 文字模式 =====
 	sendTextMessage(text: string) {
-		this.send({ type: 'text_message', text: text })
+		// clientTurnId 供后端识别/对账同一轮次(时间戳+随机数)
+		const clientTurnId = '' + Date.now() + '-' + Math.floor(Math.random() * 1000000)
+		this.send({ type: 'text_message', text: text, clientTurnId: clientTurnId })
 	}
 
 	// ===== 语音模式 =====

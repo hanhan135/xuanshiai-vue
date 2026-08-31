@@ -71,6 +71,17 @@
 						</view>
 					</view>
 				</view>
+				<!-- 墨相师·建构入口(独立一行,与画像/AI 分身并列层级,直指 master 页) -->
+				<view class="zone-master" @tap="onMoxiangMaster">
+					<view class="zone-master-figure">
+						<text class="zone-master-seal">墨</text>
+					</view>
+					<view class="zone-master-text">
+						<text class="zone-master-name">墨相师 · 聊出你的画像</text>
+						<text class="zone-master-desc">AI 引路人,陪你用对话把画像建起来</text>
+					</view>
+					<text class="zone-master-arrow">›</text>
+				</view>
 			</view>
 
 			<!-- VIP 会员卡 -->
@@ -235,6 +246,13 @@ const onAiAvatar = () => {
 	uni.navigateTo({
 		url: '/pagesSub/profileExtra/my-ai-avatar',
 		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
+}
+
+const onMoxiangMaster = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait-master',
+		fail: () => { uni.showToast({ title: '墨相师页面打开失败，请重试', icon: 'none' }) }
 	})
 }
 
@@ -661,6 +679,59 @@ page {
 .zone-btn-desc {
 	font-size: 11px;
 	color: var(--profile-text-secondary);
+}
+
+/* ===== 墨相师·建构入口(直指 my-portrait-master) ===== */
+.zone-master {
+	margin-top: 10px;
+	height: 72px;
+	border-radius: 18px;
+	background-color: rgba(255, 255, 255, 0.85);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 0 16px;
+	gap: 12px;
+}
+
+.zone-master-figure {
+	width: 44px;
+	height: 44px;
+	border-radius: 22px;
+	background-color: var(--profile-dark);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.zone-master-seal {
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--profile-rose);
+}
+
+.zone-master-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.zone-master-name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--profile-text);
+}
+
+.zone-master-desc {
+	font-size: 11px;
+	color: var(--profile-text-secondary);
+}
+
+.zone-master-arrow {
+	font-size: 20px;
+	color: var(--profile-text-muted);
 }
 
 /* ==================== VIP 会员卡 ==================== */
