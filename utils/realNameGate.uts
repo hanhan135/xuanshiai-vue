@@ -205,7 +205,7 @@ export async function guardDualVerification(action: GateAction | string = 'topic
     cancelText: '稍后再说',
     success: (res) => {
       if (res.confirm) {
-        uni.navigateTo({ url: '/pagesSub/profileExtra/certification' })
+        uni.navigateTo({ url: '/pagesSub/profileExtra/certification?focus=realname' })
       }
     }
   })
@@ -226,9 +226,44 @@ export async function guardRealName(action: GateAction | string = 'publish'): Pr
     cancelText: '稍后再说',
     success: (res) => {
       if (res.confirm) {
-        uni.navigateTo({ url: '/pagesSub/profileExtra/certification' })
+        uni.navigateTo({ url: '/pagesSub/profileExtra/certification?focus=realname' })
       }
     }
   })
   return false
+}
+
+/** 社区发布需要实名认证和人脸认证均通过。 */
+export async function guardCommunityVerification(): Promise<boolean> {
+  try {
+    const res = await getMeProfile()
+    const profile = res != null && res.success ? res.data : null
+    const realnamePassed = profile != null && Number(profile.realname_status) == 2
+    const facePassed = profile != null && Number(profile.face_verified) == 1
+    if (realnamePassed && facePassed) return true
+
+    let message = '完成实名认证和人脸认证后，才能在社区发布动态。'
+    if (!realnamePassed && !facePassed) {
+      message = '请先完成实名认证和人脸认证，完成后才能在社区发布动态。'
+    } else if (!realnamePassed) {
+      message = '请先完成实名认证，完成后才能在社区发布动态。'
+    } else {
+      message = '请先完成人脸认证，完成后才能在社区发布动态。'
+    }
+    uni.showModal({
+      title: !realnamePassed ? '需要实名认证' : '需要人脸认证',
+      content: message,
+      confirmText: '去认证',
+      cancelText: '稍后再说',
+      success: (result) => {
+        if (result.confirm) {
+          uni.navigateTo({ url: '/pagesSub/profileExtra/certification?focus=' + (!realnamePassed ? 'realname' : 'face') })
+        }
+      }
+    })
+    return false
+  } catch (e) {
+    uni.showToast({ title: '认证状态获取失败，请稍后重试', icon: 'none' })
+    return false
+  }
 }

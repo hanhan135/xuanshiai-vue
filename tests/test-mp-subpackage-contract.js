@@ -59,7 +59,9 @@ const expectedSubpackages = {
     'payment',
     'become-matchmaker',
     'become-partner',
+    'partner-center',
     'become-promoter',
+    'promoter-center',
     'application-success',
     'custom'
   ],

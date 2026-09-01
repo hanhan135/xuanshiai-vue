@@ -4,10 +4,20 @@
  */
 
 import { request } from './request.uts'
-import { ROLE_APPLICATION_USE_MOCK } from './config.uts'
+import {
+  ROLE_APPLICATION_USE_MOCK,
+  MATCHMAKER_MANAGEMENT_CENTER_USE_MOCK,
+  PARTNER_CENTER_USE_MOCK,
+  PROMOTER_CENTER_USE_MOCK
+} from './config.uts'
 import {
   mockMatchmakerContact,
   mockRoleApplications,
+  mockMatchmakerManagementCenterAccess,
+  mockMatchmakerManagementCenterSnapshot,
+  mockPartnerCenterSnapshot,
+  mockPromoterCenterSnapshot,
+  mockMatchmakerReviewMembers,
   mockServiceMatchmakers,
   mockCustomMatchmakers,
   mockCustomPlans,
@@ -94,6 +104,178 @@ function cleanPlanText(value: any, fallback: string): string {
     return fallback
   }
   return text
+}
+
+/**
+ * 将服务端管理中心访问状态收敛为页面使用的字段。
+ * 客户端始终同时校验服务端 can_access、角色 active 与已付款状态；
+ * 服务端仍是权限、订单和岗位状态的唯一可信来源。
+ */
+function normalizeMatchmakerManagementCenterAccess(data: any) {
+  const source = data != null ? data : {}
+  const roleStatus = source.role_status != null ? String(source.role_status) : (source.roleStatus != null ? String(source.roleStatus) : '')
+  const paymentStatus = source.payment_status != null ? String(source.payment_status) : (source.paymentStatus != null ? String(source.paymentStatus) : '')
+  const serverCanAccess = source.can_access != null
+    ? source.can_access == true || String(source.can_access) == 'true'
+    : (source.canAccess == true || String(source.canAccess) == 'true')
+  return {
+    roleStatus: roleStatus,
+    paymentStatus: paymentStatus,
+    canAccess: serverCanAccess && roleStatus == 'active' && paymentStatus == 'paid',
+    paidAt: source.paid_at != null ? String(source.paid_at) : (source.paidAt != null ? String(source.paidAt) : ''),
+    scope: source.scope != null ? String(source.scope) : '',
+    source: source.source != null ? String(source.source) : 'api',
+    message: source.message != null ? String(source.message) : ''
+  }
+}
+
+/** 获取总店红娘管理中心开通与权限状态。 */
+export async function getMatchmakerManagementCenterAccess() {
+  if (MATCHMAKER_MANAGEMENT_CENTER_USE_MOCK) {
+    return {
+      success: true,
+      data: normalizeMatchmakerManagementCenterAccess(mockMatchmakerManagementCenterAccess),
+      code: 0,
+      message: '框架占位'
+    }
+  }
+  const result = await request({
+    url: '/matchmaker/management-center/access',
+    forceHttp: true,
+    method: 'GET'
+  })
+  if (!result.success || result.data == null) return result
+  return {
+    success: true,
+    data: normalizeMatchmakerManagementCenterAccess(result.data),
+    code: result.code,
+    message: result.message
+  }
+}
+
+/**
+ * 获取总店红娘工作台聚合快照。
+ * 不返回手机号、微信号等敏感资料；明细和写操作须由各业务接口按 RBAC 单独控制。
+ */
+export async function getMatchmakerManagementCenterSnapshot() {
+  if (MATCHMAKER_MANAGEMENT_CENTER_USE_MOCK) {
+    return {
+      success: true,
+      data: mockMatchmakerManagementCenterSnapshot,
+      code: 0,
+      message: '框架占位'
+    }
+  }
+  return request({
+    url: '/matchmaker/management-center/dashboard',
+    forceHttp: true,
+    method: 'GET'
+  })
+}
+
+const PARTNER_CENTER_MOCK_STORAGE_KEY = 'xsa_partner_center_mock_snapshot'
+
+function createPartnerCenterMockSnapshot() {
+  return {
+    source: 'mock',
+    profile: Object.assign({}, mockPartnerCenterSnapshot.profile),
+    inviteCode: mockPartnerCenterSnapshot.inviteCode,
+    teamMembers: [] as any[],
+    effectiveMembers: [] as any[],
+    registrationRewards: [] as any[],
+    commissionRecords: [] as any[],
+    withdrawalRecords: [] as any[]
+  }
+}
+
+function getPartnerCenterMockSnapshot() {
+  try {
+    const saved = uni.getStorageSync(PARTNER_CENTER_MOCK_STORAGE_KEY)
+    if (saved != null && saved.profile != null) return saved as any
+  } catch (e) {}
+  const fresh = createPartnerCenterMockSnapshot()
+  try { uni.setStorageSync(PARTNER_CENTER_MOCK_STORAGE_KEY, fresh) } catch (e) {}
+  return fresh
+}
+
+function savePartnerCenterMockSnapshot(snapshot: any) {
+  try { uni.setStorageSync(PARTNER_CENTER_MOCK_STORAGE_KEY, snapshot) } catch (e) {}
+}
+
+/** 合伙人中心聚合数据：后端接入前只从当前设备本地 Mock 读取。 */
+export async function getPartnerCenterSnapshot() {
+  if (!PARTNER_CENTER_USE_MOCK) return { success: false, data: null, code: 501, message: '合伙人中心后端接口尚未接入' }
+  return { success: true, data: getPartnerCenterMockSnapshot(), code: 0, message: 'success' }
+}
+
+/** 修改团队名称，仅保存至当前设备的本地 Mock 数据。 */
+export async function updatePartnerTeamName(teamName: string) {
+  const value = teamName.trim()
+  if (value.length < 2 || value.length > 20) return { success: false, data: null, code: 400, message: '团队名称需为 2-20 个字符' }
+  const snapshot = getPartnerCenterMockSnapshot()
+  snapshot.profile.teamName = value
+  savePartnerCenterMockSnapshot(snapshot)
+  return { success: true, data: snapshot, code: 0, message: 'success' }
+}
+
+/** 更新账号展示资料，仅保存至当前设备的本地 Mock 数据。 */
+export async function updatePartnerAccountProfile(changes: any) {
+  const snapshot = getPartnerCenterMockSnapshot()
+  snapshot.profile = Object.assign({}, snapshot.profile, changes)
+  savePartnerCenterMockSnapshot(snapshot)
+  return { success: true, data: snapshot, code: 0, message: 'success' }
+}
+
+/** 提交提现申请。余额不足时返回可读校验错误，不产生虚构资金流水。 */
+export async function createPartnerWithdrawal(data: any) {
+  const snapshot = getPartnerCenterMockSnapshot()
+  const amount = Number(data != null ? data.amount : 0)
+  if (isNaN(amount) || amount < 1 || amount > 1000) return { success: false, data: null, code: 400, message: '请输入 1-1000 元的提现金额' }
+  if (amount > Number(snapshot.profile.balance || 0)) return { success: false, data: null, code: 400, message: '提现金额不能超过可提现余额' }
+  const method = data != null && data.method != null ? String(data.method) : ''
+  const account = data != null && data.account != null ? String(data.account).trim() : ''
+  const payee = data != null && data.payee != null ? String(data.payee).trim() : ''
+  if (method == '' || account == '' || payee == '') return { success: false, data: null, code: 400, message: '请完整填写收款方式和收款信息' }
+  const record = { id: 'withdraw-' + Date.now(), amount: amount, method: method, status: '审核中', account: account, payee: payee, createdAt: String(Date.now()) }
+  snapshot.withdrawalRecords.unshift(record)
+  snapshot.profile.balance = Number(snapshot.profile.balance || 0) - amount
+  savePartnerCenterMockSnapshot(snapshot)
+  return { success: true, data: record, code: 0, message: '提现申请已提交' }
+}
+
+const PROMOTER_CENTER_MOCK_STORAGE_KEY = 'xsa_promoter_center_mock_snapshot'
+function createPromoterCenterMockSnapshot() { return { source: 'mock', profile: Object.assign({}, mockPromoterCenterSnapshot.profile), teamOptions: [] as any[], leads: [] as any[], effectiveMembers: [] as any[], incompleteMembers: [] as any[], rewards: [] as any[], commissions: [] as any[], withdrawals: [] as any[], offlineOrders: [] as any[], finance: { expenses: [] as any[], balance: [] as any[], points: [] as any[] } } }
+function getPromoterCenterMockSnapshot() { try { const saved = uni.getStorageSync(PROMOTER_CENTER_MOCK_STORAGE_KEY); if (saved != null && saved.profile != null) return saved as any } catch (e) {}; const fresh = createPromoterCenterMockSnapshot(); try { uni.setStorageSync(PROMOTER_CENTER_MOCK_STORAGE_KEY, fresh) } catch (e) {}; return fresh }
+function savePromoterCenterMockSnapshot(snapshot: any) { try { uni.setStorageSync(PROMOTER_CENTER_MOCK_STORAGE_KEY, snapshot) } catch (e) {} }
+export async function getPromoterCenterSnapshot() { if (!PROMOTER_CENTER_USE_MOCK) return { success: false, data: null, code: 501, message: '推广红娘中心后端接口尚未接入' }; return { success: true, data: getPromoterCenterMockSnapshot(), code: 0, message: 'success' } }
+export async function updatePromoterCenterProfile(changes: any) { const snapshot = getPromoterCenterMockSnapshot(); snapshot.profile = Object.assign({}, snapshot.profile, changes); savePromoterCenterMockSnapshot(snapshot); return { success: true, data: snapshot, code: 0, message: 'success' } }
+export async function addPromoterLead(data: any) { const phone = data != null && data.phone != null ? String(data.phone).trim() : ''; if (!/^1[3-9]\d{9}$/.test(phone)) return { success: false, data: null, code: 400, message: '请输入正确的11位手机号' }; const snapshot = getPromoterCenterMockSnapshot(); const lead = { id: 'lead-' + Date.now(), source: String(data.source || ''), phone: phone, wechat: String(data.wechat || ''), nickname: String(data.nickname || ''), realName: String(data.realName || ''), gender: String(data.gender || '男'), birth: String(data.birth || ''), height: String(data.height || ''), weight: String(data.weight || ''), description: String(data.description || ''), createdAt: String(Date.now()), status: '待审' }; snapshot.leads.unshift(lead); savePromoterCenterMockSnapshot(snapshot); return { success: true, data: lead, code: 0, message: '客源已提交审核' } }
+export async function createPromoterWithdrawal(data: any) { const snapshot = getPromoterCenterMockSnapshot(); const amount = Number(data != null ? data.amount : 0); if (isNaN(amount) || amount < 1 || amount > 1000) return { success: false, data: null, code: 400, message: '请输入 1-1000 元的提现金额' }; if (amount > Number(snapshot.profile.balance || 0)) return { success: false, data: null, code: 400, message: '提现金额不能超过可提现余额' }; const account = String(data.account || '').trim(), payee = String(data.payee || '').trim(); if (account == '' || payee == '') return { success: false, data: null, code: 400, message: '请完整填写收款信息' }; snapshot.withdrawals.unshift({ id: 'withdraw-' + Date.now(), amount: amount, method: String(data.method || '微信'), account: account, payee: payee, createdAt: String(Date.now()), status: '审核中' }); snapshot.profile.balance = Number(snapshot.profile.balance || 0) - amount; savePromoterCenterMockSnapshot(snapshot); return { success: true, data: snapshot, code: 0, message: '提现申请已提交' } }
+
+/**
+ * 前端 Mock 的资料待审工作台。后端尚未接入前，所有变更仅保留在当前运行实例。
+ */
+export async function getMatchmakerReviewMembers() {
+  return {
+    success: true,
+    data: mockMatchmakerReviewMembers,
+    code: 0,
+    message: 'success'
+  }
+}
+
+/** 更新一名会员的前端暂存资料、审核状态或服务记录。 */
+export async function updateMatchmakerReviewMember(id: string, changes: any) {
+  let target: any = null
+  for (let i = 0; i < mockMatchmakerReviewMembers.length; i++) {
+    if (String(mockMatchmakerReviewMembers[i].id) == String(id)) {
+      target = mockMatchmakerReviewMembers[i]
+      break
+    }
+  }
+  if (target == null) return { success: false, data: null, code: 404, message: '未找到该会员资料' }
+  Object.assign(target, changes != null ? changes : {})
+  return { success: true, data: target, code: 0, message: '已保存到本地 Mock 数据' }
 }
 
 function toCustomPlan(item: any) {

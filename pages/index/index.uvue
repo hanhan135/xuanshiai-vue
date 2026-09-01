@@ -729,7 +729,7 @@
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
 	import { likeUser, blockUser, unblockUser } from '@/api'
-	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
+	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getDynamicDetail, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
 	import locationJson from '@/data/location.json'
@@ -969,6 +969,7 @@
 			recommendUsers.value = recommendRes.data.items as any[]
 			currentRecommendIndex.value = 0
 			loadRecommendBackground()
+			loadFeedDynamics(Number(currentRecommendUser.value.id || 0))
 		}
 		const plazaRes = await getDiscoveryPlaza({ page: 1, page_size: 20 })
 		if (plazaRes.success && plazaRes.data != null) {
@@ -1003,6 +1004,7 @@
 		if (list.length === 0) return
 			currentRecommendIndex.value = (currentRecommendIndex.value + 1) % list.length
 		loadRecommendBackground()
+		loadFeedDynamics(Number(currentRecommendUser.value.id || 0))
 	}
 	const blockVisible = ref(false)
 	const blockedUserId = ref(0)
@@ -1057,7 +1059,11 @@
 
 	// Ta的动态
 	const feedDynamics = ref<any[]>([])
-	const loadFeedDynamics = async () => {
+	const loadFeedDynamics = async (targetUserId: number = 0) => {
+		if (targetUserId <= 0) {
+			feedDynamics.value = []
+			return
+		}
 		const res = await getDynamicList('discover', 1)
 		if (!res.success || res.data == null) return
 		const data = res.data as any
@@ -1066,7 +1072,17 @@
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]
 			const author = row.user != null ? row.user : {}
+			const authorId = Number(author.id != null ? author.id : (author.userId != null ? author.userId : 0))
+			if (authorId != targetUserId) continue
 			mapped.push({ id: Number(row.id || 0), avatar: author.avatar != null ? resolveMediaUrl(author.avatar) : '', name: author.name != null ? author.name : '', timeText: row.timeText != null ? row.timeText : '', location: row.location != null ? row.location : '', content: row.content != null ? row.content : '', photos: row.photos != null && Array.isArray(row.photos) ? row.photos.map((photo: any) => resolveMediaUrl(photo)) : [], tags: row.tags != null && Array.isArray(row.tags) ? row.tags : [], likeCount: Number(row.likeCount || 0), commentCount: Number(row.commentCount || 0) })
+		}
+		// 列表统计可能是旧快照，详情接口返回单条动态的最新统计。
+		for (let i = 0; i < mapped.length; i++) {
+			const detailRes = await getDynamicDetail(Number(mapped[i].id || 0))
+			if (!detailRes.success || detailRes.data == null) continue
+			const detail = detailRes.data as any
+			if (detail.likeCount != null) mapped[i].likeCount = Number(detail.likeCount)
+			if (detail.commentCount != null) mapped[i].commentCount = Number(detail.commentCount)
 		}
 		feedDynamics.value = mapped
 	}
@@ -1157,7 +1173,6 @@
 		resetDailyIfNeeded()
 		loadHomeDiscovery()
 		loadMembershipPlans()
-		loadFeedDynamics()
 	})
 
 	onShow(() => {
