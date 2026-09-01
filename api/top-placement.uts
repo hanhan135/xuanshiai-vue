@@ -1,79 +1,97 @@
-import { mockTopPlacementPaymentOrders } from '@/mock/top-placement.uts'
+import { request } from './request.uts'
 
 export type TopPlacementPlan = {
-  id: string
-  name: string
-  days: number
-  price: number
-  tag: string
-  recommended: boolean
+	id: string
+	name: string
+	days: number
+	price: number
+	tag: string
+	recommended: boolean
 }
 
 export type TopPlacementOrder = {
-  orderNo: string
-  planId: string
-  planName: string
-  amount: number
-  days: number
-  purchasedAt: string
-  expiresAt: number
-  paymentStatus: string
-  remainingDays: number
+	orderNo: string
+	planId: string
+	planName: string
+	amount: number
+	days: number
+	purchasedAt: string
+	expiresAt: number
+	paymentStatus: string
+	remainingDays: number
 }
 
-const STORAGE_KEY = 'xsa_top_placement_orders_v1'
-
-function remainingDays(expiresAt: number): number {
-  if (expiresAt <= Date.now()) return 0
-  return Math.max(0, Math.ceil((expiresAt - Date.now()) / 86400000))
+function toTimestamp(value: any): number {
+	if (value == null) return 0
+	if (typeof value == 'number') return value
+	const parsed = Date.parse('' + value)
+	return isNaN(parsed) ? 0 : parsed
 }
 
-function restoreOrders(): void {
-  try {
-    const saved = uni.getStorageSync(STORAGE_KEY)
-    if (saved != null && Array.isArray(saved)) {
-      mockTopPlacementPaymentOrders.splice(0, mockTopPlacementPaymentOrders.length)
-      const records = saved as any[]
-      for (let i = 0; i < records.length; i++) mockTopPlacementPaymentOrders.push(records[i])
-    }
-  } catch (e) {}
+function mapStatus(raw: any): any {
+	const data = raw != null ? raw : {}
+	return {
+		active: data.active == true,
+		remainingDays: Number(data.remaining_days != null ? data.remaining_days : (data.remainingDays != null ? data.remainingDays : 0)),
+		expiresAt: toTimestamp(data.expires_at != null ? data.expires_at : data.expiresAt),
+		orderNo: data.order_no != null ? '' + data.order_no : (data.orderNo != null ? '' + data.orderNo : ''),
+		planName: data.plan_name != null ? '' + data.plan_name : ''
+	}
 }
 
-function persistOrders(): void {
-  try { uni.setStorageSync(STORAGE_KEY, mockTopPlacementPaymentOrders) } catch (e) {}
+function mapOrder(raw: any, plan: TopPlacementPlan): TopPlacementOrder {
+	const data = raw != null ? raw : {}
+	return {
+		orderNo: data.order_no != null ? '' + data.order_no : (data.orderNo != null ? '' + data.orderNo : ''),
+		planId: plan.id,
+		planName: plan.name,
+		amount: Number(data.amount != null ? data.amount : plan.price),
+		days: Number(data.days != null ? data.days : plan.days),
+		purchasedAt: data.created_at != null ? '' + data.created_at : new Date().toISOString(),
+		expiresAt: toTimestamp(data.expires_at != null ? data.expires_at : data.expiresAt),
+		paymentStatus: data.status != null ? '' + data.status : 'paid',
+		remainingDays: Number(data.remaining_days != null ? data.remaining_days : plan.days)
+	}
+}
+
+export async function getTopPlacementPackages() {
+	const res = await request({ url: '/boost/packages', method: 'GET' })
+	if (!res.success || res.data == null || !Array.isArray(res.data)) return res
+	const rows = res.data as any[]
+	const plans: TopPlacementPlan[] = []
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i] != null ? rows[i] : {}
+		plans.push({
+			id: row.package_code != null ? '' + row.package_code : '' + (row.code != null ? row.code : ''),
+			name: row.name != null ? '' + row.name : '置顶套餐',
+			days: Number(row.days != null ? row.days : (row.duration_days != null ? row.duration_days : 0)),
+			price: Number(row.price != null ? row.price : 0),
+			tag: row.tag != null ? '' + row.tag : '',
+			recommended: row.recommended == true
+		})
+	}
+	return { success: true, data: plans, code: res.code, message: res.message }
 }
 
 export async function getTopPlacementStatus() {
-  restoreOrders()
-  let latest: any = null
-  for (let i = 0; i < mockTopPlacementPaymentOrders.length; i++) {
-    const item = mockTopPlacementPaymentOrders[i]
-    if (item != null && item.paymentStatus == 'paid' && (latest == null || Number(item.expiresAt) > Number(latest.expiresAt))) latest = item
-  }
-  if (latest == null) return { success: true, data: { active: false, remainingDays: 0, expiresAt: 0 }, code: 0, message: '暂无置顶' }
-  const remain = remainingDays(Number(latest.expiresAt))
-  return { success: true, data: { active: remain > 0, remainingDays: remain, expiresAt: Number(latest.expiresAt), orderNo: String(latest.orderNo), planName: String(latest.planName) }, code: 0, message: remain > 0 ? '置顶生效中' : '置顶已过期' }
+	const res = await request({ url: '/users/me/boost/status', method: 'GET' })
+	if (!res.success) return res
+	return { success: true, data: mapStatus(res.data), code: res.code, message: res.message }
 }
 
 export async function payTopPlacement(plan: TopPlacementPlan) {
-  if (plan == null || plan.days <= 0 || plan.price < 0 || plan.id.length == 0) return { success: false, data: null, code: 400, message: '置顶套餐无效' }
-  restoreOrders()
-  const status = await getTopPlacementStatus()
-  const now = Date.now()
-  const baseExpiry = status.data.expiresAt > now ? status.data.expiresAt : now
-  const expiresAt = baseExpiry + plan.days * 86400000
-  const order: TopPlacementOrder = {
-    orderNo: 'MOCK-TOP-' + String(now),
-    planId: plan.id,
-    planName: plan.name,
-    amount: plan.price,
-    days: plan.days,
-    purchasedAt: new Date(now).toISOString(),
-    expiresAt: expiresAt,
-    paymentStatus: 'paid',
-    remainingDays: remainingDays(expiresAt)
-  }
-  mockTopPlacementPaymentOrders.unshift(order)
-  persistOrders()
-  return { success: true, data: order, code: 0, message: '支付成功，置顶已开启' }
+	if (plan == null || plan.id == '') return { success: false, data: null, code: 400, message: '置顶套餐无效' }
+	const orderRes = await request({
+		url: '/boost/orders',
+		method: 'POST',
+		data: { package_code: plan.id },
+		headers: { 'Idempotency-Key': 'boost-' + Date.now() + '-' + plan.id }
+	})
+	if (!orderRes.success || orderRes.data == null) return orderRes
+	const order = orderRes.data as any
+	const orderNo = order.order_no != null ? '' + order.order_no : (order.orderNo != null ? '' + order.orderNo : '')
+	if (orderNo == '') return { success: false, data: null, code: 502, message: '置顶订单号缺失' }
+	const payRes = await request({ url: '/payments/test/pay', method: 'POST', data: { order_no: orderNo, success: true } })
+	if (!payRes.success) return payRes
+	return { success: true, data: mapOrder(payRes.data != null ? payRes.data : order, plan), code: payRes.code, message: payRes.message }
 }

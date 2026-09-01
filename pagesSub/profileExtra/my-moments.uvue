@@ -24,12 +24,12 @@
 			<!-- 个人头部区域 -->
 			<view class="profile-header">
 				<!-- 背景墙 -->
-				<image class="cover-bg" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+				<image v-if="profile.cover != ''" class="cover-bg" :src="profile.cover" mode="aspectFill"></image>
 				<view class="cover-scrim"></view>
 
 				<!-- 头像（悬浮在背景墙下方） -->
 				<view class="avatar-circle">
-					<image class="avatar-img" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+					<image v-if="profile.avatar != ''" class="avatar-img" :src="profile.avatar" mode="aspectFill"></image>
 				</view>
 
 				<!-- 信息卡片 -->
@@ -157,16 +157,17 @@
 </template>
 
 <script setup lang="uts">
-import { getMyPosts, likeDynamic, deleteDynamic } from '@/api'
+import { getMyPosts, getOwnProfile, getProfileOverview, likeDynamic, deleteDynamic } from '@/api'
+import { resolveMediaUrl } from '@/api/config.uts'
 
 // 个人资料数据
 const profile = ref({
-	nickname: '苏晚晴',
-	postCount: 3,
-	likeCount: 168,
-	followingCount: 42,
-	avatar: '/static/portraits/profile-woman-main.jpg',
-	cover: '/static/portraits/profile-woman-main.jpg'
+	nickname: '',
+	postCount: 0,
+	likeCount: 0,
+	followingCount: 0,
+	avatar: '',
+	cover: ''
 })
 
 const feedList = ref<any[]>([])
@@ -177,6 +178,26 @@ const page = ref(1)
 const pageSize = 10
 const hasMore = ref(true)
 const total = ref(0)
+
+const loadProfile = async () => {
+	const profileRes = await getOwnProfile()
+	if (profileRes.success && profileRes.data != null) {
+		const data = profileRes.data as any
+		profile.value.nickname = data.nickname != null ? '' + data.nickname : ''
+		profile.value.avatar = resolveMediaUrl(data.avatar)
+		profile.value.cover = resolveMediaUrl(data.background_wall)
+		if (profile.value.cover == '' && data.photos != null && Array.isArray(data.photos) && data.photos.length > 0) {
+			const first = data.photos[0] as any
+			profile.value.cover = resolveMediaUrl(first.file_url != null ? first.file_url : first.url)
+		}
+	}
+	const overviewRes = await getProfileOverview()
+	if (overviewRes.success && overviewRes.data != null) {
+		const overview = overviewRes.data as any
+		profile.value.likeCount = overview.like_count != null ? Number(overview.like_count) : 0
+		profile.value.followingCount = overview.following_count != null ? Number(overview.following_count) : 0
+	}
+}
 
 // ========== 数据加载 ==========
 
@@ -201,6 +222,7 @@ const fetchData = async (isRefresh: boolean = false) => {
 			}
 			hasMore.value = data.hasMore == true
 			total.value = data.total != null ? (data.total as number) : 0
+			profile.value.postCount = total.value
 		}
 	} catch (e) {
 		console.error('获取我的动态失败', e)
@@ -291,6 +313,7 @@ const onDelete = (feed: any, index: number) => {
 
 // ========== 生命周期 ==========
 onMounted(() => {
+	loadProfile()
 	fetchData(true)
 })
 </script>
@@ -700,4 +723,6 @@ onMounted(() => {
 	height: 40px;
 	flex-shrink: 0;
 }
+.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nav-back-symbol { font-size: 16px; line-height: 1; color: var(--text-primary, #2C2C2C); }
 </style>

@@ -76,17 +76,17 @@ assert.ok(
   /storedMode[\s\S]*?parent[\s\S]*?uni\.reLaunch\(\{ url: '\/pages\/parent\/parent' \}\)/.test(loginPage),
   'login should replace the auth stack when entering parent mode',
 )
-const debugLoginStart = loginPage.indexOf('const handleDebugLogin = async () =>')
+const debugLoginStart = loginPage.indexOf('const handleDemoLogin = async () =>')
 const firstLoginStart = loginPage.indexOf('const handleFirstLogin =')
-assert.ok(debugLoginStart >= 0 && firstLoginStart > debugLoginStart, 'debug login handler should be complete')
+assert.ok(debugLoginStart >= 0 && firstLoginStart > debugLoginStart, 'demo login handler should be complete')
 assert.ok(
-  loginPage.slice(debugLoginStart, firstLoginStart).includes('routeAfterLogin(true)'),
-  'authenticated debug login should send a new account through role selection',
+	loginPage.slice(debugLoginStart, firstLoginStart).includes('routeAfterLogin(null, true)'),
+	'authenticated demo login should send a new account through role selection',
 )
 
 const configApi = read('api/config.uts')
 const clearAuthStart = configApi.indexOf('export function clearAuthTokens')
-const clearAuthEnd = configApi.indexOf('/** 拼接完整 HTTP URL */', clearAuthStart)
+const clearAuthEnd = configApi.indexOf('export function buildApiUrl', clearAuthStart)
 assert.ok(clearAuthStart >= 0 && clearAuthEnd > clearAuthStart, 'auth cleanup should be a complete function')
 const clearAuthBody = configApi.slice(clearAuthStart, clearAuthEnd)
 for (const key of [

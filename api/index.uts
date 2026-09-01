@@ -1,13 +1,19 @@
-/**
+﻿/**
  * API 统一导出
  * import { getRecommendUser, getMessageList } from '@/api'
  */
 
 // 认证相关
 export {
+  getProfileCompletion,
+  getAgreementVersions,
+  acceptAgreement,
   sendSms,
+  loginByExistingAccount,
   loginByPhone,
   loginByWechat,
+  bindPhone,
+  submitRealname,
   logout
 } from './auth.uts'
 
@@ -19,7 +25,9 @@ export {
   getUserDetail,
   getMeProfile,
   getOwnProfile,
+  getProfileTagOptions,
   updateOwnProfile,
+  updateOwnNickname,
   getOwnPreferences,
   updateOwnPreferences,
   uploadUserProfileMedia,
@@ -33,10 +41,38 @@ export {
   unlockUserProfile
 } from './user.uts'
 
+// 首页与我的页面的发现数据
+export {
+  getDiscoveryRecommendations,
+  getDiscoveryPlaza,
+  getProfileOverview,
+  getBrowseHistory,
+  getVisitors,
+  getUserVisitorCount,
+  getDiscoveryFavorites,
+  getReceivedFavorites,
+  getSentSuperlikes,
+  getReceivedSuperlikes,
+  getMembershipPackages,
+  searchDiscovery,
+  getOutgoingApplications,
+  getIncomingApplications,
+  acceptDiscoveryApplication,
+  rejectDiscoveryApplication
+} from './discovery.uts'
+
+export {
+  getMembershipStatus,
+  createMembershipOrder,
+  getMembershipOrder,
+  testPayOrder
+} from './membership.uts'
+
 // 消息相关
 export {
   getMessageList,
   getChatMessages,
+  getChatSessionId,
   sendMessage,
   uploadChatMedia,
   revokeMessage,
@@ -51,6 +87,16 @@ export {
   getChatPermission,
   markAllMessagesRead
 } from './message.uts'
+export {
+  ADVISOR_SCENARIOS,
+  ADVISOR_TONES,
+  createAdvisorSession,
+  getAdvisorSessions,
+  getAdvisorAdvice,
+  deleteAdvisorSession,
+  submitAdvisorFeedback,
+  advisorErrorMessage
+} from './ai-advisor.uts'
 
 export type {
   MessageSubject
@@ -170,23 +216,59 @@ export {
   getCommentReplies
 } from './community.uts'
 
+// 客服与帮助相关
+export {
+  getHelpQuickActions,
+  sendAiSupportMessage,
+  submitFeedback
+} from './help.uts'
+
+// AI 分身（当前为本地 Mock，不进入真人消息系统）
+export {
+  AI_AVATAR_STORAGE_PREFIX,
+  AI_AVATAR_OWNER_STORAGE_PREFIX,
+  AI_AVATAR_HANDOFF_DELAY,
+  getAiAvatarOwnerId,
+  saveAiAvatarProfileSnapshot,
+  getAiAvatarProfile,
+  getAiAvatarQuickQuestions,
+  getAiAvatarConversation,
+  sendAiAvatarMessage,
+  resolveAiAvatarHandoffs,
+  clearAiAvatarConversation,
+  getAiAvatarOwnerDashboard,
+  submitAiAvatarOwnerAnswer,
+  addAiAvatarOwnerAnswer,
+  deleteAiAvatarOwnerQuestion,
+  deleteAiAvatarOwnerAnswer
+} from './ai-avatar.uts'
+
+// 安全中心相关
+export {
+  getSecurityCenterData
+} from './security.uts'
+
 // 爆灯相关
 export {
   SPOTLIGHT_AMOUNT,
   paySpotlight
 } from './spotlight.uts'
 
+
 // 牵线/红娘相关
 export {
   getMockMatchmakerContact,
-  getMatchmakerBanners,
   getMatchmakerDetail,
   getServiceMatchmakers,
   getCustomMatchmakers,
+  createMatchmakerServiceProduct,
   getCustomPlans,
   getVolunteerMatchmakers,
-  getAiRecommendations,
   getCustomPackages,
+  getRegionProvinces,
+  getRegionCities,
+  createCustomServiceOrder,
+  getCustomServiceOrder,
   saveCustomServiceApplicationDraft,
   getCustomServiceApplicationDraft,
   payCustomServiceApplication,
@@ -196,3 +278,44 @@ export {
   submitPromoterApplication,
   bookMatchmaker
 } from './matchmaker.uts'
+
+
+// AI 画像相关（M04）
+export {
+  createProfileSession,
+  getProfileSession,
+  submitProfileTurn,
+  deleteProfileSession,
+  pauseProfileSession,
+  resumeProfileSession,
+  skipProfileQuestion,
+  getProfileDraft,
+  patchProfileDraft,
+  publishProfileDraft,
+  listProfileRevisions,
+  restoreProfileRevision,
+	  deleteAiProfile,
+	  pollTask,
+  pollTaskUntilTerminal,
+  pollExtractionAndLoadDraft,
+  mapProfileError,
+  transcribeAudio,
+  synthesizeSpeech,
+  getPortraitNarrative,
+  getAiConsents,
+  grantProfileTextConsent,
+  revokeProfileTextConsent,
+  fieldLabel,
+  fieldAction,
+  genIdempotencyKey
+} from './ai-profile.uts'
+
+export {
+  FIELD_KEY_LABELS,
+  ENUM_FIELDS,
+  ENUM_OPTIONS,
+  type EnumOption,
+  type ProfileSubject,
+  type FieldConfirmationStatus,
+  type FieldPatchAction
+} from './ai-profile.uts'

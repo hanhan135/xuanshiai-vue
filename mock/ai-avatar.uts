@@ -1,0 +1,117 @@
+/**
+ * AI 分身本地演示规则。
+ * 只根据调用方传入的公开资料快照生成回复，不读取真人会话或隐藏资料。
+ */
+
+export const AI_AVATAR_QUICK_QUESTIONS = [
+  { id: 'basic', label: '基本资料', prompt: '可以介绍一下你的基本资料吗？' },
+  { id: 'interest', label: '兴趣爱好', prompt: '你平时有什么兴趣爱好？' },
+  { id: 'expectation', label: '择偶标准', prompt: '你的择偶标准和关系期待是什么？' },
+  { id: 'platform', label: '平台规则', prompt: '在平台上怎样安全地认识一个人？' }
+]
+
+function firstValue(value: any, fallback: string = 'Ta 暂未填写'): string {
+  if (value == null) return fallback
+  const text = String(value).trim()
+  return text.length > 0 ? text : fallback
+}
+
+function listText(values: any, fallback: string = 'Ta 暂未填写'): string {
+  if (!Array.isArray(values) || values.length == 0) return fallback
+  const result: string[] = []
+  for (let i = 0; i < values.length; i++) {
+    const item = String(values[i]).trim()
+    if (item.length > 0 && result.indexOf(item) < 0) result.push(item)
+  }
+  return result.length > 0 ? result.join('、') : fallback
+}
+
+function includesAny(text: string, words: string[]): boolean {
+  for (let i = 0; i < words.length; i++) {
+    if (text.indexOf(words[i]) >= 0) return true
+  }
+  return false
+}
+
+function normalizeQuestion(value: any): string {
+  if (value == null) return ''
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[，。！？；：,.!?;:]/g, '')
+}
+
+function classifyQuestion(content: string): string {
+  const text = content.toLowerCase()
+  if (includesAny(text, ['平台', '规则', '认证', '实名', '举报', '安全', '联系方式', '申请认识'])) return 'platform'
+  if (includesAny(text, ['基本资料', '几岁', '年龄', '多大', '哪里人', '城市', '住哪', '工作', '职业', '学历', '身高'])) return 'basic'
+  if (includesAny(text, ['择偶', '对象', '伴侣', '另一半', '理想型', '关系期待', '婚姻', '聊天频率', '喜欢什么样的人'])) return 'expectation'
+  if (includesAny(text, ['兴趣', '爱好', '喜欢做', '周末', '平时', '动态', '旅行', '运动', '音乐', '电影', '看展', '读书', '美食'])) return 'interest'
+  if (includesAny(text, ['关系', '标准', '期待'])) return 'expectation'
+  return 'unknown'
+}
+
+export function buildMockAiAvatarReply(profile: any, content: string): any {
+  const question = content != null ? String(content).trim() : ''
+  const normalizedQuestion = normalizeQuestion(question)
+  const customAnswers = profile != null && profile.restricted !== true && Array.isArray(profile.customAnswers) ? profile.customAnswers : []
+  for (let i = 0; i < customAnswers.length; i++) {
+    const item = customAnswers[i]
+    if (item != null && normalizeQuestion(item.question) == normalizedQuestion && String(item.answer).trim() != '') {
+      return {
+        category: 'owner-answer',
+        source: 'owner-answer',
+        reply: `这是 ${firstValue(profile != null ? profile.name : null, 'Ta')} 本人补充的演示回答：${String(item.answer).trim()}`,
+        handoffRequired: false,
+        handoffStatus: 'none'
+      }
+    }
+  }
+  const category = classifyQuestion(question)
+  const name = firstValue(profile != null ? profile.name : null, 'Ta')
+  const age = firstValue(profile != null ? profile.age : null)
+  const city = firstValue(profile != null ? profile.city : null)
+  const job = firstValue(profile != null ? profile.job : null)
+  const education = firstValue(profile != null ? profile.education : null)
+  const tags = listText(profile != null ? profile.tags : null)
+  const bio = firstValue(profile != null ? profile.bio : null)
+  const interests = listText(profile != null ? profile.interests : null)
+  const expectations = listText(profile != null ? profile.expectations : null)
+
+  let reply = ''
+  if (category == 'basic') {
+    reply = `我是 ${name} 的 AI 分身。根据当前公开资料，Ta ${age} 岁，目前在 ${city} 生活，从事 ${job}，学历为 ${education}。`
+  } else if (category == 'interest') {
+    reply = `根据公开资料，${name} 的兴趣标签包括：${interests}。Ta 的自我介绍是：“${bio}”`
+  } else if (category == 'expectation') {
+    if (profile != null && profile.allowExpectations === false) {
+      reply = '这部分择偶期待当前不在你可以查看的公开资料范围内，我不会替 Ta 推测。你可以先通过申请认识，等双方同意后再慢慢了解。'
+    } else {
+      reply = `${name} 公开填写的关系期待是：${expectations}。这些内容只代表资料记录，不能替 Ta 做出同意或关系承诺。`
+    }
+  } else if (category == 'platform') {
+    reply = '平台鼓励先查看公开资料，再通过“申请认识”表达意愿；双方同意后才会开启真人聊天。请保护手机号、微信号和财产信息，遇到疑似诈骗或违规内容可以直接举报或拉黑。'
+  } else {
+    return {
+      category: 'unknown',
+      source: 'ai-avatar',
+      reply: '这个问题不在我当前掌握的公开资料范围内，我会把问题转交给 Ta。当前版本是前端演示，转交和后续回答均为模拟结果，Ta 不会收到提醒。',
+      handoffRequired: true,
+      handoffStatus: 'pending'
+    }
+  }
+
+  return {
+    category: category,
+    source: 'ai-avatar',
+    reply: reply,
+    handoffRequired: false,
+    handoffStatus: 'none'
+  }
+}
+
+export function buildMockAiAvatarPersonReply(profile: any, question: string): string {
+  const name = profile != null && profile.name != null ? String(profile.name) : 'Ta'
+  return `这是前端演示中的模拟本人回答：${name} 暂时没有把这个问题写进公开资料，之后可以在双方同意认识后直接和 Ta 沟通。我会尊重彼此节奏，也不会替 Ta 做决定。`
+}

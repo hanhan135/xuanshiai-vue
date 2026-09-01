@@ -1,0 +1,43 @@
+/** 安全中心展示数据 API。页面展示配置与社区动态数据分离。 */
+
+import { request } from './request.uts'
+import { USE_MOCK } from './config.uts'
+import { mockSecurityCenterData } from '@/mock/security'
+
+export interface SecurityHeroData {
+  title: string
+  subtitle: string
+  note: string
+}
+
+export interface SecurityGovernanceData {
+  monthLabel: string
+  totalProcessed: number
+  temporaryBans: number
+  permanentBans: number
+  warnings: number
+}
+
+export interface SecurityFraudArticle {
+  type: string
+  mark: string
+  tone: string
+  title: string
+  description: string
+}
+
+export interface SecurityCenterData {
+  hero: SecurityHeroData
+  governance: SecurityGovernanceData
+  fraudArticles: SecurityFraudArticle[]
+  aiSupportTitle: string
+  aiSupportDescription: string
+  riskNotice: string
+}
+
+export async function getSecurityCenterData() {
+  if (USE_MOCK) {
+    return Promise.resolve({ success: true, data: mockSecurityCenterData as SecurityCenterData })
+  }
+  return request({ url: '/security/center', method: 'GET' })
+}

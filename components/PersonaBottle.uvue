@@ -1,0 +1,322 @@
+<template>
+	<!-- 墨相纸笺:数字人格的容器。
+	     state: empty 空白 / mixing 落笔中 / curing 生成中 / bottled 已写成稿 / cleanup 清理中
+	     fill(0-1) 墨色高度由已确认字段数派生,禁止伪造。 -->
+	<view class="pb-bottle-wrap" @tap="emit('select')">
+		<!-- 纸面呼吸(生成中,失败不挡信息) -->
+		<view v-if="state == 'curing'" class="pb-steam-zone">
+			<view class="pb-steam pb-steam-1"></view>
+			<view class="pb-steam pb-steam-2"></view>
+			<view class="pb-steam pb-steam-3"></view>
+		</view>
+
+		<!-- 竖幅纸笺 -->
+		<view class="pb-bottle" :class="['pb-' + state, 'pb-v-' + variant, { 'pb-active': active }]">
+			<view class="pb-body">
+				<view class="pb-top-line"></view>
+				<view class="pb-liquid" :style="{ height: liquidHeight }"></view>
+				<!-- 竖排签文:已成稿写标题,其余状态写状态短语 -->
+				<view class="pb-vertical" :class="{ 'pb-vertical-light': state == 'bottled', 'pb-vertical-faint': state == 'empty' }">
+					<text v-for="(ch, index) in verticalChars" :key="index" class="pb-vertical-char">{{ ch }}</text>
+				</view>
+				<view v-if="footNote != ''" class="pb-foot">
+					<text class="pb-foot-text">{{ footNote }}</text>
+				</view>
+				<view v-if="state == 'bottled'" class="pb-seal">
+					<text class="pb-seal-text">成</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 新变化标记 -->
+		<view v-if="hasChange && state == 'bottled'" class="pb-ribbon">
+			<text class="pb-ribbon-text">{{ changeText != '' ? changeText : '新变化' }}</text>
+		</view>
+
+		<!-- 标签 -->
+		<view class="pb-label-zone">
+			<text class="pb-title">{{ title }}</text>
+			<text class="pb-sub">{{ sub }}</text>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+interface Props {
+	state?: string
+	variant?: string
+	fill?: number
+	title?: string
+	sub?: string
+	hasChange?: boolean
+	active?: boolean
+	footNote?: string
+	changeText?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+	state: 'empty',
+	variant: 'me',
+	fill: 0.08,
+	title: '',
+	sub: '',
+	hasChange: false,
+	active: false,
+	footNote: '',
+	changeText: ''
+})
+
+const emit = defineEmits<{
+	select: []
+}>()
+
+const liquidHeight = computed(() => {
+	const f = Number(props.fill)
+	const clamped = Math.min(Math.max(f, 0.06), 1)
+	return Math.round(clamped * 100) + '%'
+})
+
+/** 竖排签文:已成稿写标题,其余状态写状态短语,最多 6 字 */
+const verticalChars = computed(() => {
+	let t = ''
+	if (props.state == 'bottled') t = props.title
+	else if (props.state == 'mixing') t = '落笔中'
+	else if (props.state == 'curing') t = '正在成稿'
+	else if (props.state == 'cleanup') t = '清理中'
+	else t = '尚未落笔'
+	if (t.length > 6) t = t.substring(0, 5) + '…'
+	const out: string[] = []
+	for (let i = 0; i < t.length; i++) {
+		out.push(t.charAt(i))
+	}
+	return out
+})
+</script>
+
+<style scoped>
+.pb-bottle-wrap {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	position: relative;
+	padding-top: 22px;
+}
+
+/* ===== 纸面呼吸(生成中) ===== */
+.pb-steam-zone {
+	position: absolute;
+	top: -4px;
+	left: 0;
+	right: 0;
+	height: 28px;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	gap: 12px;
+	z-index: 2;
+	pointer-events: none;
+}
+.pb-steam {
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: radial-gradient(circle at 50% 50%, rgba(46, 36, 24, 0.18), rgba(46, 36, 24, 0) 70%);
+	animation: pb-steam-rise 3.2s ease-in-out infinite;
+}
+.pb-steam-2 { animation-delay: 0.9s; }
+.pb-steam-3 { animation-delay: 1.8s; }
+@keyframes pb-steam-rise {
+	0% { transform: translateY(8px) scale(0.7); opacity: 0; }
+	40% { opacity: 0.55; }
+	100% { transform: translateY(-10px) scale(1.2); opacity: 0; }
+}
+
+/* ===== 纸笺结构 ===== */
+.pb-body {
+	position: relative;
+	width: 104px;
+	height: 138px;
+	border-radius: 4px 4px 6px 6px;
+	background: rgba(255, 252, 245, 0.92);
+	border: 1px solid var(--at-line, #E6DAC4);
+	overflow: hidden;
+	box-shadow: 0 6px 16px rgba(46, 36, 24, 0.06);
+}
+.pb-top-line {
+	position: absolute;
+	top: 10px;
+	left: 14px;
+	right: 14px;
+	height: 1px;
+	background: var(--at-ink, #2E2418);
+	opacity: 0.55;
+	z-index: 3;
+}
+
+/* ===== 竖排签文 ===== */
+.pb-vertical {
+	position: absolute;
+	top: 22px;
+	bottom: 20px;
+	left: 0;
+	right: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	z-index: 2;
+}
+.pb-vertical-char {
+	font-size: 13px;
+	line-height: 16px;
+	font-weight: 600;
+	color: var(--at-ink, #2E2418);
+	font-family: var(--serif, serif);
+	text-align: center;
+}
+.pb-vertical-light .pb-vertical-char {
+	color: #FFF6E8;
+}
+.pb-vertical-faint .pb-vertical-char {
+	opacity: 0.28;
+}
+
+/* ===== 纸面底部小字(稿数/确认笔数) ===== */
+.pb-foot {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 5px;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	z-index: 2;
+}
+.pb-foot-text {
+	font-size: 9px;
+	line-height: 12px;
+	color: rgba(255, 246, 232, 0.85);
+	letter-spacing: 1px;
+}
+
+/* ===== 墨色填充 ===== */
+.pb-liquid {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: linear-gradient(180deg, rgba(92, 79, 61, 0.55), rgba(46, 36, 24, 0.82));
+	transition: height 0.7s cubic-bezier(0.3, 0.8, 0.4, 1);
+}
+.pb-v-ta .pb-liquid {
+	background: linear-gradient(180deg, rgba(201, 123, 87, 0.62), rgba(160, 90, 62, 0.88));
+}
+.pb-empty .pb-liquid {
+	background: linear-gradient(180deg, rgba(230, 218, 196, 0.45), rgba(214, 199, 172, 0.55));
+}
+.pb-cleanup .pb-liquid {
+	background: linear-gradient(180deg, rgba(154, 140, 119, 0.35), rgba(154, 140, 119, 0.5));
+}
+.pb-mixing .pb-liquid {
+	background: linear-gradient(180deg, rgba(92, 79, 61, 0.62), rgba(46, 36, 24, 0.88));
+	animation: pb-mix-glow 4s ease-in-out infinite;
+}
+.pb-v-ta.pb-mixing .pb-liquid {
+	background: linear-gradient(180deg, rgba(201, 123, 87, 0.7), rgba(160, 90, 62, 0.92));
+}
+@keyframes pb-mix-glow {
+	0%, 100% { opacity: 0.9; }
+	50% { opacity: 1; }
+}
+.pb-curing .pb-liquid {
+	background: linear-gradient(180deg, rgba(92, 79, 61, 0.5), rgba(46, 36, 24, 0.76));
+}
+.pb-v-ta.pb-curing .pb-liquid {
+	background: linear-gradient(180deg, rgba(201, 123, 87, 0.55), rgba(160, 90, 62, 0.8));
+}
+.pb-bottled .pb-liquid {
+	background: linear-gradient(180deg, rgba(92, 79, 61, 0.58), rgba(46, 36, 24, 0.86));
+}
+.pb-v-ta.pb-bottled .pb-liquid {
+	background: linear-gradient(180deg, rgba(201, 123, 87, 0.66), rgba(160, 90, 62, 0.9));
+}
+
+/* 朱文小印 */
+.pb-seal {
+	position: absolute;
+	top: 18px;
+	right: 10px;
+	width: 24px;
+	height: 24px;
+	border-radius: 2px;
+	background: radial-gradient(circle at 40% 35%, #C97B57, #A05A3E);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 1px 3px rgba(160, 90, 62, 0.35);
+	animation: pb-seal-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+	z-index: 4;
+}
+.pb-seal-text { font-size: 12px; color: #FFF6E8; font-weight: 700; }
+@keyframes pb-seal-in {
+	from { transform: scale(0); opacity: 0; }
+	to { transform: scale(1); opacity: 1; }
+}
+
+/* 选中态 */
+.pb-active .pb-body {
+	border-color: var(--at-amber, #B4762B);
+	box-shadow: 0 0 0 1px var(--at-amber, #B4762B), 0 6px 18px rgba(180, 118, 43, 0.16);
+}
+
+/* ===== 新变化标记 ===== */
+.pb-ribbon {
+	position: absolute;
+	top: 16px;
+	right: -6px;
+	padding: 2px 8px;
+	border-radius: 999px 999px 999px 0;
+	background: var(--at-danger, #B4543E);
+	max-width: 112px;
+	animation: pb-ribbon-pulse 2.4s ease-in-out infinite;
+}
+.pb-ribbon-text {
+	font-size: 10px;
+	color: #FFF6E8;
+	font-weight: 700;
+	max-width: 96px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+@keyframes pb-ribbon-pulse {
+	0%, 100% { transform: scale(1); opacity: 1; }
+	50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+/* ===== 标签 ===== */
+.pb-label-zone {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-top: 10px;
+	max-width: 128px;
+}
+.pb-title {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--at-ink, #2E2418);
+	font-family: var(--serif, serif);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 128px;
+}
+.pb-sub {
+	font-size: 11px;
+	color: var(--at-mist, #9A8C77);
+	margin-top: 3px;
+	text-align: center;
+	line-height: 1.4;
+}
+</style>

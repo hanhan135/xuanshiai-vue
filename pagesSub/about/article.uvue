@@ -14,7 +14,7 @@
 			<text class="empty-text">加载中...</text>
 		</view>
 
-		<view class="empty-state" v-else-if="error != ''">
+		<view class="empty-state" v-else-if="error != ''" @tap="onRetry">
 			<text class="empty-text">{{ error }}，点击重试</text>
 		</view>
 

@@ -94,14 +94,21 @@ components:
     padding: "13px"
 ---
 
+> **文档状态（2026-08-16 冻结，见 [`docs/decisions/2026-08-15-ai-phase1-contract-baseline.md`](../docs/decisions/2026-08-15-ai-phase1-contract-baseline.md) D6）：本文件是前端实现镜像，不是视觉规则事实源。**
+>
+> - **视觉规则唯一权威：[`../DESIGN.md`](../DESIGN.md)（工作区根）。** 视觉规则、Token 语义与组件语言冲突时以根文件为准。
+> - **Token 代码来源：[`uni.scss`](./uni.scss)**（见 `AGENTS.md` §4）；本文件 frontmatter 及正文中的 Token 值仅是实现快照。
+> - 本文件保留前端特有实现细节（overlays、牵线域 `--match-*` Token 等）；与根文件或 `uni.scss` 不一致时，按 根 DESIGN.md > uni.scss > 本文件 的顺序裁决，并应回报同步根文件而不是反向覆盖。
+
 ## Overview
 
 宣誓爱是一款以移动端小程序为第一目标的认真婚恋产品。视觉设计不是装饰层，而是帮助用户完成三件事：先通过**真实故事**产生理解，再通过**可信档案**降低不确定性，最后用**清晰行动**表达喜欢、申请认识或暂不继续。
 
-当前实现的视觉真相来自两处：
+当前实现的视觉真相来自：
 
 1. `uni.scss`：UniApp 的全局 Token 与通用工具类，是开发时的首要来源。
-2. `../design-demos/final/index.html` + `styles.css`：390 × 844 的交互原型，用于校准首页节奏、故事阅读顺序、Sheet / Modal 形态和动作文案；它是参考，不是继续维护的 HTML 产品。
+2. `App.uvue` 的 `page { --token: ... }`：运行时 Token 注入点，保证微信小程序 `app.wxss` 包含变量定义。
+3. 历史交互原型已退出开发链路，不再维护；如需校准首页节奏或动作文案，以当前页面源码和 Mock 为准。
 
 **场景句：** 用户在通勤、午休或夜间的手机屏幕前，用 15—30 分钟认真阅读一个人的生活片段，在决定申请认识前，希望界面安静、可信、没有被催促的感觉。
 
@@ -133,11 +140,20 @@ components:
 | `--navy` | `#18415D` | AI / 专业服务等深色功能卡片 |
 | `--sage` | `#338D6B` | 在线、已认证、成功提示 |
 | `--sage-soft` | `#C2E0CF` | 安全提示、认证背景 |
+| `--security-hero` | `#E5F7E7` | 安全中心顶部渐变起始色，与 `--paper` 过渡 |
 | `--text-invert` | `#FCFCFC` | 深色表面上的反白文字 |
 | `--bg-hover` | `#E7ECEC` | 轻悬停 / 次级底 |
 | `--bg-subtle` | `#DCE3E2` | 更浅的分区底 |
 | `--accent-bg` | `#C3DEDA` | 强调浅底 |
 | `--accent-glow` | `rgba(56, 152, 141, 0.15)` | 强调光晕 / 弱高亮 |
+| `--match-paper` | `#FFFDF8` | 牵线域纸张主表面 |
+| `--match-mist` | `#E6F0EC` | 牵线域青绿雾面弱强调底 |
+| `--match-sky` | `#E9F1F5` | 牵线域资料 / 流程浅色底 |
+| `--match-blush` | `#F9E7E8` | 牵线域关系与身份提示底 |
+| `--match-deep` | `#1B5B56` | 牵线域深青主色与高权重操作 |
+| `--match-coral` | `#C95C58` | 牵线域少量编号与提示点缀 |
+| `--match-line` | `#DBE4DF` | 牵线域纸张分隔线 |
+| `--match-shadow` | `0 12px 28px rgba(27, 91, 86, 0.09)` | 牵线域纸片层级阴影 |
 
 ### 使用规则
 
@@ -154,7 +170,7 @@ components:
 
 ## 图片与浮层 Token
 
-图片 Hero、渐变浮层、半透明底栏与阴影统一使用 uni.scss 的 --surface-overlay、--image-*、--shadow-overlay 等语义 Token，页面不得散落新的 rgba 值。
+图片 Hero、渐变浮层、半透明底栏与阴影应使用 `uni.scss` 中实际存在并经评审的语义 Token；本段旧名称 `--surface-overlay` / `--image-*` / `--shadow-overlay` 仅为历史设计意图，当前代码未完整定义，不得据此新增未评审变量或散落新的 rgba 值。
 
 ## Typography
 
@@ -230,6 +246,13 @@ components:
 - Sheet 用于筛选、完整档案和 AI 解读等可回看内容；Modal 用于申请确认、成功、双方同意等需要明确决策的场景。
 - 空状态必须说明发生了什么，并给出可选下一步；Toast 只提示结果，不承载完整业务说明。
 
+### AI 画像与语音输入
+
+- **画像页**：自定义导航 +「关于我 / 关于对方」双 Tab（底部线条变体，选中 `--accent` 描边）；构建进度条用 `--accent` 填充、`--warm` 轨道；模式选择卡（`--surface` + `--line` 边界）供用户在文字与语音间二选一；历史版本用 Sheet（上圆角 16px，内容滚动区不超过 50vh）。
+- **XsaPortraitField 字段卡**：`--surface`、12px 圆角、`--line` 细边界。状态靠徽章表达：待确认（`--accent2` 文字 + `rgba(56, 152, 141, 0.12)` 底）、已确认（`--sage`）、已拒绝（`--muted` + 70% 透明度）；置信度分高（≥0.85）/ 中（≥0.65）/ 低三档；「引用原文」为可折叠辅助区，浅底用 `--warm`；确认 / 修改 / 拒绝 / 删除按文字按钮处理，确认按钮可用 `--accent` 填充；不使用带颜色的粗 `border-left` 作为状态装饰。
+- **VoiceRecorder / VoiceWaveform**：录音键为 64px 圆形，五态——idle（`--surface`）、speaking（AI 播报，`--soft` 波形反向跳动）、listening（聆听，`--accent` 填充 + 脉动光环）、transcribing（旋转加载 + 三点弹跳）、reviewing（转写完成，`--sage`）。长按说话，上滑约 40px 拖拽取消（`--match-coral` 提示），单次录音上限 60 秒；波形由 7 根圆角柱组成，状态动画 0.4s—0.8s。
+- 语音问答的转写结果先展示文本供用户修改，确认后才作为回答提交；AI 结果用「仅供参考」说明约束确定性，不用颜色暗示结果。
+
 ### Layout / Responsive / Motion
 
 - 小程序优先，覆盖 320px—428px；内容左右内边距通常 16px，页面底部为固定操作栏预留空间。
@@ -253,6 +276,6 @@ components:
 - 不做左右快速滑动匹配，不把首页写成 Tinder 式卡片堆。
 - 不在双方同意前开放即时聊天，不展示联系方式，不弱化举报与隐私控制。
 - 不新增未经评审的颜色、字体、渐变、超大圆角、纯黑 / 纯白字面色值或装饰性玻璃卡片。
-- 不把 `../design-demos/final/` 当作继续维护的 HTML 生产入口，不新建根目录 `demo*.html`。
+- 不把历史 HTML 原型当作继续维护的生产入口，不新建根目录 `demo*.html`。
 - 不使用带颜色的粗 `border-left` / `border-right` 作为卡片装饰，不使用渐变文字、重复网格背景或无意义的编号眉题。
 - 不用“限时优惠”“马上脱单”等催促或夸大结果的文案；认真关系需要可核验、可撤回、可理解。

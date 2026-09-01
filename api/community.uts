@@ -1,7 +1,7 @@
 /**
  * 社区相关 API
  * 主 Tab：follow / city / discover；二级 filter：
- * follow=all|following|likedUsers；city=all|hot|latest；discover=all|mbti|alumni|hometown
+ * follow=all|following|likedUsers；city=all|hot|latest；discover=all|mbti|alumni
  * 互动门槛由页面侧 guardRealName 控制（仅实名）
  *
  * USE_MOCK=true 走本地 mock；false 时走 FastAPI `/api/v1`（见 config.uts）
@@ -256,7 +256,8 @@ function realNameStatusFrom(raw: any): string {
   const status = raw != null ? Number(raw) : 0
   if (status == 2) return 'passed'
   if (status == 1 || status == 4) return 'reviewing'
-  if (status == 3 || status == 5) return 'rejected'
+  if (status == 3) return 'rejected'
+  if (status == 5) return 'revoked'
   return 'missing'
 }
 
@@ -356,11 +357,6 @@ function schoolKey(raw: any): string {
   const cut = s.indexOf(' · ')
   if (cut >= 0) s = s.substring(0, cut)
   return s.trim()
-}
-
-function hometownKey(raw: any): string {
-  if (raw == null) return ''
-  return ('' + raw).trim()
 }
 
 function meProfile(): any {
@@ -486,7 +482,6 @@ function filterDynamics(tab: string, filter: string, city: string): any[] {
 
   const me = meProfile()
   const meSchool = schoolKey(me != null ? me.school : '')
-  const meHometown = hometownKey(me != null ? me.hometown : '')
 
   let filtered: any[] = all
   if (tab == 'follow') {
@@ -549,13 +544,6 @@ function filterDynamics(tab: string, filter: string, city: string): any[] {
         if (d.user == null) return false
         const s = schoolKey(d.user.school)
         return s != '' && meSchool != '' && s == meSchool
-      })
-    } else if (filter == 'hometown') {
-      filtered = filtered.filter((d: any) => {
-        if (d.user == null) return false
-        const h = hometownKey(d.user.hometown)
-        if (h == '' || meHometown == '') return false
-        return h == meHometown || h.indexOf(meHometown) >= 0 || meHometown.indexOf(h) >= 0
       })
     }
   }
@@ -860,7 +848,7 @@ function feedModeFromTab(tab: string, filter: string): any {
   }
   // discover
   let f: any = null
-  if (filter == 'mbti' || filter == 'alumni' || filter == 'hometown') f = filter
+  if (filter == 'mbti' || filter == 'alumni') f = filter
   return { mode: 'latest', filter: f, sort: 'latest', mergeLiked: false }
 }
 
@@ -3454,9 +3442,9 @@ export async function getMyPosts(query: any = null) {
   }
 
   const res = await request({
-    url: '/community/posts/mine',
+    url: '/community/posts',
     method: 'GET',
-    data: { page, page_size: pageSize }
+    data: { mode: 'mine', page, page_size: pageSize }
   })
   if (!res.success) return res
   const raw = res.data

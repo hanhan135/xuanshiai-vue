@@ -16,7 +16,12 @@
 			<view v-if="welcomeAgreementVisible" class="agreement-mask" @click="closeWelcomeAgreement">
 				<view class="agreement-dialog" @click.stop>
 					<text class="agreement-title">欢迎来到宣誓爱</text>
-					<text class="agreement-copy">为了给你更好的交友体验，请先阅读并同意用户协议与隐私政策。</text>
+					<text class="agreement-copy">为了给你更好的交友体验，请先阅读并同意</text>
+					<view class="agreement-links">
+						<text class="agreement-link" @click="openWelcomeDocument('terms')">《用户协议》</text>
+						<text class="agreement-link-copy">与</text>
+						<text class="agreement-link" @click="openWelcomeDocument('privacy')">《隐私政策》</text>
+					</view>
 					<view class="agreement-actions">
 						<button class="agreement-cancel" @click="closeWelcomeAgreement">暂不进入</button>
 						<button class="agreement-confirm" @click="acceptWelcomeAgreement">同意并继续</button>
@@ -62,9 +67,25 @@
 			</view>
 			<!-- 推荐 Tab -->
 			<scroll-view v-if="currentTab === 0" scroll-y class="content-scroll" enhanced show-scrollbar="false" @touchstart="onTouchStart" @touchend="onTouchEnd">
-				<view class="profile-card">
+				<view v-if="profileCompletionError != ''" class="completion-gate">
+					<text class="completion-gate-title">资料状态暂时无法读取</text>
+					<text class="completion-gate-copy">{{ profileCompletionError }}</text>
+					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
+				</view>
+				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
+					<view class="completion-gate-mark"><text>{{ profileCompletion }}%</text></view>
+					<text class="completion-gate-title">完善资料后，遇见更合适的人</text>
+					<text class="completion-gate-copy">请先将个人资料完善至 100%，完成后即可查看平台上的真实用户。</text>
+					<view class="completion-gate-progress"><view class="completion-gate-fill" :style="{ width: profileCompletion + '%' }"></view></view>
+					<navigator class="completion-gate-button" url="/pagesSub/userExtra/user/edit" hover-class="none"><text>去完善资料</text></navigator>
+				</view>
+				<view v-else-if="profileCompletionLoaded && recommendUsers.length === 0" class="completion-gate">
+					<text class="completion-gate-title">暂时没有新的推荐</text>
+					<text class="completion-gate-copy">你的资料已完整，我们正在为你寻找合适的真实用户，请稍后再来看看。</text>
+				</view>
+				<view v-else-if="profileCompletionLoaded" class="profile-card">
 					<view class="cover-wrap">
-						<image class="cover-img" :src="currentRecommendUser.photos != null && currentRecommendUser.photos.length > 0 ? currentRecommendUser.photos[0] : '/static/portraits/profile-woman-alt.jpg'" mode="aspectFill"></image>
+						<image class="cover-img" :src="recommendBackground != '' ? recommendBackground : currentRecommendUser.avatar" mode="aspectFill"></image>
 					</view>
 
 					<!-- 头像在 profile-card 下独立定位，不被 card-body 盖住 -->
@@ -85,32 +106,26 @@
 								<view class="dot-sep"></view>
 								<text class="basic-text">{{ currentRecommendUser.job }}</text>
 								<view class="dot-sep"></view>
-								<text class="basic-text">{{ currentRecommendUser.city }}</text>
+								<text class="basic-text">{{ locationTextByCityCode(currentRecommendUser.city) }}</text>
 							</view>
 							<view class="online-row">
 								<view class="online-dot"></view>
-								<text class="online-text">在线</text>
-								<text class="distance-text">· 距你 3.2km · 近期活跃</text>
+											<text class="online-text">{{ currentRecommendUser.online === true ? '在线' : '离线' }}</text>
+								<text class="distance-text">· 距你 {{ currentRecommendUser.distance }}km · 近期活跃</text>
 							</view>
 						</view>
 
 						<view class="tags-row">
-							<view class="tag accent-tag">
-								<view class="tag-dot"></view>
-								<text class="tag-text-accent">积极营业</text>
-							</view>
-							<view class="tag"><text class="tag-text">ENFJ</text></view>
-							<view class="tag"><text class="tag-text">颜控</text></view>
-							<view class="tag"><text class="tag-text">宠物</text></view>
-							<view class="tag"><text class="tag-text">旅行</text></view>
-							<view class="tag"><text class="tag-text">摄影</text></view>
+							<view class="tag accent-tag" v-if="currentRecommendUser.online === true"><view class="tag-dot"></view><text class="tag-text-accent">积极营业</text></view>
+							<view class="tag" v-if="currentRecommendUser.mbti != null && currentRecommendUser.mbti != ''"><text class="tag-text">{{ currentRecommendUser.mbti }}</text></view>
+							<view class="tag" v-for="tag in currentRecommendUser.interestTags" :key="tag"><text class="tag-text">{{ tag }}</text></view>
 						</view>
 
 						<view class="divider"></view>
 
 						<view class="about-section">
 							<text class="section-title">关于我</text>
-							<text class="about-content">性格温和，热爱生活～ 平时喜欢旅行探索世界，也享受宅家的宁静时光。希望遇到一个真诚、有责任心的人，一起经营温暖的小日子。相信爱情是相互成就，期待双向奔赴的美好。🌿</text>
+							<text class="about-content">{{ currentRecommendUser.bio }}</text>
 						</view>
 
 						<view class="divider"></view>
@@ -142,7 +157,7 @@
 								<view class="ring-outer">
 									<view class="ring-inner"></view>
 								</view>
-								<text class="ring-percent">92%</text>
+								<text class="ring-percent">{{ currentRecommendUser.matchScore }}%</text>
 							</view>
 							<view class="match-info">
 								<text class="match-title">AI 匹配度分析</text>
@@ -168,21 +183,7 @@
 
 						<view class="photos-section">
 							<text class="section-title">Ta的瞬间</text>
-							<image class="photo-large" src="/static/portraits/profile-woman-community.jpg" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">💭 爱情观</text>
-								<text class="qa-answer">相信爱情是两个人相互成就的旅程。期待双向奔赴的美好，一起经营温暖的小日子。不需要轰轰烈烈，但求细水长流的陪伴与理解。</text>
-							</view>
-							<image class="photo-large" src="/static/portraits/profile-man-light.jpg" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">🏃 喜欢什么运动</text>
-								<text class="qa-answer">平时喜欢瑜伽和慢跑，周末偶尔去爬山。运动让我保持身心平衡，也希望找到一起挥洒汗水的伙伴～</text>
-							</view>
-							<image class="photo-large" src="/static/portraits/profile-man-sea.jpg" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">✈️ 下一个旅行目的地</text>
-								<text class="qa-answer">想去日本的京都，感受古都的宁静与禅意。也想去冰岛看极光！如果你也喜欢旅行，我们可以一起规划下一次冒险 🌍</text>
-							</view>
+							<image v-for="photo in currentRecommendUser.photos" :key="photo" class="photo-large" :src="photo" mode="aspectFill"></image>
 						</view>
 
 						<view class="divider"></view>
@@ -237,7 +238,7 @@
 
 <view class="feed-card-footer">
 
-<text class="feed-date">2025-05-12 · 大理</text>
+							<text class="feed-date">{{ feed.timeText }} · {{ feed.location }}</text>
 
 <view class="feed-actions">
 
@@ -259,15 +260,15 @@
 
 <!-- 动态区块结束 -->
 						<view class="activity-row">
-							<text class="ic ic-home ic-dingwei activity-dot"></text><text class="activity-text"> 近期活跃 · 距你 3.2km</text>
-							<text class="viewed-text">23人看过</text>
+							<text class="ic ic-home ic-dingwei activity-dot"></text><text class="activity-text"> 近期活跃 · 距你 {{ currentRecommendUser.distance }}km</text>
+							<text class="viewed-text">{{ currentRecommendUser.viewCount > 0 ? currentRecommendUser.viewCount + '人看过' : '' }}</text>
 						</view>
 					</view>
 				</view>
 
 				<!-- 屏蔽/举报行 -->
-				<view class="block-row">
-					<text class="block-text" @click="showBlockReport">屏蔽Ta/举报Ta</text>
+				<view v-if="canShowRecommendUsers" class="block-row">
+					<view class="block-action" @tap="openReportPage"><text class="block-text">举报Ta</text></view><text class="block-divider">|</text><view class="block-action" @tap="handleBlockUser"><text class="block-text">拉黑Ta</text></view>
 				</view>
 				<view class="scroll-bottom-spacer"></view>
 			</scroll-view>
@@ -287,127 +288,128 @@
 				</view>
 
 				<view class="square-feed">
-					<view class="square-user-card" @tap="goUserDetail(2)">
+					<view v-if="squareUsers.length > 0" class="square-user-card" @tap="goUserDetail(squareAt(0).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-woman-alt.jpg" mode="aspectFill"></image>
-							<view class="vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+							<image class="sq-photo" :src="squareAt(0).avatar" mode="aspectFill"></image>
+							<view v-if="squareAt(0).is_vip === true || squareAt(0).isVip === true" class="vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">林悦</text>
-									<text class="sq-age">26岁 · 女</text>
+									<text class="sq-name">{{ squareAt(0).name }}</text>
+									<text class="sq-age">{{ squareAt(0).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 3.2km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(0).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">产品经理 · 北京</text>
+									<text class="sq-meta-text">{{ squareAt(0).job }} · {{ squareAt(0).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(2)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(0).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(1)">
+					<view v-if="squareUsers.length > 1" class="square-user-card" @tap="goUserDetail(squareAt(1).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+							<image class="sq-photo" :src="squareAt(1).avatar" mode="aspectFill"></image>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">周思涵</text>
-									<text class="sq-age">24岁 · 女</text>
+									<text class="sq-name">{{ squareAt(1).name }}</text>
+									<text class="sq-age">{{ squareAt(1).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 1.8km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(1).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">UI设计师 · 上海</text>
+									<text class="sq-meta-text">{{ squareAt(1).job }} · {{ squareAt(1).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(1)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(1).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
 					</view>
 
-					<view class="sq-section">
+					<view v-if="vipSquareUsers.length > 0" class="sq-section">
 						<view class="sq-section-header">
 							<view class="sq-section-title-group">
 								<text class="ic ic-vip ic-huiyuan sq-section-icon"></text>
 								<text class="sq-section-title">会员专区</text>
-								<text class="sq-section-count">128位</text>
+						<text class="sq-section-count">{{ vipSquareUsers.length + '位' }}</text>
 							</view>
 							<text class="sq-section-more">查看全部 ›</text>
 						</view>
 						<view class="sq-vip-row">
-							<view class="sq-vip-mini" @tap="goUserDetail(2)">
+							<view v-if="vipSquareUsers.length > 0" class="sq-vip-mini" @tap="goUserDetail(vipSquareAt(0).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" src="/static/portraits/profile-woman-community.jpg" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="vipSquareAt(0).avatar" mode="aspectFill"></image>
+									<view v-if="vipSquareAt(0).is_vip === true || vipSquareAt(0).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-											<text class="sq-vip-name">小倩</text>
-											<text class="sq-vip-detail">26岁 · 165cm</text>
+										<text class="sq-vip-name">{{ vipSquareAt(0).name }}</text>
+										<text class="sq-vip-detail">{{ vipSquareAt(0).age }}岁 · {{ vipSquareAt(0).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(2)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(0).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
-							<view class="sq-vip-mini" @tap="goUserDetail(3)">
+							<view v-if="vipSquareUsers.length > 1" class="sq-vip-mini" @tap="goUserDetail(vipSquareAt(1).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" src="/static/portraits/profile-man-light.jpg" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="vipSquareAt(1).avatar" mode="aspectFill"></image>
+									<view v-if="vipSquareAt(1).is_vip === true || vipSquareAt(1).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-											<text class="sq-vip-name">思思</text>
-											<text class="sq-vip-detail">24岁 · 168cm</text>
+										<text class="sq-vip-name">{{ vipSquareAt(1).name }}</text>
+										<text class="sq-vip-detail">{{ vipSquareAt(1).age }}岁 · {{ vipSquareAt(1).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(3)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(1).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
 						</view>
+						<text v-if="vipSquareUsers.length === 0" class="sq-section-empty">暂无会员专区资料</text>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(4)">
+					<view v-if="squareUsers.length > 4" class="square-user-card" @tap="goUserDetail(squareAt(4).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-man-sea.jpg" mode="aspectFill"></image>
+							<image class="sq-photo" :src="squareAt(4).avatar" mode="aspectFill"></image>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">陈雨晴</text>
-									<text class="sq-age">28岁 · 女</text>
+									<text class="sq-name">{{ squareAt(4).name }}</text>
+									<text class="sq-age">{{ squareAt(4).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 5.1km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(4).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">律师 · 深圳</text>
+									<text class="sq-meta-text">{{ squareAt(4).job }} · {{ squareAt(4).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(4)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(4).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(7)">
+					<view v-if="squareUsers.length > 5" class="square-user-card" @tap="goUserDetail(squareAt(5).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-woman-alt.jpg" mode="aspectFill"></image>
+							<image class="sq-photo" :src="squareAt(5).avatar" mode="aspectFill"></image>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">赵晓雯</text>
-									<text class="sq-age">25岁 · 女</text>
+									<text class="sq-name">{{ squareAt(5).name }}</text>
+									<text class="sq-age">{{ squareAt(5).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 2.5km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(5).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">医生 · 广州</text>
+									<text class="sq-meta-text">{{ squareAt(5).job }} · {{ squareAt(5).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(7)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(5).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
@@ -418,81 +420,95 @@
 							<view class="sq-section-title-group">
 								<text class="ic ic-vip ic-huiyuan sq-section-icon"></text>
 								<text class="sq-section-title">高收入专区</text>
-								<text class="sq-section-count">56位</text>
+						<text class="sq-section-count"></text>
 							</view>
 							<text class="sq-section-more">查看全部 ›</text>
 						</view>
 						<view class="sq-vip-row">
-							<view class="sq-vip-mini" @tap="goUserDetail(2)">
+							<view v-if="squareUsers.length > 6" class="sq-vip-mini" @tap="goUserDetail(squareAt(6).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" src="/static/portraits/profile-woman-community.jpg" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="squareAt(6).avatar" mode="aspectFill"></image>
+									<view v-if="squareAt(6).is_vip === true || squareAt(6).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-											<text class="sq-vip-name">杨总</text>
-											<text class="sq-vip-detail">32岁 · 182cm</text>
+											<text class="sq-vip-name">{{ squareAt(6).name }}</text>
+											<text class="sq-vip-detail">{{ squareAt(6).age }}岁 · {{ squareAt(6).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(2)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(squareAt(6).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
-							<view class="sq-vip-mini" @tap="goUserDetail(3)">
+							<view v-if="squareUsers.length > 7" class="sq-vip-mini" @tap="goUserDetail(squareAt(7).id)">
 								<view class="sq-vip-content">
-									<image class="sq-vip-photo" src="/static/portraits/profile-man-light.jpg" mode="aspectFill"></image>
-									<view class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
+									<image class="sq-vip-photo" :src="squareAt(7).avatar" mode="aspectFill"></image>
+									<view v-if="squareAt(7).is_vip === true || squareAt(7).isVip === true" class="vip-tag sq-vip-tag"><text class="ic ic-vip ic-huiyuan vip-tag-icon"></text><text class="vip-tag-text"> VIP</text></view>
 									<view class="sq-vip-info">
 										<view class="sq-vip-left">
-											<text class="sq-vip-name">海归姐</text>
-											<text class="sq-vip-detail">29岁 · 166cm</text>
+											<text class="sq-vip-name">{{ squareAt(7).name }}</text>
+											<text class="sq-vip-detail">{{ squareAt(7).age }}岁 · {{ squareAt(7).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(3)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(squareAt(7).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
 									</view></view>
 							</view>
 						</view>
+						<text v-if="squareUsers.length < 7" class="sq-section-empty">暂无高收入专区资料</text>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(6)">
+					<view class="sq-section">
+						<view class="sq-section-header">
+							<view class="sq-section-title-group">
+								<text class="ic ic-vip ic-huiyuan sq-section-icon"></text>
+								<text class="sq-section-title">高学历专区</text>
+								<text class="sq-section-count"></text>
+							</view>
+							<text class="sq-section-more">查看全部 ›</text>
+						</view>
+						<text v-if="squareUsers.length < 9" class="sq-section-empty">暂无高学历专区资料</text>
+					</view>
+
+					<view v-if="squareUsers.length > 8" class="square-user-card" @tap="goUserDetail(squareAt(8).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+							<image class="sq-photo" :src="squareAt(8).avatar" mode="aspectFill"></image>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">王梓萱</text>
-									<text class="sq-age">27岁 · 女</text>
+									<text class="sq-name">{{ squareAt(8).name }}</text>
+									<text class="sq-age">{{ squareAt(8).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 4.2km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(8).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">金融分析师 · 上海</text>
+									<text class="sq-meta-text">{{ squareAt(8).job }} · {{ squareAt(8).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(6)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(8).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
 					</view>
 
-					<view class="square-user-card" @tap="goUserDetail(1)">
+					<view v-if="squareUsers.length > 9" class="square-user-card" @tap="goUserDetail(squareAt(9).id)">
 						<view class="sq-photo-wrap">
-							<image class="sq-photo" src="/static/portraits/profile-man-sea.jpg" mode="aspectFill"></image>
+							<image class="sq-photo" :src="squareAt(9).avatar" mode="aspectFill"></image>
 						</view>
 						<view class="sq-card-info">
 							<view class="sq-left-info">
 								<view class="sq-name-row">
-									<text class="sq-name">孙悦然</text>
-									<text class="sq-age">29岁 · 女</text>
+									<text class="sq-name">{{ squareAt(9).name }}</text>
+									<text class="sq-age">{{ squareAt(9).age }}岁</text>
 								</view>
 								<view class="sq-meta-row">
-									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 6.3km</text>
+									<text class="sq-meta-text"><text class="ic ic-home ic-dingwei sq-loc-icon"></text> 距你 {{ squareAt(9).distance }}km</text>
 									<view class="sq-dot"></view>
-									<text class="sq-meta-text">建筑师 · 杭州</text>
+									<text class="sq-meta-text">{{ squareAt(9).job }} · {{ squareAt(9).city }}</text>
 								</view>
 							</view>
-							<view class="sq-like-btn" @click.stop="onLike(1)">
+							<view class="sq-like-btn" @click.stop="onLike(squareAt(9).id)">
 								<text class="ic ic-home ic-heart sq-heart"></text>
 							</view>
 						</view>
 					</view>
+					<view v-if="squareUsers.length === 0" class="square-empty-state"><text>暂无广场资料</text></view>
 				</view>
 				<view class="scroll-bottom-spacer"></view>
 			</scroll-view>
@@ -522,27 +538,17 @@
 				</view>
 
 				<view class="vip-cat-tabs">
-					<view class="vip-cat-tab" v-for="(cat, ci) in vipCategories" :key="cat" @click="switchVipCat(ci)">
-						<text :class="['vip-cat-tab-text', vipCatIndex === ci ? 'active' : '']">{{ cat }}</text>
-						<view v-if="vipCatIndex === ci" class="vip-cat-indicator"></view>
-					</view>
+					<view class="vip-cat-tab" @tap="switchVipCat(0)"><text :class="['vip-cat-tab-text', vipCatIndex === 0 ? 'active' : '']">高颜值专区</text><view v-if="vipCatIndex === 0" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(1)"><text :class="['vip-cat-tab-text', vipCatIndex === 1 ? 'active' : '']">高收入专区</text><view v-if="vipCatIndex === 1" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(2)"><text :class="['vip-cat-tab-text', vipCatIndex === 2 ? 'active' : '']">高学历专区</text><view v-if="vipCatIndex === 2" class="vip-cat-indicator"></view></view>
+					<view class="vip-cat-tab" @tap="switchVipCat(3)"><text :class="['vip-cat-tab-text', vipCatIndex === 3 ? 'active' : '']">95后专区</text><view v-if="vipCatIndex === 3" class="vip-cat-indicator"></view></view>
 				</view>
 
-				<view class="vip-filter-row">
-					<text class="vip-result-count">共128位嘉宾</text>
-					<view class="vip-filter-right">
-						<view class="vip-sort-btn">
-							<text class="vip-sort-text">综合排序</text>
-							<text class="ic ic-sys ic-xiala vip-sort-icon"></text>
-						</view>
-						<view class="vip-accelerate-btn">
-							<text class="ic ic-home ic-star vip-accel-icon"></text>
-							<text class="vip-accel-text">加速匹配</text>
-						</view>
-					</view>
+				<view v-if="vipCardRows.length > 0" class="vip-filter-row">
+					<text class="vip-result-count">{{ '共' + vipCardTotal + '位会员' }}</text>
 				</view>
 
-				<view class="vip-card-grid">
+				<view v-if="vipCardRows.length > 0" class="vip-card-grid">
 					<view class="vip-card-row" v-for="(row, ri) in vipCardRows" :key="ri">
 						<view class="vip-card-item" v-for="(card, ci) in row" :key="card.id + '-' + ci">
 							<view class="vip-card-content" @tap="goUserDetail(card.id)">
@@ -565,6 +571,7 @@
 						</view>
 					</view>
 				</view>
+				<view v-else class="square-empty-state"><text>暂无会员专区资料</text></view>
 
 				<view class="vip-privilege-section">
 					<view class="vip-priv-header">
@@ -575,37 +582,22 @@
 						</view>
 					</view>
 					<view class="vip-priv-row">
-						<view class="vip-priv-card" v-for="priv in vipPrivileges" :key="priv.title">
+						<view class="vip-priv-card">
 							<view class="vip-priv-icon-circle">
-								<text :class="priv.iconClass + ' vip-priv-icon-text'"></text>
+								<text class="ic ic-social ic-paishe vip-priv-icon-text"></text>
 							</view>
-							<text class="vip-priv-card-title">{{ priv.title }}</text>
-							<text class="vip-priv-card-desc">{{ priv.desc }}</text>
+							<text class="vip-priv-card-title">资料解锁</text>
+							<text class="vip-priv-card-desc">查看完整资料</text>
 						</view>
-					</view>
-				</view>
-
-				<view class="divider"></view>
-
-				<view class="vip-spotlight">
-					<view class="vip-spot-header">
-						<view class="vip-spot-title-group">
-							<text class="ic ic-home ic-star vip-spot-icon"></text>
-							<text class="vip-spot-title">人气爆灯嘉宾</text>
-							<text class="vip-spot-count">32人</text>
+						<view class="vip-priv-card">
+							<view class="vip-priv-icon-circle"><text class="ic ic-social ic-pinglun vip-priv-icon-text"></text></view>
+							<text class="vip-priv-card-title">深度了解</text>
+							<text class="vip-priv-card-desc">查看问答与期待</text>
 						</view>
-						<text class="vip-spot-more">查看全部 ›</text>
-					</view>
-					<text class="vip-spot-desc">爆灯后系统将短信通知对方，头像将显示在对方爆灯栏中</text>
-					<view class="vip-spot-row">
-						<view class="vip-spot-card" v-for="spot in vipSpots" :key="spot.name">
-							<view class="vip-spot-photo">
-								<text class="ic ic-social ic-touxiang vip-spot-photo-icon"></text>
-							</view>
-							<view class="vip-spot-info">
-								<text class="vip-spot-name">{{ spot.name }}</text>
-								<text class="vip-spot-age">{{ spot.age }} · {{ spot.job }}</text>
-							</view>
+						<view class="vip-priv-card">
+							<view class="vip-priv-icon-circle"><text class="ic ic-home ic-star vip-priv-icon-text"></text></view>
+							<text class="vip-priv-card-title">优先匹配</text>
+							<text class="vip-priv-card-desc">获得更多推荐机会</text>
 						</view>
 					</view>
 				</view>
@@ -615,17 +607,17 @@
 					<text class="vip-cta-desc">解锁全部会员资料 · 无限牵线次数 · 优先展示曝光</text>
 						<view class="vip-price-row">
 							<view class="vip-price-opt">
-							<text class="vip-price-period">7天</text>
-							<text class="vip-price-value">¥99</text>
+							<text class="vip-price-period">{{ planAt(0).duration }}</text>
+							<text class="vip-price-value">{{ planAt(0).price }}</text>
 						</view>
 							<view class="vip-price-opt recommended">
 							<view class="vip-price-badge"><text class="vip-price-badge-text">推荐</text></view>
-							<text class="vip-price-period">30天</text>
-							<text class="vip-price-value">¥299</text>
+							<text class="vip-price-period">{{ planAt(1).duration }}</text>
+							<text class="vip-price-value">{{ planAt(1).price }}</text>
 						</view>
 							<view class="vip-price-opt">
-							<text class="vip-price-period">90天</text>
-							<text class="vip-price-value">¥799</text>
+							<text class="vip-price-period">{{ planAt(2).duration }}</text>
+							<text class="vip-price-value">{{ planAt(2).price }}</text>
 						</view>
 					</view>
 					<view class="vip-cta-btn" @tap="openVipPage">
@@ -638,7 +630,7 @@
 			</scroll-view>
 
 			<!-- 底部操作栏（仅推荐页显示） -->
-			<view v-if="currentTab === 0" class="bottom-bar">
+			<view v-if="currentTab === 0 && canShowRecommendUsers" class="bottom-bar">
 				<view class="share-btn" @click="shareProfile">
 					<text class="ic ic-sys ic-fenxiang share-icon"></text>
 				</view>
@@ -652,7 +644,7 @@
 			</view>
 
 			<!-- AI悬浮按钮（仅推荐页显示） -->
-			<view v-if="currentTab === 0" class="ai-float-btn" @click="showAiScore">
+			<view v-if="currentTab === 0 && canShowRecommendUsers" class="ai-float-btn" @click="showAiScore">
 				<text class="ic ic-home ic-star ai-icon"></text>
 			</view>
 		</view>
@@ -663,7 +655,12 @@
 				<view class="ai-profile-note">
 					<text>完成情感实验室测试后，平台会结合双方已确认的资料生成更贴合的解读。</text>
 				</view>
-				<view class="ai-score-big"><text>92%</text></view>
+				<view class="ai-mbti-row">
+					<view class="ai-mbti-card"><text class="ai-mbti-label">你的 MBTI</text><text class="ai-mbti-type">INFP</text></view>
+					<text class="ai-mbti-x">×</text>
+					<view class="ai-mbti-card you"><text class="ai-mbti-label">TA 的 MBTI</text><text class="ai-mbti-type">{{ currentRecommendUser.mbti }}</text></view>
+				</view>
+				<view class="ai-score-big"><text>{{ currentRecommendUser.matchScore }}%</text></view>
 				<view class="ai-bars"><view v-for="b in aiBars" :key="b.label" class="ai-bar"><view class="ai-bar-head"><text>{{ b.label }}</text><text>{{ b.value }}%</text></view><view class="ai-bar-trk"><view class="ai-bar-fill" :style="{ width: b.value + '%' }"></view></view></view></view>
 				<view class="ai-tip"><text>基于公开资料与兴趣交集生成，不代表平台承诺结果。建议从共同兴趣或城市周末安排开始聊。</text></view>
 			</view>
@@ -692,19 +689,25 @@
 			<view class="apply-body"><text>认真关系从一段真诚对话开始。请注意保护隐私与财产安全。</text></view>
 		</XsaModal>
 
+		<view v-if="blockVisible" class="block-mask" @tap="blockVisible = false">
+			<view class="block-dialog" @tap.stop>
+				<view class="block-dialog-title"><text class="block-success-icon">✓</text><text>您已将 {{ blockedUserName }} 拉入黑名单</text></view>
+				<view class="block-dialog-card"><text class="block-dialog-note">黑名单中的人无法查看您的资料页</text><view class="blocked-user-row"><image :src="blockedUserAvatar" mode="aspectFill"></image><view class="blocked-user-info"><text>{{ blockedUserName }}</text><text>用户编号：{{ blockedUserId }}</text></view><view class="unblock-button" @tap="handleUnblock"><text>移除黑名单</text></view></view></view>
+				<view class="block-back-button" @tap="blockVisible = false"><text>返回</text></view>
+			</view>
+		</view>
+
 <!-- 自定义底部导航栏 -->
 
 <XsaTabBar />
 
 <!-- 每日查看配额用尽弹窗 -->
 		<XsaModal
-			:visible="quotaExhaustedVisible"
+			:visible="quotaExhaustedVisible && !welcomeVisible"
 			title="今日查看次数已用完"
-			:show-cancel="true"
-			cancel-text="积分兑换"
-			confirm-text="升级VIP"
+			:show-cancel="false"
+			confirm-text="开通会员"
 			@close="quotaExhaustedVisible = false"
-			@cancel="quotaExhaustedVisible = false"
 			@confirm="handleQuotaUpgrade"
 		>
 			<view class="apply-body">
@@ -725,9 +728,11 @@
 	import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
-	import { likeUser } from '@/api'
-	import { getAccessToken } from '@/api/config.uts'
-	import { mockRecommendUsers } from '@/mock/user.uts'
+	import { likeUser, blockUser, unblockUser } from '@/api'
+	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
+	import { getMembershipPackages } from '@/api/discovery.uts'
+	import { resolveMediaUrl } from '@/api/config.uts'
+	import locationJson from '@/static/location.json'
 	import {
 		recordProfileView,
 		resetDailyIfNeeded,
@@ -738,12 +743,20 @@
 	// ========== 欢迎页 ==========
 	const welcomeVisible = ref(true)
 	const welcomeAgreementVisible = ref(false)
+	const WELCOME_AGREEMENT_KEY = 'xsa_welcome_agreed_v2'
 
 	const showWelcomeService = () => { uni.showToast({ title: '客服功能将在完成登录后提供', icon: 'none' }) }
 	const openWelcomeAgreement = () => { welcomeAgreementVisible.value = true }
 	const closeWelcomeAgreement = () => { welcomeAgreementVisible.value = false }
+	const openWelcomeDocument = (type: string) => {
+		const url = type == 'privacy' ? '/pagesSub/about/article?type=privacy' : '/pagesSub/about/article?type=terms'
+		uni.navigateTo({ url })
+	}
 	const acceptWelcomeAgreement = () => {
+		uni.setStorageSync(WELCOME_AGREEMENT_KEY, true)
 		uni.setStorageSync('xsa_welcome_agreed', true)
+		uni.setStorageSync('xsa_login_agreed', true)
+		uni.removeStorageSync('xsa_skip_welcome_once')
 		welcomeAgreementVisible.value = false; welcomeVisible.value = false
 		uni.navigateTo({ url: '/pages/auth/login' })
 	}
@@ -773,80 +786,214 @@
 		})
 	}
 	const onHistory = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/history' }) }
-	const onSearch = () => {}
+	const onSearch = () => {
+		uni.navigateTo({
+			url: '/pagesSub/profileExtra/search',
+			fail: () => uni.showToast({ title: '搜索页面打开失败，请重试', icon: 'none' })
+		})
+	}
 
 	// ========== 推荐页数据 ==========
-	const basicInfoRows = [
+	const formatIncomeDisplay = (raw: any): string => {
+		if (raw == null || raw === '') return '未填写'
+		const text = '' + raw
+		const amount = Number(text)
+		if (!isNaN(amount) && text.trim() != '') {
+			const wan = Math.round(amount / 1000) / 10
+			return (wan % 1 == 0 ? '' + Math.round(wan) : '' + wan) + 'w'
+		}
+		return text.replace(/万/g, 'w')
+	}
+	const educationText = (raw: any): string => {
+		const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+		if (raw == null || raw === '') return '未填写'
+		const text = '' + raw
+		const level = Number(text)
+		if (!isNaN(level) && text.trim() != '') return level > 0 && level < labels.length ? labels[level] : '未填写'
+		return text
+	}
+	const dimensionText = (raw: any, unit: string): string => {
+		if (raw == null || raw === '' || Number(raw) <= 0) return '未填写'
+		const text = '' + raw
+		return text.endsWith(unit) ? text : text + unit
+	}
+	const zodiacFromBirthday = (birthday: any): string => {
+		const value = birthday != null ? '' + birthday : ''
+		if (value.length < 10) return ''
+		const month = Number(value.substring(5, 7))
+		const day = Number(value.substring(8, 10))
+		const signs = ['摩羯座', '水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座']
+		const cutoffs = [20, 19, 21, 21, 21, 22, 23, 23, 23, 23, 22, 22]
+		if (month < 1 || month > 12 || day < 1 || day > 31) return ''
+		return signs[(day < cutoffs[month - 1] ? month - 1 : month) % 12]
+	}
+	const locationTextByCityCode = (rawCode: any): string => {
+		const cityCode = rawCode != null ? '' + rawCode : ''
+		if (cityCode == '') return '未填写'
+		const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const province of provinces) {
+			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			for (const city of cities) if ('' + city.code == cityCode) return province.name + ' ' + city.name
+		}
+		return cityCode
+	}
+	const basicInfoRows = computed(() => [
 		[
-			{ label: '年龄', value: '26岁' },
-			{ label: '身高', value: '168cm' },
-			{ label: '体重', value: '52kg' }
+			{ label: '年龄', value: currentRecommendUser.value.age != null ? '' + currentRecommendUser.value.age + '岁' : '' },
+			{ label: '身高', value: dimensionText(currentRecommendUser.value.height, 'cm') },
+			{ label: '体重', value: dimensionText(currentRecommendUser.value.weight, 'kg') }
 		],
 		[
-			{ label: '星座', value: '天秤座' },
-			{ label: '学历', value: '本科' },
-			{ label: '职业', value: '产品经理' }
+			{ label: '星座', value: currentRecommendUser.value.zodiac || '' },
+			{ label: '学历', value: educationText(currentRecommendUser.value.education) },
+			{ label: '职业', value: currentRecommendUser.value.job || '' }
 		],
 		[
-			{ label: '现居', value: '北京朝阳' },
-			{ label: '家乡', value: '浙江杭州' },
-			{ label: '收入', value: '30-50万' }
+			{ label: '现居', value: locationTextByCityCode(currentRecommendUser.value.city) },
+			{ label: '家乡', value: currentRecommendUser.value.hometown || '未填写' },
+			{ label: '收入', value: formatIncomeDisplay(currentRecommendUser.value.income) }
 		]
-	]
+	])
 
 	// ========== 会员专区数据 ==========
 	const vipCatIndex = ref(0)
-	const vipCategories = ['高颜值专区', '高收入专区', '高学历专区', '95后专区']
-
-	const vipCardRows = [
-		[
-			{ id: 2, isVip: true, name: '林悦', age: '26岁', height: '165cm', gender: '女', photo: '/static/portraits/profile-woman-alt.jpg' },
-			{ id: 3, isVip: true, name: '周思涵', age: '24岁', height: '168cm', gender: '女', photo: '/static/portraits/profile-woman-main.jpg' },
-			{ id: 4, isVip: true, name: '陈雨晴', age: '28岁', height: '162cm', gender: '女', photo: '/static/portraits/profile-woman-community.jpg' }
-		],
-		[
-			{ id: 1, isVip: true, name: '赵晓雯', age: '25岁', height: '170cm', gender: '女', photo: '/static/portraits/profile-woman-main.jpg' },
-			{ id: 5, isVip: true, name: '王梓萱', age: '27岁', height: '163cm', gender: '女', photo: '/static/portraits/profile-woman-alt.jpg' },
-			{ id: 6, isVip: true, name: '张俊杰', age: '30岁', height: '180cm', gender: '男', photo: '/static/portraits/profile-man-light.jpg' }
-		],
-		[
-			{ id: 7, isVip: true, name: '李浩然', age: '29岁', height: '178cm', gender: '男', photo: '/static/portraits/profile-man-sea.jpg' },
-			{ id: 2, isVip: true, name: '孙悦然', age: '29岁', height: '166cm', gender: '女', photo: '/static/portraits/profile-woman-community.jpg' },
-			{ id: 3, isVip: true, name: '刘子轩', age: '32岁', height: '182cm', gender: '男', photo: '/static/portraits/profile-man-light.jpg' }
-		]
-	]
-
-	const vipPrivileges = [
-		{ iconClass: 'ic ic-social ic-paishe', title: 'Ta的瞬间', desc: '查看精彩生活瞬间' },
-		{ iconClass: 'ic ic-social ic-pinglun', title: 'Ta的问答怎么样', desc: '了解TA的真实想法' },
-		{ iconClass: 'ic ic-home ic-star', title: '爆灯特权', desc: '短信即时通知TA' }
-	]
-
-	const vipSpots = [
-		{ name: '黄思琪', age: '27岁', job: '空乘' },
-		{ name: '马薇薇', age: '31岁', job: '主持人' },
-		{ name: '龙斌', age: '33岁', job: '企业主' }
-	]
-
 	const switchVipCat = (index: number) => { vipCatIndex.value = index }
 
 	// ========== 推荐页过滤 + 配额 ==========
-	const filteredRecommendUsers = computed(() => mockRecommendUsers)
+	const recommendUsers = ref<any[]>([])
+	const profileCompletion = ref(0)
+	const profileCompletionLoaded = ref(false)
+	const profileCompletionError = ref('')
+	const squareUsers = ref<any[]>([])
+	const squareTotal = ref(0)
+	const membershipPlans = ref<any[]>([])
+	const planAt = (index: number): any => membershipPlans.value.length > index ? membershipPlans.value[index] : { duration: '', price: '' }
+	const squareAt = (index: number): any => squareUsers.value.length > index ? squareUsers.value[index] : {}
+	const vipSquareUsers = computed(() => squareUsers.value.filter((user: any) => user != null && (user.is_vip === true || user.isVip === true)))
+	const vipSquareAt = (index: number): any => vipSquareUsers.value.length > index ? vipSquareUsers.value[index] : {}
+	const vipUsersForCategory = computed(() => {
+		if (vipCatIndex.value === 1) return vipSquareUsers.value.filter((user: any) => Number(user.income || 0) >= 300000)
+		if (vipCatIndex.value === 2) return vipSquareUsers.value.filter((user: any) => Number(user.education_level || 0) > 0 && Number(user.education_level) <= 2)
+		if (vipCatIndex.value === 3) return vipSquareUsers.value.filter((user: any) => Number(user.age || 0) >= 27 && Number(user.age || 0) <= 31)
+		return vipSquareUsers.value
+	})
+	const toVipCard = (user: any): any => ({ id: Number(user.id || 0), name: user.name != null ? '' + user.name : '', age: user.age != null ? '' + user.age + '岁' : '', height: user.height != null ? '' + user.height + 'cm' : '', gender: user.gender != null ? '' + user.gender : '', photo: user.avatar != null ? '' + user.avatar : '' })
+	const vipCardRows = computed(() => {
+		const cards: any[] = []
+		for (let i = 0; i < vipUsersForCategory.value.length && i < 9; i++) cards.push(toVipCard(vipUsersForCategory.value[i]))
+		const rows: any[][] = []
+		for (let i = 0; i < cards.length; i += 3) rows.push(cards.slice(i, Math.min(i + 3, cards.length)))
+		return rows
+	})
+	const vipCardTotal = computed(() => vipUsersForCategory.value.length)
+	const filteredRecommendUsers = computed(() => recommendUsers.value)
+	const canShowRecommendUsers = computed(() => profileCompletionLoaded.value && profileCompletion.value >= 100 && recommendUsers.value.length > 0)
 	const currentRecommendIndex = ref(0)
+	const recommendBackground = ref('')
 	const currentRecommendUser = computed(() => {
 		const list = filteredRecommendUsers.value as any[]
-		if (list.length === 0) return (mockRecommendUsers as any[])[0]
+		if (list.length === 0) return { id: 0, name: '暂无推荐', age: 0, avatar: '', photos: [], education: '暂无数据', job: '', city: '', isVip: false }
 		return list[currentRecommendIndex.value % list.length]
 	})
+	const loadRecommendBackground = async () => {
+		const userId = Number(currentRecommendUser.value.id || 0)
+		recommendBackground.value = ''
+		if (userId <= 0) return
+		const res = await getUserDetail(userId)
+		if (!res.success || res.data == null) {
+			if (Number(res.code) == 429) showQuotaExhausted(res.message != null ? '' + res.message : '')
+			return
+		}
+		if (Number(currentRecommendUser.value.id || 0) != userId) return
+		const detail = res.data as any
+		const profile = detail.profile != null ? detail.profile : detail
+		const current = currentRecommendUser.value as any
+		const rawPhotos = profile.photos != null && Array.isArray(profile.photos) ? profile.photos as any[] : []
+		const photos = rawPhotos.map((photo: any) => {
+			if (photo != null && typeof photo === 'object') return resolveMediaUrl(photo.file_url != null ? photo.file_url : photo.url)
+			return resolveMediaUrl(photo)
+		}).filter((photo: string) => photo != '')
+		const enriched = {
+			...current,
+			avatar: profile.avatar != null && profile.avatar != '' ? resolveMediaUrl(profile.avatar) : current.avatar,
+			photos,
+			height: profile.height != null ? Number(profile.height) : current.height,
+			weight: profile.weight != null ? Number(profile.weight) : current.weight,
+			education: educationText(profile.education_level != null ? profile.education_level : current.education),
+			job: profile.occupation != null && profile.occupation != '' ? '' + profile.occupation : current.job,
+			city: profile.residence_display != null && profile.residence_display != '' ? '' + profile.residence_display : locationTextByCityCode(current.city),
+			hometown: profile.hometown_display != null && profile.hometown_display != '' ? '' + profile.hometown_display : (current.hometown != null && current.hometown != '' ? current.hometown : '未填写'),
+			income: formatIncomeDisplay(profile.income_display != null && profile.income_display != '' ? profile.income_display : (profile.income != null ? profile.income : current.income)),
+			zodiac: zodiacFromBirthday(profile.birthday) != '' ? zodiacFromBirthday(profile.birthday) : current.zodiac,
+			bio: profile.self_intro != null && profile.self_intro != '' ? '' + profile.self_intro : current.bio
+		}
+		const currentIndex = currentRecommendIndex.value % recommendUsers.value.length
+		if (currentIndex >= 0) recommendUsers.value.splice(currentIndex, 1, enriched)
+		recommendBackground.value = resolveMediaUrl(profile.background_wall)
+	}
+	const loadProfileCompletion = async (): Promise<boolean> => {
+		profileCompletionLoaded.value = false
+		profileCompletionError.value = ''
+		const response = await getProfileCompletion()
+		if (response.success && response.data != null) {
+			const data = response.data as any
+			const score = Number(data.score != null ? data.score : data.completion_score)
+			if (!isNaN(score)) {
+				profileCompletion.value = Math.max(0, Math.min(100, score))
+				profileCompletionLoaded.value = true
+				return true
+			}
+		}
+		const profileRes = await getOwnProfile()
+		if (profileRes.success && profileRes.data != null) {
+			const score = Number((profileRes.data as any).completion_score)
+			if (!isNaN(score)) {
+				profileCompletion.value = Math.max(0, Math.min(100, score))
+				profileCompletionLoaded.value = true
+				return true
+			}
+		}
+		profileCompletionError.value = '请检查登录状态和网络后重试'
+		return false
+	}
+	const loadHomeDiscovery = async () => {
+		const completionReady = await loadProfileCompletion()
+		if (!completionReady) return
+		if (profileCompletion.value < 100) {
+			recommendUsers.value = []
+			recommendBackground.value = ''
+			return
+		}
+		const recommendRes = await getDiscoveryRecommendations({ page: 1, page_size: 20 })
+		if (recommendRes.success && recommendRes.data != null) {
+			recommendUsers.value = recommendRes.data.items as any[]
+			currentRecommendIndex.value = 0
+			loadRecommendBackground()
+		}
+		const plazaRes = await getDiscoveryPlaza({ page: 1, page_size: 20 })
+		if (plazaRes.success && plazaRes.data != null) {
+			squareUsers.value = plazaRes.data.items as any[]
+			squareTotal.value = plazaRes.data.total != null ? Number(plazaRes.data.total) : squareUsers.value.length
+		}
+	}
+	const loadMembershipPlans = async () => {
+		const res = await getMembershipPackages()
+		if (!res.success || res.data == null || !Array.isArray(res.data)) return
+		const rows = res.data as any[]
+		const plans: any[] = []
+		for (let i = 0; i < rows.length; i++) {
+			const row = rows[i]
+			plans.push({ duration: row.duration_days != null ? '' + row.duration_days + '天' : '', price: row.price != null ? '¥' + row.price : '' })
+		}
+		membershipPlans.value = plans
+	}
 	const quotaExhaustedVisible = ref(false)
 	const quotaExhaustedMessage = ref('')
-	const showQuotaExhausted = () => {
-		const quota = getDailyViewQuota()
-		if (quota.isVip) {
-			quotaExhaustedMessage.value = '今日免费查看次数已用完（' + quota.total + '/' + quota.total + '），可使用积分兑换'
-} else {
-			quotaExhaustedMessage.value = '今日免费查看次数已用完（' + quota.total + '/' + quota.total + '），升级VIP享每日20次查看，或积分兑换'
-}
+	const showQuotaExhausted = (serverMessage: string = '') => {
+		const message = serverMessage.trim()
+		quotaExhaustedMessage.value = message != ''
+			? message + '。开通会员可增加每日浏览额度。'
+			: '今日完整浏览额度已用完，开通会员可增加每日浏览额度。'
 		quotaExhaustedVisible.value = true
 	}
 	const handleQuotaUpgrade = () => { quotaExhaustedVisible.value = false; uni.navigateTo({ url: '/pagesSub/profileExtra/vip' }) }
@@ -854,9 +1001,37 @@
 		if (!recordProfileView()) { showQuotaExhausted(); return }
 		const list = filteredRecommendUsers.value as any[]
 		if (list.length === 0) return
-		currentRecommendIndex.value = (currentRecommendIndex.value + 1) % list.length
+			currentRecommendIndex.value = (currentRecommendIndex.value + 1) % list.length
+		loadRecommendBackground()
 	}
-	const showBlockReport = () => { showToast('屏蔽/举报功能') }
+	const blockVisible = ref(false)
+	const blockedUserId = ref(0)
+	const blockedUserName = ref('')
+	const blockedUserAvatar = ref('')
+	const openReportPage = () => {
+		const user = currentRecommendUser.value as any
+		const userId = user != null && user.id != null ? Number(user.id) : 0
+		const userName = user != null && user.name != null ? '' + user.name : '该用户'
+		uni.navigateTo({ url: '/pagesSub/profileExtra/report?userId=' + userId + '&userName=' + encodeURIComponent(userName), fail: () => showToast('举报页面打开失败，请重试') })
+	}
+	const handleBlockUser = async () => {
+		const user = currentRecommendUser.value as any
+		const userId = user != null && user.id != null ? Number(user.id) : 0
+		blockedUserId.value = userId
+		blockedUserName.value = user.name != null ? '' + user.name : '该用户'
+		blockedUserAvatar.value = user.avatar != null ? '' + user.avatar : ''
+		blockVisible.value = true
+		if (userId <= 0) { showToast('当前为演示用户，已展示拉黑结果'); return }
+		try {
+			const res = await blockUser(userId)
+			if (!res.success) showToast(res.message != null ? '' + res.message : '已显示拉黑结果，稍后同步')
+		} catch (e) { showToast('已显示拉黑结果，网络恢复后同步') }
+	}
+	const handleUnblock = async () => {
+		const res = await unblockUser(blockedUserId.value)
+		if (res.success) { blockVisible.value = false; showToast('已移除黑名单') }
+		else showToast('移除失败，请重试')
+	}
 
 	// 左滑换一个
 	const touchStartX = ref(0)
@@ -881,10 +1056,20 @@
 	}
 
 	// Ta的动态
-	const feedDynamics = [
-		{ id: 101, avatar: '/static/portraits/profile-woman-main.jpg', name: '苏晚晴', timeText: '2小时前', location: '大理', content: '周末和朋友去了趟大理，洱海边的风真的好舒服！租了一辆小电驴环了半个岛，停下来拍照的时候，感觉整个世界都慢下来了。', photos: ['/static/portraits/profile-woman-alt.jpg', '/static/portraits/profile-woman-community.jpg'], tags: ['#旅行'], likeCount: 89, commentCount: 12 },
-		{ id: 102, avatar: '/static/portraits/profile-woman-main.jpg', name: '苏晚晴', timeText: '1天前', location: '杭州', content: '在画室泡了一整天，终于把新系列的第一幅完成了！这次尝试了新的水彩技法，颜色层次比之前丰富了很多。', photos: ['/static/portraits/profile-man-light.jpg', '/static/portraits/profile-man-sea.jpg'], tags: ['#画画', '#日常'], likeCount: 56, commentCount: 8 }
-	]
+	const feedDynamics = ref<any[]>([])
+	const loadFeedDynamics = async () => {
+		const res = await getDynamicList('discover', 1)
+		if (!res.success || res.data == null) return
+		const data = res.data as any
+		const rows = data.list != null && Array.isArray(data.list) ? data.list as any[] : (data.items != null && Array.isArray(data.items) ? data.items as any[] : [])
+		const mapped: any[] = []
+		for (let i = 0; i < rows.length; i++) {
+			const row = rows[i]
+			const author = row.user != null ? row.user : {}
+			mapped.push({ id: Number(row.id || 0), avatar: author.avatar != null ? resolveMediaUrl(author.avatar) : '', name: author.name != null ? author.name : '', timeText: row.timeText != null ? row.timeText : '', location: row.location != null ? row.location : '', content: row.content != null ? row.content : '', photos: row.photos != null && Array.isArray(row.photos) ? row.photos.map((photo: any) => resolveMediaUrl(photo)) : [], tags: row.tags != null && Array.isArray(row.tags) ? row.tags : [], likeCount: Number(row.likeCount || 0), commentCount: Number(row.commentCount || 0) })
+		}
+		feedDynamics.value = mapped
+	}
 		const viewAllFeed = () => { showToast('查看全部动态') }
 		const goPostDetail = (postId: number) => {
 			uni.navigateTo({ url: '/pagesSub/community/post-detail?id=' + postId })
@@ -892,13 +1077,16 @@
 
 	// ========== AI 合拍度 ==========
 	const aiVisible = ref(false)
-	const aiBars = [{ label: '关系目标', value: 96 }, { label: '生活节奏', value: 89 }, { label: '兴趣交集', value: 86 }]
+	const aiBars = computed(() => {
+		const score = Number(currentRecommendUser.value.matchScore || 0)
+		return [{ label: '关系目标', value: score }, { label: '生活节奏', value: score }, { label: '兴趣交集', value: score }]
+	})
 
 	const showAiScore = () => { aiVisible.value = true }
 
 	// ========== 申请认识 ==========
 	const applyVisible = ref(false)
-	const applyUserId = ref(1)
+	const applyUserId = ref(0)
 	const successVisible = ref(false)
 	const matchedVisible = ref(false)
 	const toastVisible = ref(false)
@@ -924,17 +1112,16 @@
 
 	const goMessages = () => { successVisible.value = false; uni.switchTab({ url: '/pages/message/message' }) }
 	const simulateMatch = () => { successVisible.value = false; matchedVisible.value = true }
-	const startChat = () => { matchedVisible.value = false; uni.navigateTo({ url: '/pagesSub/chat/detail?userId=user_001&userName=林悦' }) }
+	const startChat = () => { matchedVisible.value = false; const user = currentRecommendUser.value as any; uni.navigateTo({ url: '/pagesSub/chat/detail?userId=' + Number(user.id || 0) + '&userName=' + encodeURIComponent(user.name != null ? '' + user.name : '') }) }
 
 	// ========== 通用操作 ==========
-	// 推荐卡默认嘉宾 id（与 mock 动态作者对齐，便于验证关注·喜欢）
-	const recommendUserId = ref(1)
-	const goUserDetail = (userId: number = 1) => {
-		const id = userId > 0 ? userId : 1
+	const recommendUserId = computed(() => Number(currentRecommendUser.value.id || 0))
+	const goUserDetail = (userId: number = 0) => {
+		const id = Number(userId)
+		if (id <= 0) return
 		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id })
 	}
 	const shareProfile = () => { showToast('已生成分享入口') }
-	// 用户级喜欢：写入 mockLikedUserIds，供社区「关注·喜欢」使用
 	const onLike = async (userId: number = 0) => {
 		const id = userId > 0 ? userId : recommendUserId.value
 		const ok = await guardRealName('like')
@@ -958,10 +1145,9 @@
 		const pages = getCurrentPages()
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
-		const hasAuthenticatedSession = getAccessToken() != ''
-		welcomeVisible.value =
-			!hasAuthenticatedSession &&
-			(options.tab == null || options.tab == '')
+		const skipWelcomeOnce = uni.getStorageSync('xsa_skip_welcome_once') == true
+		if (skipWelcomeOnce) uni.removeStorageSync('xsa_skip_welcome_once')
+		welcomeVisible.value = !skipWelcomeOnce && (options.tab == null || options.tab == '')
 		if (options.tab != null && options.tab != '') {
 			const parsedTab = Number(options.tab)
 			if (!isNaN(parsedTab) && parsedTab >= 0 && parsedTab < navTabs.length) {
@@ -969,6 +1155,23 @@
 			}
 		}
 		resetDailyIfNeeded()
+		loadHomeDiscovery()
+		loadMembershipPlans()
+		loadFeedDynamics()
+	})
+
+	onShow(() => {
+		const freshLaunch = uni.getStorageSync('xsa_new_app_launch') == true
+		const skipWelcomeOnce = uni.getStorageSync('xsa_skip_welcome_once') == true
+		if (freshLaunch) {
+			uni.removeStorageSync('xsa_new_app_launch')
+			if (skipWelcomeOnce) uni.removeStorageSync('xsa_skip_welcome_once')
+			welcomeVisible.value = !skipWelcomeOnce
+		} else if (skipWelcomeOnce) {
+			uni.removeStorageSync('xsa_skip_welcome_once')
+			welcomeVisible.value = false
+		}
+		if (!welcomeVisible.value) loadHomeDiscovery()
 	})
 </script>
 
@@ -992,8 +1195,11 @@
 .agreement-dialog { width: 100%; padding: 22px; background: var(--paper); border-radius: 12px; }
 .agreement-title { display: block; margin-bottom: 12px; font-family: var(--serif); font-size: 20px; font-weight: 700; text-align: center; }
 .agreement-copy { display: block; font-size: 14px; line-height: 1.7; color: var(--ink2); text-align: center; }
-.agreement-actions { display: flex; gap: 8px; margin-top: 18px; }
-.agreement-cancel, .agreement-confirm { flex: 1; height: 44px; border-radius: 999px; font-size: 14px; line-height: 44px; }
+.agreement-links { display: flex; flex-direction: row; align-items: center; justify-content: center; margin-top: 2px; }
+.agreement-link { color: var(--accent2); font-size: 14px; line-height: 1.7; }
+.agreement-link-copy { color: var(--ink2); font-size: 14px; line-height: 1.7; }
+.agreement-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 18px; }
+.agreement-cancel, .agreement-confirm { flex: 1; width: 0; min-width: 0; height: 44px; margin: 0; padding: 0 6px; border-radius: 999px; font-size: 14px; line-height: 44px; }
 .agreement-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
 .agreement-confirm { border: 1px solid var(--accent); background: var(--accent); color: var(--text-invert); }
 
@@ -1157,6 +1363,7 @@
 .want-top-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
 
 .square-feed { display: flex; flex-direction: column; gap: 28rpx; }
+.square-empty-state { padding: 96rpx 24rpx; color: var(--text-muted); text-align: center; font-size: 26rpx; }
 .square-user-card { display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
 .sq-photo-wrap { width: 100%; height: 440rpx; position: relative; overflow: hidden; }
 .sq-photo { width: 100%; height: 100%; }
@@ -1180,6 +1387,7 @@
 .sq-section-title { font-size: 30rpx; font-weight: 700; color: var(--gold); }
 .sq-section-count { font-size: 24rpx; color: var(--gold); font-weight: 500; }
 .sq-section-more { font-size: 24rpx; color: var(--text-muted); }
+.sq-section-empty { padding: 12rpx 0 4rpx; color: var(--text-muted); font-size: 24rpx; text-align: center; }
 .sq-vip-row { display: flex; flex-direction: row; gap: 24rpx; }
 .sq-vip-mini { position: relative; flex: 1; display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
 .sq-vip-photo { width: 100%; height: 320rpx; }
@@ -1211,9 +1419,6 @@
 .vip-filter-row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 24rpx 0; }
 .vip-result-count { font-size: 28rpx; font-weight: 600; color: var(--text-primary); }
 .vip-filter-right { display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
-.vip-sort-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--bg-card); }
-.vip-sort-text { font-size: 24rpx; color: var(--text-secondary); }
-.vip-sort-icon { font-size: 20rpx; color: var(--text-muted); }
 .vip-accelerate-btn { display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 10rpx 20rpx; border-radius: var(--radius-full); background-color: var(--accent); }
 .vip-accel-icon { font-size: 24rpx; color: var(--text-inverse); }
 .vip-accel-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
@@ -1262,7 +1467,8 @@
 .vip-spot-desc { font-size: 24rpx; color: var(--text-muted); line-height: 1.5; }
 .vip-spot-row { display: flex; flex-direction: row; gap: 20rpx; }
 .vip-spot-card { flex: 1; display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
-.vip-spot-photo { width: 100%; height: 200rpx; background-color: var(--bg-card-soft); display: flex; align-items: center; justify-content: center; }
+.vip-spot-photo { width: 100%; height: 200rpx; overflow: hidden; background-color: var(--bg-card-soft); display: flex; align-items: center; justify-content: center; }
+.vip-spot-photo-img { width: 100%; height: 100%; }
 .vip-spot-photo-icon { font-size: 64rpx; color: var(--text-muted); }
 .vip-spot-info { display: flex; flex-direction: column; gap: 4rpx; padding: 20rpx; }
 .vip-spot-name { font-size: 26rpx; font-weight: 600; color: var(--text-primary); }
@@ -1308,9 +1514,30 @@
 /* 固定头部 */
 .sticky-header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; max-width: 750rpx; margin: 0 auto; background-color: var(--bg-primary); }
 .content-scroll { flex: 1; padding: 254rpx 32rpx 0 32rpx; }
+.completion-gate { margin-top: 28rpx; padding: 64rpx 40rpx; display: flex; flex-direction: column; align-items: center; border-radius: 32rpx; background-color: var(--bg-card); box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); text-align: center; }
+.completion-gate-mark { width: 128rpx; height: 128rpx; display: flex; align-items: center; justify-content: center; border: 10rpx solid var(--accent); border-radius: 50%; color: var(--accent-dark); font-size: 30rpx; font-weight: 800; box-sizing: border-box; }
+.completion-gate-title { margin-top: 32rpx; color: var(--text-primary); font-size: 32rpx; font-weight: 700; }
+.completion-gate-copy { margin-top: 18rpx; color: var(--text-secondary); font-size: 25rpx; line-height: 1.7; }
+.completion-gate-progress { width: 100%; height: 12rpx; margin-top: 36rpx; overflow: hidden; border-radius: 6rpx; background-color: var(--bg-card-soft); }
+.completion-gate-fill { height: 100%; border-radius: 6rpx; background-color: var(--accent); }
+.completion-gate-button { width: 100%; height: 88rpx; margin-top: 36rpx; display: flex; align-items: center; justify-content: center; border-radius: 44rpx; background-color: var(--accent); color: var(--text-inverse); font-size: 28rpx; font-weight: 700; }
 /* 屏蔽/举报行 */
-.block-row { display: flex; justify-content: center; align-items: center; width: 100%; padding: 16rpx 0 8rpx 0; }
-.block-text { font-size: 24rpx; color: var(--text-muted); }
+.block-row { display: flex; flex-direction: row; justify-content: center; align-items: center; width: 100%; padding: 16rpx 0 8rpx 0; }
+.block-action { display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 10rpx 18rpx; }
+.block-text { display: block; flex-shrink: 0; white-space: nowrap; font-size: 24rpx; color: var(--text-muted); }
+.block-divider { margin: 0 12rpx; font-size: 22rpx; color: var(--line); }
+.block-mask { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding: 30px; background: rgba(0,0,0,.58); }
+.block-dialog { width: 100%; padding: 28px 22px 22px; border-radius: 24px; background: linear-gradient(135deg, #F8FBFF, #F4F0FF); box-sizing: border-box; }
+.block-dialog-title { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; font-size: 20px; font-weight: 800; color: var(--ink); text-align: center; }
+.block-success-icon { width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: #7047F4; color: var(--text-invert); font-size: 18px; }
+.block-dialog-card { margin-top: 26px; padding: 18px 14px; border-radius: 10px; background: rgba(255,255,255,.82); }
+.block-dialog-note { display: block; text-align: center; font-size: 13px; color: var(--muted); }
+.blocked-user-row { display: flex; flex-direction: row; align-items: center; gap: 10px; margin-top: 16px; }
+.blocked-user-row image { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; }
+.blocked-user-info { flex: 1; display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--ink); }
+.blocked-user-info text:last-child { font-size: 12px; color: var(--muted); }
+.unblock-button { padding: 10px 8px; border: 2px solid #7957C9; border-radius: 6px; color: #7957C9; font-size: 12px; white-space: nowrap; }
+.block-back-button { height: 48px; margin-top: 22px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #8247F3, #4B45F4); color: var(--text-invert); font-size: 18px; font-weight: 800; }
 /* 底部操作栏 */
 
 .ai-float-btn { z-index: 55; bottom: 360rpx; }

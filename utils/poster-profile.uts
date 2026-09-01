@@ -1,0 +1,164 @@
+export type PosterProfile = {
+	id: number
+	name: string
+	age: string
+	birthYear: string
+	city: string
+	hometown: string
+	height: string
+	education: string
+	job: string
+	income: string
+	marriage: string
+	avatar: string
+	photos: string[]
+	tags: string[]
+	introduction: string
+	expectations: string[]
+	realNameVerified: boolean
+}
+
+const FALLBACK_AVATAR = '/static/portraits/profile-woman-main.jpg'
+const EMPTY_VALUE = '未填写'
+
+function textValue(source: any, key: string, fallback: string = EMPTY_VALUE): string {
+	if (source == null || source[key] == null) return fallback
+	const value = '' + source[key]
+	return value.trim().length > 0 ? value.trim() : fallback
+}
+
+function firstText(source: any, keys: string[], fallback: string = EMPTY_VALUE): string {
+	for (let i = 0; i < keys.length; i++) {
+		const value = textValue(source, keys[i], '')
+		if (value != '') return value
+	}
+	return fallback
+}
+
+function formatAge(source: any, fallback: string): string {
+	const value = firstText(source, ['age', 'ageText'], '')
+	if (value == '') return fallback
+	return value.indexOf('岁') >= 0 ? value : value + '岁'
+}
+
+function formatBirthYear(source: any, fallback: string): string {
+	const value = firstText(source, ['birthYear', 'birth_year', 'birthDate', 'birthday'], '')
+	if (value == '') return fallback
+	return value.indexOf('年') >= 0 ? value : value + '年'
+}
+
+function appendCandidate(candidates: any[], value: any) {
+	if (value == null) return
+	if (Array.isArray(value)) {
+		const values = value as any[]
+		for (let i = 0; i < values.length; i++) appendCandidate(candidates, values[i])
+		return
+	}
+	if (typeof value == 'object') {
+		const keys = Object.keys(value)
+		for (let i = 0; i < keys.length; i++) appendCandidate(candidates, value[keys[i]])
+		return
+	}
+	const text = ('' + value).trim()
+	if (text != '') candidates.push(text)
+}
+
+function normalizePhotos(source: any, avatar: string): string[] {
+	const result: string[] = []
+	if (source != null && Array.isArray(source.photos)) {
+		const rawPhotos = source.photos as any[]
+		for (let i = 0; i < rawPhotos.length; i++) {
+			if (rawPhotos[i] != null && ('' + rawPhotos[i]).trim() != '') result.push('' + rawPhotos[i])
+		}
+	}
+	if (result.length == 0 && avatar != '') result.push(avatar)
+	if (result.length == 0) result.push(FALLBACK_AVATAR)
+	return result
+}
+
+function normalizeTags(source: any): string[] {
+	const result: string[] = []
+	const rawTags = source != null && Array.isArray(source.tags) ? source.tags as any[] : []
+	for (let i = 0; i < rawTags.length && result.length < 2; i++) {
+		if (rawTags[i] != null && ('' + rawTags[i]).trim() != '') result.push(('' + rawTags[i]).trim())
+	}
+	if (result.length == 0 && source != null && Array.isArray(source.qualificationTags)) {
+		const qualificationTags = source.qualificationTags as any[]
+		for (let i = 0; i < qualificationTags.length && result.length < 2; i++) {
+			if (qualificationTags[i] != null && ('' + qualificationTags[i]).trim() != '') result.push(('' + qualificationTags[i]).trim())
+		}
+	}
+	while (result.length < 2) result.push(EMPTY_VALUE)
+	return result
+}
+
+function normalizeExpectations(source: any): string[] {
+	const candidates: any[] = []
+	if (source != null) {
+		appendCandidate(candidates, source.expect)
+		if (source.deepInfo != null) appendCandidate(candidates, source.deepInfo.idealPartner)
+		appendCandidate(candidates, source.idealPartner)
+		appendCandidate(candidates, source.expectation)
+		appendCandidate(candidates, source.expectations)
+		if (source.preferences != null) appendCandidate(candidates, source.preferences)
+	}
+	const result: string[] = []
+	for (let i = 0; i < candidates.length && result.length < 5; i++) {
+		const value = ('' + candidates[i]).trim()
+		if (value != '' && result.indexOf(value) < 0) result.push(value)
+	}
+	while (result.length < 5) result.push(EMPTY_VALUE)
+	return result
+}
+
+export function defaultPosterProfile(): PosterProfile {
+	return {
+		id: 9001,
+		name: '顾言澄',
+		age: '29岁',
+		birthYear: '未填写',
+		city: '南京',
+		hometown: '江苏南京',
+		height: EMPTY_VALUE,
+		education: '本科',
+		job: '产品经理',
+		income: EMPTY_VALUE,
+		marriage: EMPTY_VALUE,
+		avatar: '/static/portraits/profile-man-light.jpg',
+		photos: ['/static/portraits/profile-man-light.jpg', '/static/portraits/profile-man-alt.jpg', '/static/portraits/profile-man-sea.jpg'],
+		tags: [EMPTY_VALUE, EMPTY_VALUE],
+		introduction: '认真生活，也愿意为重要的人留出时间。',
+		expectations: [EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE],
+		realNameVerified: true
+	}
+}
+
+export function normalizePosterProfile(source: any): PosterProfile {
+	const fallback = defaultPosterProfile()
+	const raw = source != null && source.data != null && source.success != false ? source.data : source
+	if (raw == null) return fallback
+	const avatar = firstText(raw, ['avatar', 'avatarUrl', 'photo'], fallback.avatar)
+	const certifications = raw.certifications
+	const realNameStatus = firstText(raw, ['realNameStatus', 'realname_status'], '')
+	const realNameVerified = (certifications != null && certifications.realName == true) || raw.realNameVerified == true || realNameStatus == 'passed' || raw.realname_status == 2
+	const rawId = raw.id != null ? Number(raw.id) : fallback.id
+	return {
+		id: isNaN(rawId) ? fallback.id : rawId,
+		name: firstText(raw, ['name', 'nickname'], fallback.name),
+		age: formatAge(raw, fallback.age),
+		birthYear: formatBirthYear(raw, fallback.birthYear),
+		city: firstText(raw, ['city', 'location'], fallback.city),
+		hometown: firstText(raw, ['hometown', 'nativePlace'], fallback.hometown),
+		height: firstText(raw, ['height', 'heightText'], fallback.height),
+		education: firstText(raw, ['education', 'school'], fallback.education),
+		job: firstText(raw, ['job', 'occupation'], fallback.job),
+		income: firstText(raw, ['income', 'salary'], fallback.income),
+		marriage: firstText(raw, ['marriage', 'marriageStatus'], fallback.marriage),
+		avatar: avatar,
+		photos: normalizePhotos(raw, avatar),
+		tags: normalizeTags(raw),
+		introduction: firstText(raw, ['introduction', 'intro', 'selfIntroduction'], fallback.introduction),
+		expectations: normalizeExpectations(raw),
+		realNameVerified: realNameVerified
+	}
+}

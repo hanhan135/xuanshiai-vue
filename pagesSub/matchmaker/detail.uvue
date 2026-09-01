@@ -2,8 +2,9 @@
 	<view class="detail-page">
 		<scroll-view scroll-y class="page-scroller" :show-scrollbar="false">
 			<view class="page-content">
-				<!-- ===== 基本信息卡片 ===== -->
-				<view class="profile-card">
+				<!-- ===== 红娘资料卡：擅长领域与个人介绍连续呈现 ===== -->
+				<view class="profile-intro-card">
+					<view class="profile-card">
 					<view class="profile-main">
 						<view class="avatar-wrap">
 							<MatchmakerAvatar :src="matchmaker.avatar" :name="matchmaker.name" variant="detail" />
@@ -19,15 +20,6 @@
 							</view>
 
 							<text v-if="sloganText.length > 0" class="signature">{{ sloganText }}</text>
-
-							<!-- 评分 -->
-							<view class="rating-row">
-								<text class="stars-text">{{ starText }}</text>
-								<view class="rating-meta">
-									<text class="rating-score">{{ ratingText }}</text>
-									<text class="rating-count">({{ matchmaker.ratingCount || 0 }}评价)</text>
-								</view>
-							</view>
 
 							<!-- 服务价格 -->
 							<view v-if="matchmaker.price != null" class="price-row">
@@ -48,10 +40,6 @@
 							<text class="stat-value">{{ matchmaker.serviceCount || 0 }}</text>
 							<text class="stat-label">累计服务</text>
 						</view>
-						<view class="stat-item">
-							<text class="stat-value">{{ praiseRateText }}</text>
-							<text class="stat-label">好评率</text>
-						</view>
 					</view>
 
 					<!-- 擅长领域 -->
@@ -63,15 +51,16 @@
 							</view>
 						</view>
 					</view>
-				</view>
+					</view>
 
-				<!-- ===== 个人介绍 ===== -->
-				<view class="intro-card">
-					<text class="block-title">个人介绍</text>
-					<text class="intro-copy">{{ visibleIntroduction }}</text>
-					<view v-if="showIntroToggle" class="intro-toggle" @click="toggleIntro">
-						<text>{{ introExpanded ? '收起' : '展开全文' }}</text>
-						<text class="toggle-arrow" :class="{ up: introExpanded }">⌄</text>
+					<!-- ===== 个人介绍 ===== -->
+					<view class="intro-card">
+						<text class="block-title">个人介绍</text>
+						<text class="intro-copy">{{ visibleIntroduction }}</text>
+						<view v-if="showIntroToggle" class="intro-toggle" @click="toggleIntro">
+							<text>{{ introExpanded ? '收起' : '展开全文' }}</text>
+							<text class="toggle-arrow" :class="{ up: introExpanded }">⌄</text>
+						</view>
 					</view>
 				</view>
 
@@ -85,16 +74,11 @@
 				</view>
 
 				<scroll-view v-if="displayCases.length > 0" scroll-x enhanced :enable-flex="true" class="case-scroll" :show-scrollbar="false" @scroll="handleCaseScroll" @scrollend="handleCaseScrollEnd">
-					<view class="case-list">
+					<view class="case-list" :style="'width: ' + caseListWidth + 'rpx;'">
 						<view v-for="(item, caseIdx) in displayCases" :key="item._id || item.title" class="case-card" @click="viewCaseDetail(item)">
 							<image class="case-image" :src="item.image || item.images[0]" mode="aspectFill"></image>
 							<view class="case-body">
-								<text class="case-title">{{ item.title }}</text>
-								<text class="case-meta">{{ item.matchTime || item.meta }}</text>
-								<text class="case-copy">{{ item.matchmakerComment || item.copy }}</text>
-								<view v-if="item.tags && item.tags.length > 0" class="case-tags">
-									<text v-for="tag in (item.tags || []).slice(0, 2)" :key="tag" class="case-tag">{{ tag }}</text>
-								</view>
+								<text class="case-copy">{{ caseSummary(item.summary || item.story || item.copy || item.matchmakerComment) }}</text>
 							</view>
 						</view>
 					</view>
@@ -128,9 +112,7 @@
 								<view v-for="item in displayCases" :key="'all-' + (item._id || item.title)" class="cases-modal-card" @click="viewCaseDetail(item)">
 									<image class="cases-modal-image" :src="item.image || item.images[0]" mode="aspectFit"></image>
 									<view class="cases-modal-body">
-										<text class="cases-modal-name">{{ item.title }}</text>
-										<text class="cases-modal-meta">{{ item.matchTime || item.meta }}</text>
-										<text class="cases-modal-copy">{{ item.matchmakerComment || item.copy }}</text>
+										<text class="cases-modal-copy">{{ caseSummary(item.summary || item.story || item.copy || item.matchmakerComment) }}</text>
 									</view>
 								</view>
 							</view>
@@ -227,8 +209,6 @@ const fallbackMatchmaker = {
 	price: 199,
 	priceUnit: '次',
 	introduction: '国家三级婚姻家庭咨询师，6 年婚恋服务经验。擅长帮助第一次认真使用婚恋产品的用户梳理边界、安排见面节奏。重视资料真实性与沟通质量，不追求快速匹配，更关注双方在关系目标和生活节奏上的契合度。',
-	rating: 4.9,
-	ratingCount: 156,
 	serviceCount: 320,
 	successCount: 89,
 	phone: mockMatchmakerContact.phone,
@@ -349,26 +329,6 @@ const visibleIntroduction = computed(() => {
 
 const showIntroToggle = computed(() => fullIntroduction.value.length > 72)
 
-const starRating = computed(() => {
-	const rating = parseFloat(String(matchmaker.value.rating || '4.9'))
-	return Math.round(rating)
-})
-
-const starText = computed(() => {
-	const filledCount = Math.max(0, Math.min(5, starRating.value))
-	return '★'.repeat(filledCount) + '☆'.repeat(5 - filledCount)
-})
-
-const ratingText = computed(() => {
-	const rating = parseFloat(String(matchmaker.value.rating || '4.9'))
-	return isNaN(rating) ? '4.9' : rating.toFixed(1)
-})
-
-const praiseRateText = computed(() => {
-	const rating = parseFloat(String(matchmaker.value.rating || '4.9'))
-	return Math.round(rating / 5 * 100) + '%'
-})
-
 const phoneText = computed(() => {
 	const phone = matchmaker.value.phone
 	if (phone != null && String(phone).length > 0) return String(phone)
@@ -426,18 +386,33 @@ const toggleIntro = () => { introExpanded.value = !introExpanded.value }
 // ===== 案例滑动追踪 =====
 const currentCaseIndex = ref(0)
 let caseScrollTimer: any = null
-const caseCardStepRpx = 294
 let latestCaseScrollLeft = 0
+
+const caseListWidth = computed((): number => {
+	const count = displayCases.value.length
+	if (count <= 1) return 244
+	return count * 244 + (count - 1) * 16 + 84
+})
 
 const updateCaseIndex = (scrollLeft: number) => {
 	try {
+		const count = displayCases.value.length
+		if (count <= 1) {
+			currentCaseIndex.value = 0
+			return
+		}
 		const info = uni.getSystemInfoSync()
-		const screenWidth = info.screenWidth ?? 375
-		const cardStep = (caseCardStepRpx / 750) * screenWidth
-		if (cardStep <= 0 || displayCases.value.length == 0) return
+		const windowWidth = info.windowWidth ?? info.screenWidth ?? 375
+		const viewportWidth = ((750 - 56) / 750) * windowWidth
+		const contentWidth = (caseListWidth.value / 750) * windowWidth
+		const maxScroll = contentWidth - viewportWidth
+		if (maxScroll <= 0) {
+			currentCaseIndex.value = 0
+			return
+		}
 		// 先通过当前卡片的一半，就切换到下一页提示点；初始位置仍为第一张。
-		const rawIdx = Math.floor((scrollLeft + cardStep * 0.5) / cardStep)
-		currentCaseIndex.value = Math.max(0, Math.min(rawIdx, displayCases.value.length - 1))
+		const progress = Math.max(0, Math.min(scrollLeft / maxScroll, 1))
+		currentCaseIndex.value = Math.round(progress * (count - 1))
 	} catch (_) {
 		// 降级：不更新指示点
 	}
@@ -461,11 +436,34 @@ const handleCaseScrollEnd = (e: any) => {
 	updateCaseIndex(latestCaseScrollLeft)
 }
 // ===== 成功案例 =====
+const caseSummary = (value: any): string => {
+	const copy = value != null ? String(value).replace(/\s+/g, '').trim() : ''
+	const sentenceEnd = copy.indexOf('。')
+	const summary = sentenceEnd >= 0 ? copy.substring(0, sentenceEnd + 1) : copy
+	const maxLength = 20
+	if (summary.length <= maxLength) return summary
+
+	for (let index = maxLength - 1; index >= 8; index--) {
+		const character = summary.charAt(index)
+		if (character == '，' || character == '、' || character == '；' || character == '：') {
+			return summary.substring(0, index + 1) + '…'
+		}
+	}
+	return summary.substring(0, maxLength - 1) + '…'
+}
+
 const viewCaseDetail = (item: any) => {
 	const id = item._id || item.title || ''
+	let content = item.story || item.copy || ''
+	if (item.feedback) {
+		content += '\n\n—— 用户反馈：' + item.feedback
+	}
+	if (item.matchmakerComment) {
+		content += '\n\n—— 红娘评语：' + item.matchmakerComment
+	}
 	uni.showModal({
 		title: item.title || '案例详情',
-		content: (item.story || item.copy || '') + '\n\n—— 红娘评语：' + (item.matchmakerComment || '用心促成每一次遇见'),
+		content: content,
 		showCancel: false,
 		confirmText: '知道了'
 	})
@@ -529,17 +527,17 @@ const showToast = (msg: string) => {
 
 <style scoped>
 .detail-page {
-	--rose: #F33E78;
-	--rose-dark: #C61F58;
-	--rose-soft: #FFE4EE;
-	--rose-faint: #FFF5F9;
-	--rose-line: #FFD2E2;
+	--rose: #7EC8A0;
+	--rose-dark: #5BAF80;
+	--rose-soft: #E8F5EE;
+	--rose-faint: #F5F9F2;
+	--rose-line: #D6EBDD;
 	--gold: #F0A332;
 	--gold-soft: #FFF0CF;
 	--violet: #8B58E8;
 	--violet-soft: #EFE2FF;
-	--green: #18B866;
-	--blue: #168AEC;
+	--green: #5BAF80;
+	--blue: #7EC8A0;
 	min-height: 100vh;
 	background: linear-gradient(180deg, var(--rose-faint) 0%, var(--paper) 40%, var(--paper) 100%);
 }
@@ -555,13 +553,19 @@ const showToast = (msg: string) => {
 
 .bottom-spacer { height: 8rpx; }
 
-/* ===== 基本信息卡片 ===== */
+/* ===== 红娘资料卡 ===== */
+.profile-intro-card {
+	border-radius: 26rpx;
+	overflow: hidden;
+	background: var(--surface);
+	border: 1px solid rgba(255, 210, 226, 0.72);
+	box-shadow: 0 10rpx 34rpx rgba(198, 31, 88, 0.08);
+}
+
 .profile-card {
 	padding: 28rpx 24rpx 22rpx;
-	border-radius: 26rpx;
+	border-radius: 26rpx 26rpx 0 0;
 	background: linear-gradient(180deg, rgba(255, 228, 238, 0.86), rgba(255, 255, 255, 0.96));
-	box-shadow: 0 10rpx 34rpx rgba(198, 31, 88, 0.08);
-	border: 1px solid rgba(255, 210, 226, 0.72);
 	display: flex;
 	flex-direction: column;
 	gap: 22rpx;
@@ -634,43 +638,6 @@ const showToast = (msg: string) => {
 	color: var(--rose-dark);
 }
 
-/* 评分 */
-.rating-row {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	gap: 8rpx;
-	flex-wrap: nowrap;
-}
-
-.stars-text {
-	flex-shrink: 0;
-	font-size: 26rpx;
-	line-height: 1;
-	letter-spacing: 2rpx;
-	color: var(--gold);
-}
-
-.rating-meta {
-	display: flex;
-	flex-direction: row;
-	align-items: baseline;
-	gap: 6rpx;
-	flex-wrap: nowrap;
-	min-width: 0;
-}
-
-.rating-score {
-	font-size: 26rpx;
-	font-weight: 900;
-	color: var(--ink);
-}
-
-.rating-count {
-	font-size: 20rpx;
-	color: var(--muted);
-}
-
 /* 价格 */
 .price-row {
 	display: flex;
@@ -695,7 +662,7 @@ const showToast = (msg: string) => {
 /* 数据统计 */
 .stats-row {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
+	grid-template-columns: repeat(2, 1fr);
 	gap: 8rpx;
 	padding: 18rpx 0 0;
 	border-top: 1px solid var(--rose-line);
@@ -761,14 +728,13 @@ const showToast = (msg: string) => {
 /* ===== 个人介绍 ===== */
 .intro-card {
 	position: relative;
-	padding: 26rpx 28rpx;
-	border-radius: 22rpx;
-	background: rgba(255, 255, 255, 0.96);
-	box-shadow: 0 8rpx 26rpx rgba(17, 23, 24, 0.05);
-	border: 1px solid rgba(255, 210, 226, 0.58);
+	padding: 26rpx 24rpx 28rpx;
+	border-top: 1px solid var(--rose-line);
+	border-radius: 0 0 26rpx 26rpx;
+	background: rgba(255, 250, 252, 0.82);
 	display: flex;
 	flex-direction: column;
-	gap: 12rpx;
+	gap: 14rpx;
 }
 
 .block-title {
@@ -828,7 +794,7 @@ const showToast = (msg: string) => {
 
 .case-scroll {
 	width: 100%;
-	height: 400rpx;
+	height: 292rpx;
 	margin: -8rpx -28rpx 0;
 	padding: 8rpx 28rpx 4rpx;
 	box-sizing: border-box;
@@ -840,16 +806,15 @@ const showToast = (msg: string) => {
 	flex-direction: row;
 	flex-wrap: nowrap;
 	align-items: flex-start;
-	width: 966rpx;
-	height: 392rpx;
+	height: 284rpx;
 	box-sizing: border-box;
 	padding-right: 84rpx;
 }
 
 .case-card {
-	width: 276rpx;
-	height: 356rpx;
-	margin-right: 18rpx;
+	width: 244rpx;
+	height: 250rpx;
+	margin-right: 16rpx;
 	flex-shrink: 0;
 	white-space: normal;
 	border-radius: 16rpx;
@@ -862,23 +827,16 @@ const showToast = (msg: string) => {
 
 .case-image {
 	width: 100%;
-	height: 184rpx;
+	height: 118rpx;
 	background: var(--rose-soft);
 }
 
 .case-body {
 	flex: 1;
-	padding: 16rpx 18rpx 18rpx;
+	padding: 12rpx 14rpx 14rpx;
 	display: flex;
 	flex-direction: column;
-	gap: 8rpx;
-}
-
-.case-title {
-	font-size: 25rpx;
-	line-height: 1.25;
-	font-weight: 900;
-	color: var(--ink);
+	gap: 6rpx;
 }
 
 .case-meta {
@@ -888,10 +846,12 @@ const showToast = (msg: string) => {
 }
 
 .case-copy {
-	flex: 1;
-	font-size: 20rpx;
+	height: 54rpx;
+	font-size: 19rpx;
 	line-height: 1.4;
 	color: var(--ink2);
+	white-space: normal;
+	overflow: hidden;
 }
 
 .case-tags {
@@ -985,8 +945,6 @@ const showToast = (msg: string) => {
 
 .cases-modal-image { width: 180rpx; height: 120rpx; flex-shrink: 0; border-radius: 12rpx; background: var(--surface); }
 .cases-modal-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4rpx; }
-.cases-modal-name { font-size: 25rpx; font-weight: 900; color: var(--ink); }
-.cases-modal-meta { font-size: 19rpx; color: var(--rose-dark); font-weight: 700; }
 .cases-modal-copy { font-size: 20rpx; line-height: 1.35; color: var(--ink2); }
 
 /* ===== 服务提醒 ===== */

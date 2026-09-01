@@ -198,7 +198,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	// 二级筛选：
 	// follow: all / following / likedUsers
 	// city: all / hot / latest
-	// discover: all / mbti / alumni / hometown
+	// discover: all / mbti / alumni
 	const currentTab = ref('discover')
 	const currentFilter = ref('all')
 	const loading = ref(false)
@@ -285,7 +285,6 @@ onMounted(async () => {
 		}
 		if (currentFilter.value === 'mbti') return '暂无 MBTI 动态'
 		if (currentFilter.value === 'alumni') return '暂无校友动态'
-		if (currentFilter.value === 'hometown') return '暂无同乡动态'
 		return '暂无动态'
 	})
 
