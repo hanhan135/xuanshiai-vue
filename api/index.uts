@@ -134,6 +134,7 @@ export {
   likeComment,
   uploadMedia,
   uploadCommunityMedia,
+  getCommunityMediaStatus,
   deleteCommunityMedia,
   getPaperPlaneMessages,
   sendPaperPlaneMessage,
