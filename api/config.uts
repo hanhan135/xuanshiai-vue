@@ -3,6 +3,11 @@
 export const USE_MOCK = false
 export const API_BASE_URL = 'https://xhztest.xyz'
 export const ROLE_APPLICATION_USE_MOCK = false
+// 服务红娘管理中心后端接口接入前，保留显式演示开关；上线前必须关闭。
+export const MATCHMAKER_MANAGEMENT_CENTER_USE_MOCK = true
+// 合伙人中心后端尚未接入，所有业务读写均使用设备本地 Mock 数据。
+export const PARTNER_CENTER_USE_MOCK = true
+export const PROMOTER_CENTER_USE_MOCK = true
 export const PAPER_PLANE_CHANCE_USE_MOCK = true
 export const LAN_API_BASE_URL = 'https://xhztest.xyz'
 

@@ -24,6 +24,8 @@
 |---|---|
 | [`MOCK_API_GUIDE.md`](./MOCK_API_GUIDE.md) | 当前 Mock/API 结构与真实接口切换前提 |
 | [`COMMUNITY_HTTP_CHANGELOG.md`](./COMMUNITY_HTTP_CHANGELOG.md) | 社区 FE↔BE 联调修改记录 |
+| [`服务红娘管理中心框架开发文档.md`](./服务红娘管理中心框架开发文档.md) | 总店红娘首页框架、支付门禁和后端联调契约 |
+| [`红娘管理中心-数据看板开发文档.md`](./红娘管理中心-数据看板开发文档.md) | 8 项数据简报的固定顺序、占位规则与接口契约 |
 | [`待完成事项.md`](./待完成事项.md) | 前端未完成事项（媒体上传、端侧回归、M04 后置） |
 | [`ai-portrait-prompt.md`](./ai-portrait-prompt.md) | AI 画像提示词 |
 | [`backend-gaps-ai-portrait.md`](./backend-gaps-ai-portrait.md) | AI 画像后端缺口 |
