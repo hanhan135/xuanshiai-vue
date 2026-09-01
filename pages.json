@@ -207,9 +207,23 @@
           }
         },
         {
+          "path": "partner-center",
+          "style": {
+            "navigationBarTitleText": "合伙人中心",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "become-promoter",
           "style": {
             "navigationBarTitleText": "申请推广红娘",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "promoter-center",
+          "style": {
+            "navigationBarTitleText": "推广红娘管理中心",
             "navigationStyle": "custom"
           }
         },
