@@ -65,12 +65,26 @@ const expectedSubpackages = {
   ],
   'pagesSub/profileExtra': [
     'settings',
+    'help',
+    'security',
     'certification',
     'vip',
     'my-moments',
+    'my-tasks',
+    'my-registration',
+    'my-posters',
+    'my-poster-preview',
     'history',
     'visitors',
-    'applications'
+    'search',
+    'report',
+    'applications',
+    'favorites',
+    'spotlights',
+    'support',
+    'my-ai-avatar',
+    'my-portrait',
+    'my-portrait-master'
   ],
   'pagesSub/chat': ['detail'],
   'pagesSub/about': ['about', 'article'],
@@ -78,6 +92,7 @@ const expectedSubpackages = {
     'onboarding/profile',
     'user/detail',
     'user/edit',
+    'user/preference',
     'mytags/edit',
     'index/top-placement'
   ]

@@ -41,9 +41,9 @@ uniCloud-aliyun/      既有云函数目录，未经确认不得修改
 
 - `api/config.uts` 当前社区 1.0 验收为 `USE_MOCK = false`；其它尚未接入真实后端的模块仍保留 Mock。
 - 页面只能通过 `@/api` 获取业务数据，不直接依赖 `@/mock`。
-- `USE_MOCK = false` 不代表生产后端已经可用；切换前必须完成云函数、错误码、鉴权和接口契约联调。
+- `USE_MOCK = false` 不代表生产后端已经可用；仓库默认走测试服 `https://xhztest.xyz`，生产发布仍需正式 HTTPS 合法域名与合规验收。
 - `manifest.json`、`pages.json`、`uniCloud-aliyun/` 是受保护区域，未经明确确认不得修改。
-- `../design-demos/final/` 只作为外部视觉参考，不是生产入口。
+- 历史 HTML / design-demos 已退出开发链路，不是生产入口。
 
 ## 验证顺序
 
@@ -51,4 +51,4 @@ uniCloud-aliyun/      既有云函数目录，未经确认不得修改
 2. 使用 HBuilderX 运行到浏览器，记录第一条编译错误并完成 H5 快速回归。
 3. 使用 HBuilderX 运行到微信开发者工具，检查关键路径；H5 不能替代小程序验收。
 4. npm CLI 问题修复后，再恢复 `npm run build:h5` / `npm run build:mp-weixin` 为提交门禁。
-5. 按 [`docs/开发自检清单.md`](./docs/开发自检清单.md) 完成提交前自检。
+5. 提交前按 [`AGENTS.md`](./AGENTS.md) 第 6 节做结构测试、`git diff --check` 与微信小程序关键路径回归。

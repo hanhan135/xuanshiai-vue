@@ -10,7 +10,7 @@ function read(file) {
   if (!fs.existsSync(target)) {
     throw new Error(`${file}: file is missing`)
   }
-  return fs.readFileSync(target, 'utf8')
+  return fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n')
 }
 
 function expect(content, fragment, label) {

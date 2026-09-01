@@ -4,139 +4,69 @@
 			<text class="state-title">正在加载资料</text>
 			<text class="state-description">请稍候，正在读取最新信息</text>
 		</view>
-		<XsaEmpty
-			v-else-if="detailError != ''"
-			text="资料暂时无法打开"
-			:description="detailError"
-			:show-action="true"
-			action-text="重试"
-			@action="load"
-		/>
+		<view v-else-if="detailError != ''" class="error-state">
+			<view class="error-mark"><text>!</text></view>
+			<text class="error-title">{{ detailQuotaExhausted ? '今日浏览额度已用完' : '资料暂时无法打开' }}</text>
+			<text class="error-description">{{ detailError }}</text>
+			<text class="error-hint">{{ detailQuotaExhausted ? '开通会员可增加每日浏览额度' : '请检查网络后重试' }}</text>
+			<view class="error-actions">
+				<view class="error-retry" @tap="handleDetailErrorAction"><text>{{ detailQuotaExhausted ? '开通会员' : '重新加载' }}</text></view>
+				<view class="error-cancel" @tap="onBack"><text>返回</text></view>
+			</view>
+		</view>
 		<scroll-view v-else scroll-y class="detail-scroll" enhanced show-scrollbar="false">
-			<view v-if="!isLockedView" class="ordinary-detail-page">
-				<view class="ordinary-profile-card">
-					<view class="ordinary-cover">
-						<image class="ordinary-cover-img" :src="user.photos[0]" mode="aspectFill"></image>
-						<view class="cover-actions">
-							<view class="round-action" @tap="onBack"><text class="round-action-text">←</text></view>
-							<view v-if="!isPreview" class="round-action" @tap="onShare"><text class="round-action-text share-symbol">↗</text></view>
-						</view>
-						<view class="ordinary-cover-user">
-							<image class="ordinary-avatar" :src="user.avatar" mode="aspectFill"></image>
-							<view class="ordinary-cover-copy">
-								<view class="ordinary-name-row">
-									<text class="ordinary-name">{{ user.name }}，{{ user.age }}岁</text>
-									<view v-if="user.isVIP" class="vip-badge"><text class="vip-badge-text">VIP</text></view>
-								</view>
-								<text class="ordinary-cover-meta">{{ user.edu }} · {{ user.job }} · {{ user.city }}</text>
-								<text class="ordinary-active">{{ user.online }} · {{ user.distance }}</text>
+			<view v-if="!isLockedView" class="vip-detail-page">
+				<view class="vip-cover-area">
+					<image class="vip-cover-img" :src="user.cover != '' ? user.cover : user.avatar" mode="aspectFill"></image>
+					<view class="vip-avatar-circle"><image class="vip-avatar" :src="user.avatar" mode="aspectFill"></image></view>
+				</view>
+
+				<view class="vip-profile-header">
+					<view class="vip-name-row">
+						<view class="vip-name-group"><text class="vip-name">{{ user.name }}</text><text class="vip-age">{{ user.age }}岁</text></view>
+						<view v-if="user.isVIP" class="vip-badge vip-badge-large"><text class="vip-crown">♛</text><text class="vip-badge-text">VIP会员</text></view>
+					</view>
+					<text class="vip-meta">{{ user.job }} · {{ user.edu }}　{{ user.city }}　<text class="online-text">{{ user.online }}</text></text>
+					<text v-if="visitorCount != null" class="visitor-count-text">已有 {{ visitorCount }} 人看过 Ta</text>
+					<view v-if="user.tags.length > 0" class="tag-row"><view v-for="tag in user.tags" :key="tag" class="profile-tag"><text class="profile-tag-text">{{ tag }}</text></view></view>
+					<text v-if="user.bio != ''" class="vip-bio">{{ user.bio }}</text>
+				</view>
+
+				<view class="vip-detail-content">
+					<view class="vip-section-card">
+						<text class="vip-section-title">基础资料</text>
+						<view class="basic-info-grid">
+							<view v-for="(row, ri) in user.basicInfo" :key="ri" class="basic-info-row">
+								<view v-for="(item, ii) in row" :key="ii" class="basic-info-cell"><text class="basic-info-label">{{ item.label }}</text><text class="basic-info-value">{{ item.value }}</text></view>
 							</view>
 						</view>
 					</view>
 
-					<view class="ordinary-card-body">
-						<view class="ordinary-section about-me-section">
-							<text class="ordinary-section-title">关于我</text>
-							<view class="tag-row">
-								<view v-for="tag in user.tags" :key="tag" class="profile-tag"><text class="profile-tag-text">{{ tag }}</text></view>
-							</view>
-							<text class="about-text">{{ user.bio }}</text>
-							<view class="cert-summary">
-								<text class="cert-summary-label">已认证：</text>
-								<text v-for="cert in certs" :key="cert.label" class="cert-summary-item">✓ {{ cert.shortLabel }}</text>
-							</view>
-						</view>
+					<view v-if="certs.length > 0" class="vip-section-card">
+						<text class="vip-section-title">认证信息</text>
+						<view v-for="cert in certs" :key="cert.label" class="cert-item"><view class="cert-icon-wrap"><text class="cert-icon">{{ cert.icon }}</text></view><view class="cert-copy"><text class="cert-label">{{ cert.label }}</text><text class="cert-desc">{{ cert.desc }}</text></view><text class="cert-check">✓</text></view>
+					</view>
 
-						<view class="ai-match-section">
-							<view class="match-score"><text class="match-score-value">{{ user.match }}%</text></view>
-							<view class="match-copy">
-								<text class="match-title">AI 匹配度分析</text>
-								<text class="match-desc">MBTI高度契合 · 兴趣重合度高 · 三观相近</text>
-							</view>
-						</view>
+					<view v-if="user.lifePhotos.length > 0" class="vip-section-card">
+						<text class="vip-section-title">Ta的瞬间</text>
+						<image v-for="(photo, index) in user.lifePhotos" :key="index" class="moment-hero" :src="photo" mode="aspectFill"></image>
+					</view>
 
-						<view class="ordinary-section basic-info-section">
-							<text class="ordinary-section-title">基础资料</text>
-							<view class="basic-info-grid">
-								<view v-for="(row, ri) in user.basicInfo" :key="ri" class="basic-info-row">
-									<view v-for="(item, ii) in row" :key="ii" class="basic-info-cell">
-										<text class="basic-info-label">{{ item.label }}</text>
-										<text class="basic-info-value">{{ item.value }}</text>
-									</view>
-								</view>
-							</view>
-						</view>
+					<view v-if="user.expect.length > 0" class="vip-section-card">
+						<text class="vip-section-title">Ta的期待</text>
+						<view v-for="(item, index) in user.expect" :key="index" class="qa-card"><text class="qa-answer">{{ item }}</text></view>
+					</view>
 
-						<view class="ordinary-section moments-section">
-							<text class="ordinary-section-title">Ta的瞬间</text>
-							<image class="moment-hero" :src="user.lifePhotos[0]" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">💭 爱情观</text>
-								<text class="qa-answer">{{ user.expect[0] }}。相信爱情是两个人相互成就的旅程，期待细水长流的陪伴与理解。</text>
-							</view>
-							<image class="moment-hero" :src="user.lifePhotos[1]" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">🏃 喜欢什么运动</text>
-								<text class="qa-answer">平时喜欢瑜伽和慢跑，周末偶尔去爬山。运动让我保持身心平衡，也期待遇到可以一起挥洒汗水的伙伴。</text>
-							</view>
-							<image class="moment-hero" :src="user.lifePhotos[2]" mode="aspectFill"></image>
-							<view class="qa-card">
-								<text class="qa-question">✈️ 下一个旅行目的地</text>
-								<text class="qa-answer">想去京都感受古都的宁静，也想去冰岛看极光。如果你也喜欢旅行，我们可以一起规划下一次冒险。</text>
-							</view>
-						</view>
-
-						<view class="ordinary-section dynamics-section">
-							<view class="section-heading-row">
-								<text class="ordinary-section-title">Ta的动态</text>
-								<text class="section-more">查看全部 ›</text>
-							</view>
-							<view v-for="item in dynamics" :key="item.id" class="dynamic-card">
-								<view class="dynamic-user-row">
-									<image class="dynamic-avatar" :src="user.avatar" mode="aspectFill"></image>
-									<view class="dynamic-user-copy"><text class="dynamic-name">{{ user.name }}</text><text class="dynamic-time">{{ item.time }}</text></view>
-								</view>
-								<text class="dynamic-content">{{ item.content }}</text>
-								<image class="dynamic-photo" :src="item.photo" mode="aspectFill"></image>
-								<view class="dynamic-footer"><text class="dynamic-topic">{{ item.topic }}</text><text class="dynamic-count">♡ {{ item.likes }}　◌ {{ item.comments }}</text></view>
-							</view>
-							<view class="more-dynamics"><text class="more-dynamics-text">查看更多动态</text></view>
-						</view>
-
-													<view class="ordinary-section spotlight-section">
-								<view class="section-heading-row">
-									<view class="spot-heading-left"><text class="spot-light-icon">💡</text><text class="ordinary-section-title">爆灯嘉宾</text><text class="spot-count">32人</text></view>
-									<text class="section-more">查看全部 ›</text>
-								</view>
-								<view class="visitor-row">
-									<view v-for="visitor in visitors" :key="visitor.name" class="visitor-avatar"><image class="visitor-img" :src="visitor.avatar" mode="aspectFill"></image></view>
-									<text class="visitor-more">+26人</text>
-								</view>
-								<text class="spot-desc">非常中意Ta？爆灯后系统将立即短信通知对方，您的头像将显示在爆灯栏，让Ta第一时间注意到你！</text>
-								<view class="spot-benefits">
-									<view class="spot-benefit"><text class="spot-benefit-icon">▣</text><text class="spot-benefit-title">快速触达</text><text class="spot-benefit-desc">即时短信通知</text></view>
-									<view class="spot-benefit"><text class="spot-benefit-icon">♙</text><text class="spot-benefit-title">展示曝光</text><text class="spot-benefit-desc">头像展示在爆灯栏</text></view>
-									<view class="spot-benefit"><text class="spot-benefit-icon">♥</text><text class="spot-benefit-title">增加好感</text><text class="spot-benefit-desc">更容易被留意</text></view>
-								</view>
-								<view class="spot-price"><text class="spot-price-label">单次爆灯</text><text class="spot-price-value">¥9.9</text><text class="spot-price-unit">/次</text></view>
-							<view class="spotlight-button" @tap="onSpotlight"><text class="spotlight-button-text">💡 我要爆灯</text></view>
-							</view>
-
-							<view class="activity-row">
-							<text class="activity-text">● {{ user.recentActivity }} · {{ user.distance }}</text>
-							<text class="viewed-text">23人看过</text>
-						</view>
+					<view v-if="dynamics.length > 0" class="vip-section-card">
+						<view class="section-heading-row"><text class="vip-section-title">Ta的动态</text><text class="section-more">查看全部 ›</text></view>
+						<view v-for="item in dynamics" :key="item.id" class="dynamic-card"><view class="dynamic-user-row"><image class="dynamic-avatar" :src="user.avatar" mode="aspectFill"></image><view class="dynamic-user-copy"><text class="dynamic-name">{{ user.name }}</text><text class="dynamic-time">{{ item.time }}</text></view></view><text class="dynamic-content">{{ item.content }}</text><image v-if="item.photo != ''" class="dynamic-photo" :src="item.photo" mode="aspectFill"></image><view class="dynamic-footer"><text class="dynamic-topic">{{ item.topic }}</text><text class="dynamic-count">♡ {{ item.likes }}　◌ {{ item.comments }}</text></view></view>
 					</view>
 				</view>
 			</view>
 
 			<view v-else class="locked-detail-page">
 				<view class="locked-cover-area">
-					<image class="locked-cover-img" :src="user.photos[0]" mode="aspectFill"></image>
-					<view class="cover-actions">
-						<view class="round-action" @tap="onBack"><text class="round-action-text">←</text></view>
-						<view class="round-action" @tap="onShare"><text class="round-action-text share-symbol">↗</text></view>
-					</view>
+					<image class="locked-cover-img" :src="user.cover != '' ? user.cover : user.avatar" mode="aspectFill"></image>
 					<view class="locked-avatar-circle"><image class="locked-avatar" :src="user.avatar" mode="aspectFill"></image></view>
 				</view>
 
@@ -192,21 +122,6 @@
 						</view>
 					</view>
 
-					<view class="locked-section-card spotlight-section">
-						<view class="spot-heading"><view class="spot-heading-left"><text class="spot-light-icon">💡</text><text class="locked-section-title">爆灯嘉宾</text><text class="spot-count">32人</text></view><text class="spot-more">查看全部 ›</text></view>
-						<view class="visitor-row">
-							<view v-for="visitor in visitors" :key="visitor.name" class="visitor-avatar"><image class="visitor-img" :src="visitor.avatar" mode="aspectFill"></image></view>
-							<text class="visitor-more">+26人</text>
-						</view>
-						<text class="spot-desc">非常中意Ta？爆灯后系统将立即短信通知对方，您的头像将显示在此处，让Ta第一时间注意到你！</text>
-						<view class="spot-benefits">
-							<view class="spot-benefit"><text class="spot-benefit-icon">▣</text><text class="spot-benefit-title">快速触达</text><text class="spot-benefit-desc">即时短信通知</text></view>
-							<view class="spot-benefit"><text class="spot-benefit-icon">♙</text><text class="spot-benefit-title">展示曝光</text><text class="spot-benefit-desc">头像展示在爆灯栏</text></view>
-							<view class="spot-benefit"><text class="spot-benefit-icon">♥</text><text class="spot-benefit-title">增加好感</text><text class="spot-benefit-desc">更容易被留意</text></view>
-						</view>
-						<view class="spot-price"><text class="spot-price-label">单次爆灯</text><text class="spot-price-value">¥9.9</text><text class="spot-price-unit">/次</text></view>
-						<view class="spotlight-button" @tap="onSpotlight"><text class="spotlight-button-text">💡 我要爆灯</text></view>
-					</view>
 				</view>
 			</view>
 
@@ -216,8 +131,8 @@
 			<view v-if="!isLockedView && isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar bottom-bar-own">
 				<view class="primary-action edit-only-btn" @tap="goEdit"><text class="primary-action-text">编辑资料</text></view>
 			</view>
-			<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar">
-			<view class="bottom-back" @tap="onBack"><text class="bottom-back-icon">←</text><text class="bottom-back-text">返回</text></view>
+		<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar">
+			<view class="ai-avatar-action" @tap="openAiAvatar"><text class="ai-avatar-icon">✦</text><text class="ai-avatar-text">AI 分身</text></view>
 			<view class="primary-action" @tap="onMatch"><text class="primary-action-text">♥　申请认识</text></view>
 			<view class="like-action" @tap="onLike"><text class="like-action-text">♥</text></view>
 		</view>
@@ -230,61 +145,36 @@
 
 <script setup lang="uts">
 import { ref } from 'vue'
-import XsaEmpty from '@/components/XsaEmpty.uvue'
 import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
-import { getUserDetail, likeUser, getOwnProfile } from '@/api'
+import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, getUserVisitorCount, saveAiAvatarProfileSnapshot } from '@/api'
+import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
+import locationJson from '@/static/location.json'
 import { SPOTLIGHT_AMOUNT, paySpotlight } from '@/api/spotlight.uts'
 import { guardRealName } from '@/utils/realNameGate.uts'
-import { getCurrentUserVipStatus } from '@/utils/quota.uts'
 
 const isLockedView = ref(false)
+const viewerIsVip = ref(false)
 const isOwnProfile = ref(false)
 const isPreview = ref(false)
 const detailLoading = ref(true)
 const detailError = ref('')
+const detailQuotaExhausted = ref(false)
 const applyVisible = ref(false)
 const applyUserId = ref(1)
 const spotlightPaymentVisible = ref(false)
 const spotlightSuccessVisible = ref(false)
 const spotlightPaying = ref(false)
 const spotlightTarget = ref({ id: 0, name: '', avatar: '', meta: '' })
+const visitorCount = ref<number | null>(null)
 
 const user = ref({
-	id: 1,
-	name: '林悦',
-	age: '26',
-	avatar: '/static/portraits/profile-woman-main.jpg',
-	isVIP: true,
-	job: '产品经理',
-	edu: '本科',
-	city: '北京',
-	online: '当前在线',
-	distance: '距你 3.2km',
-	recentActivity: '近期活跃',
-	match: 92,
-	tags: ['积极营业', 'ENFJ', '颜控', '旅行', '摄影'],
-	bio: '性格温和，热爱生活～ 平时喜欢旅行探索世界，也享受宅家的宁静时光。希望遇到一个真诚的人，一起经营温暖的小日子。',
-	photos: [
-		'/static/portraits/profile-woman-main.jpg',
-		'/static/portraits/profile-woman-alt.jpg'
-	],
-	lifePhotos: [
-		'/static/portraits/profile-woman-community.jpg',
-		'/static/portraits/profile-woman-alt.jpg',
-		'/static/portraits/profile-woman-main.jpg'
-	],
-	expect: [
-		'愿意把真实想法说清楚，不用猜来猜去',
-		'各自有生活，也愿意为共同计划留出时间',
-		'把长期关系当作两个人一起完成的作品'
-	],
-	basicInfo: [
-		[{ label: '年龄', value: '26岁' }, { label: '身高', value: '168cm' }, { label: '体重', value: '52kg' }],
-		[{ label: '星座', value: '天秤座' }, { label: '学历', value: '本科' }, { label: '职业', value: '产品经理' }],
-		[{ label: '现居', value: '北京朝阳' }, { label: '家乡', value: '浙江杭州' }, { label: '收入', value: '30-50万' }]
-	]
+	id: 0,
+	detailLocked: false,
+	name: '', age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
+	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
+	cover: '', photos: [], lifePhotos: [], expect: [], basicInfo: []
 })
 
 const certs = ref([
@@ -292,13 +182,6 @@ const certs = ref([
 	{ icon: '学', shortLabel: '学历', label: '学历认证', desc: '学历信息已核验' },
 	{ icon: '像', shortLabel: '头像', label: '头像认证', desc: '头像为本人真实照片' },
 	{ icon: '房', shortLabel: '房产', label: '房产认证', desc: '房产信息已认证' }
-])
-
-const visitors = ref([
-	{ name: '张伟', avatar: '/static/portraits/profile-woman-alt.jpg' },
-	{ name: '李明', avatar: '/static/portraits/profile-man-light.jpg' },
-	{ name: '王强', avatar: '/static/portraits/profile-man-sea.jpg' },
-	{ name: '刘洋', avatar: '/static/portraits/profile-woman-community.jpg' }
 ])
 
 const dynamics = ref([
@@ -311,46 +194,151 @@ const textValue = (value: any, fallback: string): string => {
 	return value != null && value != '' ? '' + value : fallback
 }
 
+const firstField = (raw: any, keys: string[]): any => {
+	if (raw == null) return null
+	for (const key of keys) if (raw[key] != null && raw[key] != '') return raw[key]
+	return null
+}
+
+const locationTextByCodes = (raw: any, provinceKey: string, cityKey: string, districtKey: string): string => {
+	const provinceCode = raw != null ? textValue(raw[provinceKey], '') : ''
+	const cityCode = raw != null ? textValue(raw[cityKey], '') : ''
+	const districtCode = raw != null ? textValue(raw[districtKey], '') : ''
+	if (provinceCode == '' || cityCode == '' || districtCode == '') return ''
+	const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+	for (const province of provinces) {
+		if ('' + province.code != provinceCode) continue
+		const cities = Array.isArray(province.city) ? province.city as any[] : []
+		for (const city of cities) {
+			if ('' + city.code != cityCode) continue
+			const areas = Array.isArray(city.area) ? city.area as any[] : []
+			for (const area of areas) if ('' + area.code == districtCode) return province.name + ' ' + city.name + ' ' + area.name
+		}
+	}
+	return ''
+}
+
+const locationTextByPrefix = (raw: any, prefix: string): string => {
+	const province = firstField(raw, [prefix + '_province_code', prefix + '_province'])
+	const city = firstField(raw, [prefix + '_city_code', prefix + '_city'])
+	const district = firstField(raw, [prefix + '_district_code', prefix + '_district', prefix + '_area_code', prefix + '_area'])
+	if (province != null && city != null && district != null) {
+		const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const item of provinces) {
+			if ('' + item.code != '' + province && '' + item.name != '' + province) continue
+			const cities = Array.isArray(item.city) ? item.city as any[] : []
+			for (const cityItem of cities) {
+				if ('' + cityItem.code != '' + city && '' + cityItem.name != '' + city) continue
+				const areas = Array.isArray(cityItem.area) ? cityItem.area as any[] : []
+				for (const area of areas) if ('' + area.code == '' + district || '' + area.name == '' + district) return item.name + ' ' + cityItem.name + ' ' + area.name
+			}
+		}
+	}
+	return ''
+}
+
+const constellationFromBirthday = (birthday: any): string => {
+	const value = textValue(birthday, '')
+	if (value.length < 10) return ''
+	const month = Number(value.substring(5, 7))
+	const day = Number(value.substring(8, 10))
+	const signs = ['摩羯座', '水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座']
+	const cutoffs = [20, 19, 21, 21, 21, 22, 23, 23, 23, 23, 22, 22]
+	if (month < 1 || month > 12 || day < 1 || day > 31) return ''
+	return signs[(day < cutoffs[month - 1] ? month - 1 : month) % 12]
+}
+
+const locationTextByCityCode = (rawCode: any): string => {
+	const cityCode = textValue(rawCode, '')
+	if (cityCode == '') return ''
+	const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+	for (const province of provinces) {
+		const cities = Array.isArray(province.city) ? province.city as any[] : []
+		for (const city of cities) {
+			if ('' + city.code == cityCode) return province.name + ' ' + city.name
+		}
+	}
+	return ''
+}
+
+const formatDimension = (raw: any, unit: string): string => {
+	if (raw == null || raw === '' || Number(raw) <= 0) return '未填写'
+	const output = '' + raw
+	return output.endsWith(unit) ? output : output + unit
+}
+
+const formatIncome = (raw: any): string => {
+	if (raw == null || raw === '') return '未填写'
+	const text = '' + raw
+	const amount = Number(text)
+	if (!isNaN(amount) && text.trim() != '') {
+		const wan = Math.round(amount / 1000) / 10
+		return (wan % 1 == 0 ? '' + Math.round(wan) : '' + wan) + 'w'
+	}
+	return text.replace(/万/g, 'w')
+}
+
+user.value = {
+	id: 0, name: '', detailLocked: false, age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
+	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
+	cover: '', photos: [], lifePhotos: [], expect: [], basicInfo: []
+}
+dynamics.value = []
+certs.value = []
+
 const mapDetailUser = (raw: any, id: number) => {
 	if (raw == null) return
 	const envelope = raw.data != null ? raw.data : raw
 	if (envelope == null) return
 	const card = envelope.card != null ? envelope.card : envelope
 	const profile = envelope.profile != null ? envelope.profile : envelope
+	const account = envelope.user != null ? envelope.user : {}
 	const value = (primary: any, secondary: any, fallback: string): string => {
 		return textValue(primary, textValue(secondary, fallback))
 	}
-	const age = value(card.age, profile.age, user.value.age)
+	const missing = '未填写'
+	const age = value(card.age, profile.age, missing)
 	const educationLabel = (level: any): string => {
-		const labels = ['', '高中及以下', '大专', '本科', '硕士', '博士']
-		const index = level != null ? Number(level) : 0
-		return index > 0 && index < labels.length ? labels[index] : ''
+		const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+		if (level == null || level === '') return ''
+		const text = '' + level
+		const index = Number(text)
+		if (!isNaN(index) && text.trim() != '') return index > 0 && index < labels.length ? labels[index] : ''
+		return text
 	}
-	const edu = value(card.education, profile.education, value(card.edu, educationLabel(profile.education_level), user.value.edu))
-	const job = value(card.job, profile.occupation, user.value.job)
-	const city = value(card.city, profile.city_code, user.value.city)
-	const height = value(card.height, profile.height != null ? '' + profile.height + 'cm' : null, '168cm')
-	const weight = value(card.weight, profile.weight != null ? '' + profile.weight + 'kg' : null, '52kg')
-	const constellation = value(card.constellation, profile.constellation, '天秤座')
-	const hometown = value(card.hometown, profile.hometown, '浙江杭州')
-	const income = value(card.income, profile.income, value(card.salary, profile.income, '30-50万'))
-	const marriage = value(card.marriage, profile.is_married == 1 ? '未婚' : profile.is_married == 2 ? '离异' : profile.is_married == 3 ? '丧偶' : null, '未填写')
+	const educationValue = firstField(card, ['education', 'education_level', 'edu']) || firstField(profile, ['education', 'education_level', 'edu'])
+	const edu = educationLabel(educationValue) == '' ? missing : educationLabel(educationValue)
+	const job = value(card.occupation, profile.occupation, value(card.job, profile.job, missing))
+	const residenceText = value(profile.residence_display, card.residence_display, value(envelope.residence_display, '', locationTextByCodes(profile, 'residence_province_code', 'residence_city_code', 'residence_district_code') || locationTextByPrefix(profile, 'residence') || locationTextByPrefix(envelope, 'residence') || locationTextByCityCode(card.city_code)))
+	const hometownText = value(profile.hometown_display, card.hometown_display, value(envelope.hometown_display, '', locationTextByCodes(profile, 'hometown_province_code', 'hometown_city_code', 'hometown_district_code') || locationTextByPrefix(profile, 'hometown') || locationTextByPrefix(envelope, 'hometown')))
+	const city = value(residenceText, card.residence, value(profile.residence, value(card.city, profile.city, missing), missing))
+	const height = formatDimension(card.height != null ? card.height : profile.height, 'cm')
+	const weight = formatDimension(card.weight != null ? card.weight : profile.weight, 'kg')
+	const birthday = firstField(card, ['birthday', 'birth_date', 'date_of_birth']) || firstField(profile, ['birthday', 'birth_date', 'date_of_birth']) || firstField(envelope, ['birthday', 'birth_date', 'date_of_birth'])
+	const constellation = value(card.constellation, profile.constellation, constellationFromBirthday(birthday) == '' ? missing : constellationFromBirthday(birthday))
+	const hometown = value(hometownText, card.hometown, value(profile.hometown, missing, missing))
+	const incomeValue = firstField(profile, ['income_display', 'income', 'salary']) || firstField(card, ['income_display', 'income', 'salary']) || firstField(envelope, ['income_display', 'income', 'salary'])
+	const income = formatIncome(incomeValue)
+	const marriageStatus = card.is_married != null ? card.is_married : profile.is_married
+	const marriage = value(card.marriage, marriageStatus == 1 ? '未婚' : marriageStatus == 2 ? '离异' : marriageStatus == 3 ? '丧偶' : null, '未填写')
 	const mbti = value(card.mbti, profile.mbti, '未填写')
 	const activeStatus = value(card.activeStatus, card.active_status, '未填写')
-	const avatar = value(card.avatar, profile.avatar, user.value.avatar)
+	const avatar = resolveMediaUrl(value(card.avatar, profile.avatar, value(envelope.avatar, account.avatar, '')))
+	const background = resolveMediaUrl(value(card.background_wall, profile.background_wall, value(envelope.background_wall, '', '')))
+	const nickname = value(card.nickname, profile.nickname, value(envelope.nickname, account.nickname, ''))
+	const detailLocked = card.detail_locked === true || envelope.detail_locked === true
+	if (envelope.is_vip_viewer != null) viewerIsVip.value = envelope.is_vip_viewer === true
 	const rawPhotos = card.photos != null ? card.photos : profile.photos
 	const photos = Array.isArray(rawPhotos)
-		? (rawPhotos as any[]).map((photo: any) => photo != null && typeof photo === 'object' ? value(photo.url, photo.file_url, avatar) : '' + photo)
-		: user.value.photos
-	const lifePhotos = Array.isArray(card.lifePhotos) && card.lifePhotos.length >= 3
-		? card.lifePhotos as string[]
-		: photos.length >= 3 ? photos.slice(0, 3) : user.value.lifePhotos
-	const tags = Array.isArray(card.tags) ? card.tags as string[] : Array.isArray(profile.interest_tags) ? profile.interest_tags as string[] : user.value.tags
+		? (rawPhotos as any[]).map((photo: any) => photo != null && typeof photo === 'object' ? resolveMediaUrl(value(photo.url, photo.file_url, avatar)) : resolveMediaUrl(photo))
+		: []
+	const lifePhotos = photos
+	const tags = Array.isArray(card.interest_tags) ? card.interest_tags as string[] : Array.isArray(card.tags) ? card.tags as string[] : Array.isArray(profile.interest_tags) ? profile.interest_tags as string[] : []
 	const expectations = profile.tag_selections != null && Array.isArray(profile.tag_selections.relationship_expectation)
 		? profile.tag_selections.relationship_expectation as string[]
-		: Array.isArray(card.expect) && card.expect.length > 0 ? card.expect as string[] : user.value.expect
+		: Array.isArray(card.expect) && card.expect.length > 0 ? card.expect as string[] : []
 	const mappedInfo = [
-		[{ label: '年龄', value: age + '岁' }, { label: '身高', value: height }, { label: '体重', value: weight }],
+		[{ label: '年龄', value: age == missing ? missing : age + '岁' }, { label: '身高', value: height }, { label: '体重', value: weight }],
 		[{ label: '星座', value: constellation }, { label: '学历', value: edu }, { label: '职业', value: job }],
 		[{ label: '现居', value: city }, { label: '家乡', value: hometown }, { label: '收入', value: income }],
 		[{ label: '婚姻', value: marriage }, { label: 'MBTI', value: mbti }, { label: '状态', value: activeStatus }]
@@ -358,23 +346,25 @@ const mapDetailUser = (raw: any, id: number) => {
 	user.value = {
 		...user.value,
 		id: envelope.user_id != null ? Number(envelope.user_id) : (card.id != null ? Number(card.id) : id),
-		name: value(card.name, card.nickname, user.value.name),
+		name: value(nickname, card.name, user.value.name),
+		detailLocked,
 		age,
 		avatar,
-		isVIP: card.isVip === true || card.isVIP === true || profile.isVip === true || profile.isVIP === true,
+		isVIP: card.is_vip === true || card.isVip === true || card.isVIP === true || profile.is_vip === true || profile.isVip === true || profile.isVIP === true,
 		job,
 		edu,
 		city,
-		online: value(card.online, card.online_status, user.value.online),
-		distance: value(card.distance, null, user.value.distance),
-		recentActivity: value(card.recentActivity, card.activeStatus, user.value.recentActivity),
-		match: card.match != null ? Number(card.match) : user.value.match,
+		online: value(card.online, card.online_status, ''),
+		distance: value(card.distance, card.distance_km != null ? '距你 ' + card.distance_km + 'km' : null, ''),
+		recentActivity: value(card.recentActivity, card.activeStatus, ''),
+		match: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : 0),
 		tags,
-		bio: value(card.intro, profile.self_intro, value(card.introduction, profile.introduction, user.value.bio)),
-		photos: photos.length > 0 ? photos : user.value.photos,
+		bio: value(card.intro, profile.self_intro, value(card.introduction, profile.introduction, '')),
+		cover: background != '' ? background : (photos.length > 0 ? photos[0] : avatar),
+		photos,
 		lifePhotos,
 		expect: expectations,
-		basicInfo: Array.isArray(card.basicInfo) && card.basicInfo.length > 0 ? card.basicInfo : mappedInfo
+		basicInfo: mappedInfo
 	}
 	applyUserId.value = user.value.id
 }
@@ -382,6 +372,8 @@ const mapDetailUser = (raw: any, id: number) => {
 const load = async () => {
 	detailLoading.value = true
 	detailError.value = ''
+	detailQuotaExhausted.value = false
+	visitorCount.value = null
 	try {
 		let res: any = null
 		if (isOwnProfile.value) {
@@ -391,8 +383,32 @@ const load = async () => {
 		}
 		if (res != null && res.success === true && res.data != null) {
 			mapDetailUser(res, user.value.id)
+			if (!isOwnProfile.value && !isPreview.value && user.value.id > 0) {
+				const visitorRes = await getUserVisitorCount(user.value.id)
+				if (visitorRes != null && visitorRes.success === true && visitorRes.data != null) {
+					const count = Number((visitorRes.data as any).visitor_count)
+					if (!isNaN(count) && count >= 0) visitorCount.value = count
+				}
+			}
+			if (isOwnProfile.value) {
+				const postsRes = await getMyPosts({ page: 1, pageSize: 3 })
+				if (postsRes.success && postsRes.data != null) {
+					const rawPosts = postsRes.data.list != null ? postsRes.data.list as any[] : []
+					dynamics.value = rawPosts.map((post: any) => ({
+						id: post.id,
+						time: post.timeText != null ? '' + post.timeText : '',
+						content: post.content != null ? '' + post.content : '',
+						photo: post.photos != null && post.photos.length > 0 ? '' + post.photos[0] : '',
+						topic: post.topicTitle != null ? '' + post.topicTitle : '',
+						likes: post.likeCount != null ? Number(post.likeCount) : 0,
+						comments: post.commentCount != null ? Number(post.commentCount) : 0
+					}))
+				}
+			}
 		} else {
-			detailError.value = res != null && res.message != null ? '' + res.message : '请稍后重试'
+			const message = res != null && res.message != null ? '' + res.message : '请稍后重试'
+			detailQuotaExhausted.value = res != null && Number(res.code) == 429 && message.indexOf('浏览额度') >= 0
+			detailError.value = detailQuotaExhausted.value ? '今日完整浏览额度已用完' : message
 		}
 	} catch (e) {
 		detailError.value = '网络异常，请稍后重试'
@@ -403,39 +419,84 @@ const load = async () => {
 }
 
 const refreshLockedView = () => {
-	const viewerIsVip = getCurrentUserVipStatus()
 	const targetIsVip = user.value.isVIP === true
 	isLockedView.value =
 		!isPreview.value &&
 		!isOwnProfile.value &&
-		viewerIsVip !== true &&
-		targetIsVip
+		viewerIsVip.value !== true && targetIsVip
+}
+
+const loadViewerMembership = async () => {
+	if (isOwnProfile.value || isPreview.value) return
+	const res = await getMembershipStatus()
+	if (res.success && res.data != null) viewerIsVip.value = (res.data as any).is_vip == true
 }
 
 onMounted(async () => {
 	const pages = getCurrentPages()
 	const currentPage = pages[pages.length - 1]
 	const options = currentPage.options
-	isOwnProfile.value = options.own === 'true'
-	isPreview.value = options.preview === 'true'
+	isPreview.value = options.preview === 'true' || options.preview === true
 
 	let parsed = 1
 	if (options.userId != null && options.userId != '') {
 		const candidate = Number(options.userId)
 		if (!isNaN(candidate) && candidate > 0) parsed = candidate
 	}
+	let viewerId = 0
+	try {
+		const storedViewerId = uni.getStorageSync('xsa_user_id')
+		if (storedViewerId != null && storedViewerId != '') {
+			const candidateViewerId = Number(storedViewerId)
+			if (!isNaN(candidateViewerId) && candidateViewerId > 0) viewerId = candidateViewerId
+		}
+	} catch (e) {}
+	isOwnProfile.value = options.own === 'true' || options.own === true || isPreview.value || (viewerId > 0 && viewerId == parsed)
 	user.value.id = parsed
 	applyUserId.value = parsed
+	await loadViewerMembership()
 	await load()
 })
 
-onShow(() => {
+onShow(async () => {
+	await loadViewerMembership()
 	refreshLockedView()
 })
 
 const onBack = () => { uni.navigateBack({ delta: 1 }) }
+const openQuotaMembership = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/vip' }) }
+const handleDetailErrorAction = () => { if (detailQuotaExhausted.value) openQuotaMembership(); else load() }
 const onShare = () => { uni.showToast({ title: '分享给朋友', icon: 'none' }) }
 const goEdit = () => { uni.navigateTo({ url: '/pagesSub/userExtra/user/edit' }) }
+const openAiAvatar = () => {
+	if (isOwnProfile.value) return
+	if (getAccessToken() == '') {
+		uni.showToast({ title: '请先登录后使用 AI 分身', icon: 'none' })
+		setTimeout(() => { uni.navigateTo({ url: '/pages/auth/login' }) }, 350)
+		return
+	}
+	const snapshotRes = saveAiAvatarProfileSnapshot(user.value.id, {
+		id: user.value.id,
+		name: user.value.name,
+		avatar: user.value.avatar,
+		age: user.value.age,
+		city: user.value.city,
+		job: user.value.job,
+		education: user.value.edu,
+		tags: user.value.tags,
+		intro: user.value.bio,
+		expectations: isLockedView.value ? [] : user.value.expect,
+		dynamicSummary: isLockedView.value ? [] : dynamics.value.map((item: any) => item.content)
+	}, isLockedView.value)
+	if (!snapshotRes.success) {
+		uni.showToast({ title: snapshotRes.message != null ? String(snapshotRes.message) : '公开资料读取失败', icon: 'none' })
+		return
+	}
+	const url = '/pagesSub/chat/detail?mode=ai-avatar&userId=' + String(user.value.id)
+		+ '&userName=' + encodeURIComponent(String(user.value.name))
+		+ '&locked=' + (isLockedView.value ? 'true' : 'false')
+	uni.navigateTo({ url: url, fail: () => { uni.showToast({ title: 'AI 分身打开失败，请重试', icon: 'none' }) } })
+}
 const onSpotlight = () => {
 	if (isOwnProfile.value) {
 		uni.showToast({ title: '不能向自己爆灯', icon: 'none' })
@@ -512,11 +573,37 @@ const onLike = async () => {
 <style scoped>
 .detail-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; background-color: var(--canvas); color: var(--ink); }
 .state-block { padding: 72px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.error-state { min-height: 100vh; padding: 120px 32px 180px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
+.error-mark { width: 82px; height: 82px; margin-bottom: 26px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 26px; background: var(--surface); box-shadow: var(--shadow-md); }
+.error-mark text { color: var(--accent2); font-size: 42px; font-weight: 700; line-height: 1; }
+.error-title { color: var(--ink); font-size: 18px; font-weight: 700; }
+.error-description { max-width: 560rpx; margin-top: 12px; color: var(--ink2); font-size: 14px; line-height: 1.5; text-align: center; }
+.error-hint { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.error-actions { display: flex; flex-direction: row; align-items: center; gap: 12px; margin-top: 28px; }
+.error-retry, .error-cancel { height: 42px; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 21px; font-size: 14px; }
+.error-retry { min-width: 116px; background: var(--sage); color: var(--text-invert); box-shadow: var(--shadow-sm); }
+.error-cancel { min-width: 76px; border: 1px solid var(--line); background: var(--surface); color: var(--ink2); }
 .state-title { font-size: 16px; font-weight: 700; color: var(--ink); }
 .state-description { font-size: 13px; color: var(--muted); }
 .detail-scroll { width: 100%; height: 100vh; }
-.ordinary-detail-page { padding: 24rpx 32rpx 0; }
-.ordinary-profile-card { overflow: hidden; border-radius: 28rpx; background-color: var(--surface); box-shadow: var(--shadow-md); }
+.vip-detail-page { min-height: 100%; background-color: var(--canvas); }
+.vip-cover-area { position: relative; width: 100%; height: 560rpx; overflow: visible; background-color: var(--warm); }
+.vip-cover-img { width: 100%; height: 100%; }
+.vip-avatar-circle { position: absolute; z-index: 3; left: 32rpx; bottom: -40rpx; width: 160rpx; height: 160rpx; overflow: hidden; border: 6rpx solid var(--surface); border-radius: 50%; background-color: var(--warm); box-sizing: border-box; }
+.vip-avatar { width: 100%; height: 100%; }
+.vip-profile-header { display: flex; flex-direction: column; gap: 14rpx; padding: 62rpx 40rpx 32rpx; background-color: var(--surface); }
+.vip-name-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20rpx; }
+.vip-name-group { display: flex; min-width: 0; flex: 1; flex-direction: row; align-items: center; gap: 16rpx; }
+.vip-name { max-width: 380rpx; overflow: hidden; color: var(--ink); font-family: var(--serif); font-size: 42rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.vip-age { flex-shrink: 0; color: var(--ink2); font-size: 28rpx; }
+.vip-meta { color: var(--ink2); font-size: 24rpx; line-height: 1.5; }
+.visitor-count-text { color: var(--ink3); font-size: 22rpx; line-height: 1.4; }
+.vip-bio { color: var(--ink2); font-size: 25rpx; line-height: 1.65; }
+.vip-detail-content { display: flex; flex-direction: column; gap: 24rpx; padding: 24rpx 32rpx 36rpx; }
+.vip-section-card { display: flex; flex-direction: column; gap: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: var(--surface); box-shadow: var(--shadow-sm); }
+.vip-section-title { color: var(--ink); font-family: var(--serif); font-size: 30rpx; font-weight: 700; }
+.ordinary-detail-page { padding: 0; }
+.ordinary-profile-card { overflow: hidden; border-radius: 0; background-color: var(--surface); box-shadow: none; }
 .ordinary-cover, .locked-cover-area { position: relative; width: 100%; height: 560rpx; overflow: hidden; background-color: var(--warm); }
 .ordinary-cover-img, .locked-cover-img { width: 100%; height: 100%; }
 .cover-actions { position: absolute; top: 32rpx; right: 32rpx; left: 32rpx; display: flex; flex-direction: row; justify-content: space-between; }
@@ -534,7 +621,7 @@ const onLike = async () => {
 .vip-badge-large { padding: 10rpx 18rpx; }
 .vip-badge-text { color: var(--ink); font-size: 20rpx; font-weight: 700; }
 .vip-crown { color: var(--ink); font-size: 22rpx; }
-.ordinary-card-body { padding: 32rpx 24rpx; }
+.ordinary-card-body { padding: 24rpx 32rpx 32rpx; background-color: var(--canvas); }
 .ordinary-section { display: flex; flex-direction: column; gap: 24rpx; padding: 28rpx 0; border-bottom: 2rpx solid var(--line); }
 .ordinary-section-title, .locked-section-title { font-family: var(--serif); font-size: 30rpx; font-weight: 700; color: var(--ink); }
 .tag-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12rpx; }
@@ -619,14 +706,17 @@ const onLike = async () => {
 .spotlight-button { display: flex; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--plane-yellow); }
 .spotlight-button-text { color: var(--ink); font-size: 28rpx; font-weight: 700; }
 .scroll-bottom-spacer { height: 180rpx; }
-.bottom-bar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background-color: var(--surface); box-shadow: var(--shadow-md); }
+.bottom-bar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: flex; flex-direction: row; align-items: center; gap: 12rpx; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background-color: var(--surface); box-shadow: var(--shadow-md); }
 .bottom-bar-own { justify-content: center; }
 .bottom-back { display: flex; flex-direction: column; align-items: center; gap: 2rpx; }
 .bottom-back-icon { color: var(--ink2); font-size: 36rpx; font-weight: 700; }
 .bottom-back-text { color: var(--muted); font-size: 19rpx; }
-.primary-action { display: flex; align-items: center; justify-content: center; width: 400rpx; height: 88rpx; border-radius: 44rpx; background-color: var(--accent); box-shadow: var(--shadow-sm); }
-.edit-only-btn { width: 480rpx; }
+.primary-action { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--accent); box-shadow: var(--shadow-sm); }
+.edit-only-btn { flex: 0 0 480rpx; width: 480rpx; }
 .primary-action-text { color: var(--text-invert); font-size: 28rpx; font-weight: 700; }
+.ai-avatar-action { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6rpx; width: 154rpx; height: 88rpx; border: 1px solid var(--accent2); border-radius: 44rpx; background-color: var(--paper); box-sizing: border-box; }
+.ai-avatar-icon { color: var(--accent2); font-size: 28rpx; font-weight: 700; }
+.ai-avatar-text { color: var(--accent2); font-size: 24rpx; font-weight: 700; }
 .like-action { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; border-radius: 50%; background-color: var(--accent-bg); }
 .like-action-text { color: var(--accent2); font-size: 40rpx; }
 </style>

@@ -1,0 +1,727 @@
+<template>
+	<view class="mm-page">
+		<!-- 导航栏 -->
+		<view class="mm-nav">
+			<view class="mm-nav-back" @tap="navBack">
+				<text class="mm-nav-back-text">‹</text>
+			</view>
+			<text class="mm-nav-title">墨相师</text>
+			<view class="mm-nav-side"></view>
+		</view>
+
+		<!-- 角色形象区 -->
+		<view class="mm-hero" :class="'mm-hero-' + masterState">
+			<MoxiangMasterAvatar :state="masterState" />
+			<text class="mm-hero-name">墨相师</text>
+			<text class="mm-hero-sub">{{ statusLabel }}</text>
+		</view>
+
+		<!-- 连接中 -->
+		<view v-if="connecting" class="mm-state">
+			<view class="mm-steam">
+				<view class="mm-steam-dot mm-steam-dot-1"></view>
+				<view class="mm-steam-dot mm-steam-dot-2"></view>
+				<view class="mm-steam-dot mm-steam-dot-3"></view>
+			</view>
+			<text class="mm-state-text">正在连接墨相师</text>
+		</view>
+
+		<!-- 错误/降级 -->
+		<view v-else-if="connectError != ''" class="mm-state">
+			<text class="mm-state-text">连接失败</text>
+			<text class="mm-state-sub">{{ connectError }}</text>
+			<view class="mm-state-btn" @tap="retryConnect">
+				<text class="mm-state-btn-text">重试</text>
+			</view>
+		</view>
+
+		<!-- 对话主体 -->
+		<view v-else class="mm-body">
+			<!-- 消息流 -->
+			<scroll-view scroll-y class="mm-flow" enhanced :show-scrollbar="false" :scroll-into-view="scrollAnchor" :scroll-with-animation="true">
+				<view v-for="msg in messages" :key="msg.id" :id="'msg-' + msg.id">
+					<!-- 墨相师消息(左) -->
+					<view v-if="msg.role == 'master'" class="mm-msg mm-msg-left">
+						<view class="mm-msg-avatar">
+							<MoxiangMasterAvatar :state="masterState" />
+						</view>
+						<view class="mm-bubble mm-bubble-master">
+							<text class="mm-bubble-text">{{ msg.text }}</text>
+							<view v-if="msg.canListen && msg.text != ''" class="mm-listen" @tap="playTTS(msg.text)">
+								<text class="mm-listen-text">听它读</text>
+							</view>
+						</view>
+					</view>
+
+					<!-- 用户消息(右) -->
+					<view v-if="msg.role == 'user'" class="mm-msg mm-msg-right">
+						<view class="mm-bubble mm-bubble-user">
+							<text class="mm-bubble-text">{{ msg.text }}</text>
+						</view>
+					</view>
+
+					<!-- 思考中 -->
+					<view v-if="msg.role == 'typing'" class="mm-msg mm-msg-left">
+						<view class="mm-msg-avatar">
+							<MoxiangMasterAvatar state="thinking" />
+						</view>
+						<view class="mm-bubble mm-bubble-master mm-typing">
+							<view class="mm-dot"></view>
+							<view class="mm-dot"></view>
+							<view class="mm-dot"></view>
+						</view>
+					</view>
+				</view>
+				<view class="mm-flow-bottom"></view>
+			</scroll-view>
+
+			<!-- 语音实时转写(说话中显示) -->
+			<view v-if="masterState == 'listening' && partialText != ''" class="mm-partial">
+				<text class="mm-partial-text">{{ partialText }}</text>
+			</view>
+
+			<!-- 语音模式 TTS 播报提示 -->
+			<view v-if="lastTTSUrl != ''" class="mm-tts-bar">
+				<text class="mm-tts-label">墨相师说完了</text>
+				<view class="mm-tts-replay" @tap="replayTTS">
+					<text class="mm-tts-replay-text">再听一遍</text>
+				</view>
+				<view class="mm-tts-close" @tap="closeTTS">
+					<text class="mm-tts-close-text">收起</text>
+				</view>
+			</view>
+
+			<!-- 底部输入区 -->
+			<view class="mm-input-bar">
+				<!-- 文字模式 -->
+				<view v-if="inputMode == 'text'" class="mm-input-row">
+					<input
+						class="mm-input"
+						v-model="inputText"
+						placeholder="说点什么…"
+						:adjust-position="true"
+						confirm-type="send"
+						@confirm="sendText"
+						:disabled="masterState == 'thinking'"
+					/>
+					<view
+						class="mm-send-btn"
+						:class="{ 'mm-send-active': inputText.length > 0 && masterState != 'thinking' }"
+						@tap="sendText"
+					>
+						<text class="mm-send-text">发送</text>
+					</view>
+					<view class="mm-mode-btn" @tap="switchToVoice">
+						<text class="mm-mode-btn-icon">🎤</text>
+					</view>
+				</view>
+
+				<!-- 语音模式 -->
+				<view v-else class="mm-input-row">
+					<view class="mm-mode-btn" @tap="switchToText">
+						<text class="mm-mode-btn-icon">⌨</text>
+					</view>
+					<view
+						class="mm-voice-btn"
+						:class="{ 'mm-voice-active': masterState == 'listening' }"
+						@tap="toggleVoice"
+					>
+						<text class="mm-voice-btn-text">{{ masterState == 'listening' ? '说完' : '说话' }}</text>
+					</view>
+					<view
+						v-if="masterState == 'idle' && lastReplyText != ''"
+						class="mm-listen-btn"
+						@tap="requestTTS"
+					>
+						<text class="mm-listen-btn-text">听它读</text>
+					</view>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import MoxiangMasterAvatar from '@/components/MoxiangMasterAvatar.uvue'
+import { MasterWS } from '@/api/voice-master-ws.uts'
+import { resolveMediaUrl } from '@/api/config.uts'
+
+// ===== 状态 =====
+const connecting = ref(true)
+const connectError = ref('')
+const masterState = ref('idle')  // idle / thinking / listening / speaking
+const inputMode = ref('text')    // text / voice
+const inputText = ref('')
+const partialText = ref('')
+const lastReplyText = ref('')
+const lastTTSUrl = ref('')
+const lastTTSDuration = ref(0)
+const scrollAnchor = ref('')
+const messages = ref([] as any[])
+
+let ws: MasterWS | null = null
+let recorderManager: any = null
+let audioContext: any = null
+let chunkSeq = 0
+let isRecording = false
+let typingMsgId = 0
+
+// ===== 计算属性 =====
+const statusLabel = computed(() : string => {
+	if (connecting.value) return '正在连接'
+	if (masterState.value == 'thinking') return '思考中'
+	if (masterState.value == 'listening') return '倾听中'
+	if (masterState.value == 'speaking') return '说话中'
+	return 'AI 引路人'
+})
+
+// ===== 连接 =====
+function connectWS() {
+	connecting.value = true
+	connectError.value = ''
+	ws = new MasterWS({
+		onSessionReady: () => {
+			connecting.value = false
+			// 开场白已在 session_start 后由后端推送(ai_reply)
+		},
+		onPartialTranscript: (text: string) => {
+			partialText.value = text
+		},
+		onFinalTranscript: (text: string) => {
+			partialText.value = ''
+			// 把用户语音转写加入消息流
+			addMessage('user', text)
+		},
+		onAIThinking: () => {
+			masterState.value = 'thinking'
+			// 在消息流末尾添加 typing 占位
+			typingMsgId = Date.now()
+			messages.value.push({
+				id: typingMsgId,
+				role: 'typing',
+				text: '',
+				canListen: false
+			})
+			scrollToBottom()
+		},
+		onAIContent: (text: string) => {
+			// 流式增量:把 typing 占位替换为实际内容,逐段追加
+			const idx = findMsgIndex(typingMsgId)
+			if (idx >= 0) {
+				const m = messages.value[idx]
+				m.text = m.text + text
+				scrollToBottom()
+			}
+		},
+		onAIReply: (text: string) => {
+			// 完整回复:替换 typing 占位为正式消息
+			const idx = findMsgIndex(typingMsgId)
+			if (idx >= 0) {
+				messages.value.splice(idx, 1)
+			}
+			addMessage('master', text, true)
+			lastReplyText.value = text
+			masterState.value = 'idle'
+		},
+		onTTSAudio: (audioUrl: string, durationMs: number) => {
+			lastTTSUrl.value = audioUrl
+			lastTTSDuration.value = durationMs
+			masterState.value = 'speaking'
+			playAudio(audioUrl)
+		},
+		onError: (code: string, message: string) => {
+			if (connecting.value) {
+				connectError.value = message
+				connecting.value = false
+			} else {
+				uni.showToast({ title: message, icon: 'none' })
+				masterState.value = 'idle'
+				// 移除 typing 占位
+				const idx = findMsgIndex(typingMsgId)
+				if (idx >= 0) messages.value.splice(idx, 1)
+			}
+		},
+		onClose: () => {
+			if (!connecting.value) {
+				uni.showToast({ title: '墨相师已离开', icon: 'none' })
+			}
+		}
+	})
+	ws.connect()
+}
+
+// ===== 消息管理 =====
+function addMessage(role: string, text: string, canListen: boolean = false) {
+	messages.value.push({
+		id: Date.now() + Math.floor(Math.random() * 1000),
+		role: role,
+		text: text,
+		canListen: canListen
+	})
+	scrollToBottom()
+}
+
+function findMsgIndex(id: number) : number {
+	for (let i = 0; i < messages.value.length; i++) {
+		if (messages.value[i].id == id) return i
+	}
+	return -1
+}
+
+function scrollToBottom() {
+	nextTick(() => {
+		scrollAnchor.value = ''
+		const last = messages.value[messages.value.length - 1]
+		if (last != null) {
+			scrollAnchor.value = 'msg-' + last.id
+		}
+	})
+}
+
+// ===== 文字模式 =====
+function sendText() {
+	const text = inputText.value.trim()
+	if (text == '' || ws == null || !ws.isConnected()) return
+	if (masterState.value == 'thinking') return
+	addMessage('user', text)
+	inputText.value = ''
+	ws.sendTextMessage(text)
+}
+
+function switchToVoice() {
+	inputMode.value = 'voice'
+}
+
+function switchToText() {
+	inputMode.value = 'text'
+	// 如果正在录音,停止
+	if (isRecording) {
+		stopRecording()
+	}
+}
+
+// ===== 语音模式 =====
+function toggleVoice() {
+	if (masterState.value == 'listening') {
+		stopRecording()
+	} else {
+		startRecording()
+	}
+}
+
+function ensureRecorder() {
+	if (recorderManager != null) return
+	recorderManager = uni.getRecorderManager()
+	recorderManager.onFrameRecorded((res: any) => {
+		if (!isRecording || ws == null || !ws.isConnected()) return
+		const frameBuffer = res.frameBuffer
+		if (frameBuffer == null) return
+		const base64Data = arrayBufferToBase64(frameBuffer)
+		if (base64Data != '') {
+			chunkSeq++
+			ws.sendAudioChunk(base64Data, chunkSeq)
+		}
+		if (res.isLastFrame === true) {
+			if (ws != null && ws.isConnected()) {
+				ws.sendAudioEnd()
+			}
+		}
+	})
+	recorderManager.onStop((res: any) => {
+		// onFrameRecorded isLastFrame 已处理 audio_end
+		// onStop 仅用于状态清理
+	})
+}
+
+function arrayBufferToBase64(buffer: any) : string {
+	return uni.arrayBufferToBase64(buffer)
+}
+
+function startRecording() {
+	if (ws == null || !ws.isConnected()) {
+		uni.showToast({ title: '未连接', icon: 'none' })
+		return
+	}
+	ensureRecorder()
+	isRecording = true
+	chunkSeq = 0
+	partialText.value = ''
+	masterState.value = 'listening'
+	ws.sendAudioStart()
+	recorderManager.start({
+		format: 'pcm',
+		sampleRate: 16000,
+		numberOfChannels: 1,
+		frameSize: 4
+	})
+}
+
+function stopRecording() {
+	if (!isRecording) return
+	isRecording = false
+	if (recorderManager != null) {
+		recorderManager.stop()
+	}
+	// audio_end 由 onFrameRecorded isLastFrame 发送
+	// 兜底:如果未触发 isLastFrame,手动发
+	if (ws != null && ws.isConnected()) {
+		ws.sendAudioEnd()
+	}
+}
+
+// ===== TTS 播报 =====
+function requestTTS() {
+	if (ws != null && ws.isConnected() && lastReplyText.value != '') {
+		ws.sendListen()
+	}
+}
+
+function playTTS(text: string) {
+	// 从消息流中点击"听它读":发送 revise 让后端重新合成
+	if (ws != null && ws.isConnected() && text != '') {
+		ws.sendReviseText(text)
+		ws.sendListen()
+	}
+}
+
+function playAudio(url: string) {
+	const fullUrl = resolveMediaUrl(url)
+	if (fullUrl == '') return
+	if (audioContext != null) {
+		try { audioContext.destroy() } catch (e) {}
+	}
+	audioContext = uni.createInnerAudioContext()
+	audioContext.src = fullUrl
+	audioContext.onEnded(() => {
+		masterState.value = 'idle'
+		lastTTSUrl.value = ''
+	})
+	audioContext.onError(() => {
+		masterState.value = 'idle'
+		lastTTSUrl.value = ''
+	})
+	audioContext.play()
+}
+
+function replayTTS() {
+	if (lastTTSUrl.value != '') {
+		playAudio(lastTTSUrl.value)
+	}
+}
+
+function closeTTS() {
+	lastTTSUrl.value = ''
+	if (audioContext != null) {
+		try { audioContext.stop() } catch (e) {}
+	}
+	masterState.value = 'idle'
+}
+
+// ===== 重试 =====
+function retryConnect() {
+	messages.value = [] as any[]
+	connectWS()
+}
+
+// ===== 导航 =====
+function navBack() {
+	if (isRecording) stopRecording()
+	if (audioContext != null) {
+		try { audioContext.destroy() } catch (e) {}
+	}
+	if (ws != null) {
+		ws.disconnect()
+		ws = null
+	}
+	uni.navigateBack({ delta: 1 })
+}
+
+// ===== 生命周期 =====
+onLoad(() => {
+	connectWS()
+})
+
+onUnmounted(() => {
+	if (isRecording) stopRecording()
+	if (audioContext != null) {
+		try { audioContext.destroy() } catch (e) {}
+		audioContext = null
+	}
+	if (ws != null) {
+		ws.disconnect()
+		ws = null
+	}
+})
+</script>
+
+<style scoped>
+.mm-page {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	background: #F7F1E5;
+}
+
+/* ===== 导航栏 ===== */
+.mm-nav {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 16px;
+	height: 44px;
+	padding-top: var(--status-bar-height, 0px);
+	background: #F7F1E5;
+}
+.mm-nav-back { padding: 0 8px; }
+.mm-nav-back-text { font-size: 28px; color: #2E2418; }
+.mm-nav-title {
+	font-size: 17px;
+	font-weight: 700;
+	color: #2E2418;
+	font-family: var(--serif, serif);
+}
+.mm-nav-side { width: 28px; }
+
+/* ===== 角色形象区 ===== */
+.mm-hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 16px 0 12px;
+}
+.mm-hero-name {
+	font-size: 18px;
+	font-weight: 700;
+	color: #2E2418;
+	font-family: var(--serif, serif);
+	margin-top: 8px;
+}
+.mm-hero-sub {
+	font-size: 12px;
+	color: #9A8C77;
+	margin-top: 2px;
+}
+
+/* ===== 状态页(连接中/错误) ===== */
+.mm-state {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+}
+.mm-steam {
+	display: flex;
+	flex-direction: row;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+.mm-steam-dot {
+	width: 8px; height: 8px; border-radius: 999px;
+	background: rgba(180, 118, 43, 0.3);
+	animation: mm-steam-rise 2.4s ease-in-out infinite;
+}
+.mm-steam-dot-2 { animation-delay: 0.8s; }
+.mm-steam-dot-3 { animation-delay: 1.6s; }
+@keyframes mm-steam-rise {
+	0% { transform: translateY(6px) scale(0.7); opacity: 0; }
+	40% { opacity: 0.55; }
+	100% { transform: translateY(-8px) scale(1.2); opacity: 0; }
+}
+.mm-state-text { font-size: 15px; color: #5C4F3D; font-family: var(--serif, serif); }
+.mm-state-sub { font-size: 12px; color: #9A8C77; margin-top: 6px; text-align: center; padding: 0 32px; }
+.mm-state-btn {
+	margin-top: 16px;
+	padding: 8px 24px;
+	border-radius: 8px;
+	background: #B4762B;
+}
+.mm-state-btn-text { font-size: 13px; color: #FFFCF5; font-weight: 700; }
+
+/* ===== 对话主体 ===== */
+.mm-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* 消息流 */
+.mm-flow {
+	flex: 1;
+	padding: 0 12px;
+}
+.mm-flow-bottom { height: 8px; }
+
+.mm-msg {
+	display: flex;
+	flex-direction: row;
+	margin-bottom: 12px;
+	align-items: flex-start;
+}
+.mm-msg-left { justify-content: flex-start; }
+.mm-msg-right { justify-content: flex-end; }
+
+.mm-msg-avatar {
+	width: 36px;
+	height: 36px;
+	margin-right: 8px;
+	flex-shrink: 0;
+}
+
+.mm-bubble {
+	max-width: 72%;
+	padding: 10px 14px;
+	border-radius: 12px 12px 12px 0;
+}
+.mm-bubble-master {
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+}
+.mm-bubble-user {
+	background: #B4762B;
+	border-radius: 12px 12px 0 12px;
+}
+.mm-bubble-text {
+	font-size: 14px;
+	line-height: 1.55;
+}
+.mm-bubble-master .mm-bubble-text { color: #2E2418; }
+.mm-bubble-user .mm-bubble-text { color: #FFFCF5; }
+
+/* 听它读 */
+.mm-listen {
+	margin-top: 6px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: rgba(180, 118, 43, 0.1);
+	align-self: flex-start;
+}
+.mm-listen-text { font-size: 11px; color: #B4762B; }
+
+/* 思考中 */
+.mm-typing {
+	display: flex;
+	flex-direction: row;
+	gap: 5px;
+	align-items: center;
+	padding: 12px 14px;
+}
+.mm-dot {
+	width: 6px; height: 6px; border-radius: 999px;
+	background: #9A8C77;
+	animation: mm-dot-bounce 1.2s ease-in-out infinite;
+}
+.mm-dot:nth-child(2) { animation-delay: 0.2s; }
+.mm-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes mm-dot-bounce {
+	0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+	30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* 实时转写 */
+.mm-partial {
+	padding: 6px 16px;
+	background: rgba(78, 125, 91, 0.08);
+	margin: 0 12px 6px;
+	border-radius: 8px;
+}
+.mm-partial-text { font-size: 13px; color: #4E7D5B; }
+
+/* TTS 播报条 */
+.mm-tts-bar {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 8px 16px;
+	background: rgba(201, 123, 87, 0.1);
+	gap: 12px;
+}
+.mm-tts-label { font-size: 12px; color: #5C4F3D; flex: 1; }
+.mm-tts-replay {
+	padding: 4px 12px;
+	border-radius: 999px;
+	background: rgba(201, 123, 87, 0.15);
+}
+.mm-tts-replay-text { font-size: 11px; color: #A05A3E; }
+.mm-tts-close { padding: 4px 8px; }
+.mm-tts-close-text { font-size: 11px; color: #9A8C77; }
+
+/* ===== 底部输入区 ===== */
+.mm-input-bar {
+	padding: 8px 12px;
+	padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+	background: #F7F1E5;
+	border-top: 1px solid #E6DAC4;
+}
+.mm-input-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+}
+.mm-input {
+	flex: 1;
+	height: 38px;
+	padding: 0 14px;
+	border-radius: 8px;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	font-size: 14px;
+	color: #2E2418;
+}
+.mm-send-btn {
+	padding: 0 16px;
+	height: 38px;
+	border-radius: 8px;
+	background: rgba(180, 118, 43, 0.4);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-send-active {
+	background: #B4762B;
+}
+.mm-send-text { font-size: 13px; color: #FFFCF5; font-weight: 700; }
+
+.mm-mode-btn {
+	width: 38px;
+	height: 38px;
+	border-radius: 8px;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-mode-btn-icon { font-size: 18px; }
+
+/* 语音按钮 */
+.mm-voice-btn {
+	flex: 1;
+	height: 38px;
+	border-radius: 8px;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-voice-active {
+	background: rgba(201, 123, 87, 0.15);
+	border-color: #C97B57;
+}
+.mm-voice-btn-text { font-size: 14px; color: #2E2418; font-weight: 600; }
+
+.mm-listen-btn {
+	padding: 0 16px;
+	height: 38px;
+	border-radius: 8px;
+	background: rgba(180, 118, 43, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-listen-btn-text { font-size: 13px; color: #B4762B; }
+</style>

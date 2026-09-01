@@ -209,6 +209,6 @@ const handleConfirm = () => {
 	}
 
 	.modal-actions.single {
-		/* 单按钮时占满 */
+		justify-content: center;
 	}
 </style>

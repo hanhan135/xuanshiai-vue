@@ -1,234 +1,229 @@
 <template>
 	<view class="tag-edit-page">
-		<!-- Nav Bar -->
-		<view class="nav-bar" :style="{ paddingTop: (statusBarHeight + 8) + 'px', paddingRight: menuButtonSpacing + 'px' }">
-			<view class="nav-back" @click="goBack">
-				<text class="back-icon">←</text>
-			</view>
-			<text class="nav-title">编辑标签</text>
-			<view class="nav-save" @click="saveTags">
-				<text class="save-text">保存</text>
-			</view>
+		<view class="nav-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="nav-back" @tap="goBack"><text class="nav-back-icon">‹</text></view>
+			<text class="nav-title">编辑我的标签</text>
+			<view class="nav-back-placeholder"></view>
 		</view>
 
-		<!-- 标签编辑内容 -->
-		<scroll-view scroll-y class="tag-content" enhanced show-scrollbar="false">
-			<!-- 已选标签 -->
+		<view class="tag-content">
 			<view class="selected-section">
-				<text class="section-label">已选标签（{{ selectedTags.length }}/6）</text>
-				<view class="tag-row">
-					<view class="tag-item selected" v-for="(tag, i) in selectedTags" :key="i" @click="removeTag(i)">
-						<text class="tag-text">{{ tag }}</text>
-						<text class="tag-remove">×</text>
+				<view class="selected-header">
+					<text class="section-label">已选标签 {{ selectedItems.length }}/{{ maxTags }}</text>
+					<text v-if="selectedItems.length > 0" class="clear-action" @tap="clearTags">清空</text>
+				</view>
+				<view class="selected-row">
+					<view class="selected-chip" v-for="tag in selectedItems" :key="tag.id" @tap="removeTag(tag.id)">
+						<text class="selected-emoji">{{ tag.emoji }}</text>
+						<text class="selected-text">{{ tag.label }}</text>
+						<text class="selected-remove">×</text>
 					</view>
-					<text v-if="selectedTags.length === 0" class="empty-hint">请从下方选择你的个性标签</text>
+					<text v-if="selectedItems.length === 0" class="empty-hint">从下面选择能代表你的标签</text>
+				</view>
+				<view class="selected-actions">
+					<view class="selected-save" :class="{ disabled: !canSave || saving }" @tap="saveAndBack"><text>{{ saving ? '保存中' : '保存' }}</text></view>
 				</view>
 			</view>
 
-			<!-- 标签分类 -->
-			<view class="categories-section">
-				<view class="category" v-for="(cat, ci) in tagCategories" :key="ci">
-					<text class="category-title">{{ cat.name }}</text>
-					<view class="tag-row">
-						<view
-							class="tag-item"
-							:class="{ selected: isTagSelected(t) }"
-							v-for="(t, ti) in cat.tags"
-							:key="ti"
-							@click="toggleTag(t)"
-						>
-							<text class="tag-text">{{ t }}</text>
-						</view>
+		<view class="tag-workspace">
+			<scroll-view scroll-y class="category-sidebar" enhanced show-scrollbar="false">
+				<view v-for="category in visibleCategories" :key="category.id" class="category-side-item" :class="{ active: activeCategoryId === category.id }" @tap="selectCategory(category.id)">
+					<view class="category-side-mark"></view>
+					<text class="category-side-name">{{ category.name }}</text>
+					<text v-if="categorySelectedCount(category.id) > 0" class="category-side-count">{{ categorySelectedCount(category.id) }}</text>
+				</view>
+			</scroll-view>
+
+			<scroll-view scroll-y class="tag-panel" enhanced show-scrollbar="false">
+				<view class="category-heading">
+					<text class="category-title">{{ activeCategory.name }}</text>
+					<text class="category-count">可多选</text>
+				</view>
+				<view class="tag-grid">
+					<view v-for="tag in activeCategory.tags" :key="tag.id" class="tag-item" :class="{ selected: isTagSelected(activeCategory.id, tag.label) }" @tap="toggleTag(activeCategory.id, tag.label)">
+						<text v-if="tag.emoji != ''" class="tag-emoji">{{ tag.emoji }}</text>
+						<text class="tag-text">{{ tag.label }}</text>
+						<view v-if="isTagSelected(activeCategory.id, tag.label)" class="tag-check"><text>✓</text></view>
 					</view>
 				</view>
-			</view>
-
-			<view class="tag-bottom-spacer"></view>
-		</scroll-view>
+				<view class="tag-bottom-spacer"></view>
+			</scroll-view>
+		</view>
+		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
-	const systemInfo = uni.getSystemInfoSync()
-	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
-	const menuButtonInfo = uni.getMenuButtonBoundingClientRect()
-	const menuButtonSpacing = menuButtonInfo != null ? (systemInfo.windowWidth - menuButtonInfo.left) : 8
+import { getOwnProfile, getProfileTagOptions, updateOwnProfile } from '@/api'
 
-	const selectedTags = ref<string[]>([])
-	const maxTags = 6
+type TagItem = { id: string, label: string, emoji: string }
+type TagCategory = { id: string, name: string, tags: TagItem[] }
 
-	// 从 storage 加载已有标签
-	onMounted(() => {
-		try {
-			const saved = uni.getStorageSync('xsa_my_tags')
-			if (saved != null && Array.isArray(saved)) {
-				const arr = saved as any[]
-				for (let i = 0; i < arr.length && i < maxTags; i++) {
-					if (typeof arr[i] === 'string') {
-						selectedTags.value.push(arr[i] as string)
-					}
-				}
-			}
-		} catch (e) {
-			// 忽略，使用空列表
-		}
-	})
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+const categories = ref<TagCategory[]>([])
+const maxTags = 5
+const activeCategoryId = ref('')
+const tagMode = ref('interest')
+const selectedLabels = ref<string[]>([])
+const saving = ref(false)
 
-	// 标签分类数据
-	const tagCategories = [
-		{
-			name: '个性特征',
-			tags: ['文艺青年', '阳光开朗', '内向安静', '幽默风趣', '温柔体贴', '独立自主', '成熟稳重', '粘人可爱', '理性冷静']
-		},
-		{
-			name: '经历背景',
-			tags: ['有海外经历', '985/211', '海归', '创业中', '体制内', '大厂']
-		},
-		{
-			name: '游戏偏好',
-			tags: ['不玩游戏', '休闲手游', '主机游戏', 'PC游戏', '桌游']
-		},
-		{
-			name: '书影音',
-			tags: ['读书', '电影', '追剧', '音乐', '看展']
-		},
-		{
-			name: '运动健身',
-			tags: ['跑步', '瑜伽', '游泳', '篮球', '健身', '不运动']
-		},
-		{
-			name: '恋爱经历',
-			tags: ['母单', '1-2段', '3段以上']
-		},
-		{
-			name: '旅行方式',
-			tags: ['自由行', '跟团游', '自驾游', '背包客', '不爱旅行']
-		},
-		{
-			name: '美食偏好',
-			tags: ['中餐', '日料', '西餐', '火锅', '素食', '自己做']
-		},
-		{
-			name: '宠物态度',
-			tags: ['养宠', '喜欢但不养', '不感兴趣', '害怕']
-		}
-	]
-
-	const isTagSelected = (tag: string): boolean => {
-		const list = selectedTags.value
-		for (let i = 0; i < list.length; i++) {
-			if (list[i] === tag) return true
-		}
-		return false
+const visibleCategories = computed((): TagCategory[] => categories.value.filter((category: TagCategory) => tagMode.value === 'personality' ? category.id === 'personality' : category.id !== 'personality'))
+const activeCategory = computed((): TagCategory => {
+	for (const category of visibleCategories.value) if (category.id === activeCategoryId.value) return category
+	return visibleCategories.value.length > 0 ? visibleCategories.value[0] : { id: '', name: '', tags: [] }
+})
+const selectedItems = computed((): TagItem[] => {
+	const result: TagItem[] = []
+	for (const category of visibleCategories.value) {
+		for (const tag of category.tags) if (selectedLabels.value.indexOf(tag.label) >= 0) result.push(tag)
 	}
+	return result
+})
+const canSave = computed(() => selectedLabels.value.length >= 3 && selectedLabels.value.length <= maxTags)
 
-	const toggleTag = (tag: string) => {
-		const list = selectedTags.value
-		const idx = list.indexOf(tag)
-		if (idx >= 0) {
-			list.splice(idx, 1)
-		} else if (list.length < maxTags) {
-			list.push(tag)
-		} else {
-			uni.showToast({ title: '最多选择' + maxTags + '个标签', icon: 'none' })
-		}
-		selectedTags.value = list
+const selectCategory = (categoryId: string) => { activeCategoryId.value = categoryId }
+const isTagSelected = (_categoryId: string, label: string): boolean => selectedLabels.value.indexOf(label) >= 0
+const categorySelectedCount = (categoryId: string): number => {
+	for (const category of categories.value) {
+		if (category.id !== categoryId) continue
+		return category.tags.filter((tag: TagItem) => selectedLabels.value.indexOf(tag.label) >= 0).length
 	}
-
-	const removeTag = (index: number) => {
-		const list = selectedTags.value
-		list.splice(index, 1)
-		selectedTags.value = list
-	}
-
-	const saveTags = () => {
-		try {
-			const list = selectedTags.value
-			const arr: string[] = []
-			for (let i = 0; i < list.length; i++) {
-				arr.push(list[i])
-			}
-			uni.setStorageSync('xsa_my_tags', arr)
-		} catch (e) {
-			// ignore
+	return 0
+}
+const toggleTag = (_categoryId: string, label: string) => {
+	const next = selectedLabels.value.slice()
+	const index = next.indexOf(label)
+	if (index >= 0) next.splice(index, 1)
+	else if (next.length < maxTags) next.push(label)
+	selectedLabels.value = next
+}
+const removeTag = (tagId: string) => {
+	for (const category of categories.value) {
+		for (const tag of category.tags) {
+			if (tag.id !== tagId) continue
+			selectedLabels.value = selectedLabels.value.filter((label: string) => label !== tag.label)
+			return
 		}
+	}
+}
+const clearTags = () => { selectedLabels.value = [] }
+
+const load = async () => {
+	try {
+		const optionsResponse = await getProfileTagOptions()
+		if (!optionsResponse.success || optionsResponse.data == null) {
+			uni.showToast({ title: '标签选项加载失败', icon: 'none' })
+			return
+		}
+		const rawCategories = Array.isArray(optionsResponse.data.categories) ? optionsResponse.data.categories as any[] : []
+		const mapped: TagCategory[] = []
+		for (const rawCategory of rawCategories) {
+			const key = rawCategory.key != null ? '' + rawCategory.key : ''
+			const options = Array.isArray(rawCategory.options) ? rawCategory.options as string[] : []
+			mapped.push({
+				id: key,
+				name: rawCategory.label != null ? '' + rawCategory.label : key,
+				tags: options.map((label: string, index: number): TagItem => ({ id: key + '-' + index, label, emoji: '' }))
+			})
+		}
+		categories.value = mapped
+		const visible = visibleCategories.value
+		activeCategoryId.value = visible.length > 0 ? visible[0].id : ''
+
+		const profileResponse = await getOwnProfile()
+		if (profileResponse.success && profileResponse.data != null) {
+			const profile = profileResponse.data as any
+			const values = tagMode.value === 'personality' ? profile.personality_tags : profile.interest_tags
+			selectedLabels.value = Array.isArray(values) ? (values as string[]).slice(0, maxTags) : []
+		}
+	} catch (error) {
+		console.error('[TagEdit] load failed', error)
+		uni.showToast({ title: '标签选项加载失败', icon: 'none' })
+	}
+}
+
+const saveAndBack = async () => {
+	if (saving.value || !canSave.value) return
+	saving.value = true
+	try {
+		const payload: any = {}
+		if (tagMode.value === 'personality') payload.personality_tags = selectedLabels.value.slice(0, maxTags)
+		else payload.interest_tags = selectedLabels.value.slice(0, maxTags)
+		const response = await updateOwnProfile(payload)
+		if (!response.success) {
+			uni.showToast({ title: response.message != null ? '' + response.message : '标签保存失败', icon: 'none' })
+			return
+		}
+		const responseProfile = response.data != null && response.data.profile != null ? response.data.profile : response.data
+		const savedValues = responseProfile != null
+			? (tagMode.value === 'personality' ? responseProfile.personality_tags : responseProfile.interest_tags)
+			: null
+		if (!Array.isArray(savedValues) || savedValues.length < 3) {
+			uni.showToast({ title: '后台未保存标签，请重试', icon: 'none' })
+			return
+		}
+		const eventChannel = getOpenerEventChannel()
+		if (eventChannel != null) eventChannel.emit('tagsSaved', { type: tagMode.value, tags: (savedValues as string[]).slice(0, maxTags) })
 		uni.showToast({ title: '标签已保存', icon: 'success' })
-		setTimeout(() => {
-			goBack()
-		}, 600)
+		setTimeout(() => goBack(), 500)
+	} finally {
+		saving.value = false
 	}
+}
 
-	const goBack = () => {
-		uni.navigateBack({ delta: 1 })
-	}
+const goBack = () => { uni.navigateBack({ delta: 1 }) }
+
+onLoad((options: any) => {
+	const type = options != null && options.type != null ? '' + options.type : 'interest'
+	tagMode.value = type === 'personality' ? 'personality' : 'interest'
+})
+onMounted(() => { load() })
 </script>
 
 <style scoped>
-.tag-edit-page {
-	position: relative;
-	width: 100%;
-	max-width: 750rpx;
-	min-height: 100vh;
-	margin: 0 auto;
-	background-color: #FAF8F5;
-	display: flex;
-	flex-direction: column;
-	--accent: #7EC8A0;
-	--accent-dark: #5BAF80;
-	--accent-soft: #E8F5EE;
-	--bg-card: #FFFFFF;
-	--bg-card-soft: #F5F9F2;
-	--text-primary: #1A1A1A;
-	--text-secondary: #5A6B5C;
-	--text-muted: #A0B0A2;
-	--text-inverse: #FFFFFF;
-	--border-soft: #E8EDE6;
-	--radius-sm: 12rpx;
-	--radius-md: 24rpx;
-	--radius-full: 9999rpx;
+.tag-edit-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; background: var(--canvas); color: var(--ink); }
+.nav-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 88rpx; padding-left: 24rpx; padding-right: 24rpx; background: var(--paper); border-bottom: 1px solid var(--line); }
+.nav-title { flex: 1; min-width: 0; color: var(--ink); font-size: 34rpx; font-weight: 700; text-align: center; }
+.nav-back, .nav-back-placeholder { width: 72rpx; height: 72rpx; flex-shrink: 0; }
+.nav-back { display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { color: var(--ink); font-size: 56rpx; font-weight: 700; line-height: 1; }
+.tag-content { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 24rpx 24rpx 0; box-sizing: border-box; }
+.selected-section { display: flex; flex-direction: column; gap: 16rpx; padding: 22rpx; background: var(--surface); border: 1px solid var(--line); border-radius: 16rpx; box-shadow: var(--shadow-sm); }
+.selected-header { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.section-label { color: var(--ink); font-size: 28rpx; font-weight: 700; }
+.clear-action { color: var(--accent2); font-size: 24rpx; font-weight: 700; }
+.selected-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12rpx; min-height: 54rpx; align-items: center; }
+.selected-actions { display: flex; flex-direction: row; justify-content: flex-end; }
+.selected-save { min-width: 140rpx; height: 60rpx; display: flex; align-items: center; justify-content: center; border-radius: 30rpx; background: var(--accent); color: var(--text-invert); font-size: 24rpx; font-weight: 700; }
+.selected-save.disabled { opacity: 0.45; pointer-events: none; }
+.selected-chip { display: flex; flex-direction: row; align-items: center; gap: 4rpx; padding: 10rpx 14rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); }
+.selected-emoji { font-size: 22rpx; }
+.selected-text { font-size: 22rpx; font-weight: 600; }
+.selected-remove { margin-left: 2rpx; color: var(--accent2); font-size: 26rpx; line-height: 1; }
+.empty-hint { color: var(--muted); font-size: 24rpx; }
+.tag-workspace { flex: 1; min-height: 0; display: flex; flex-direction: row; gap: 14rpx; margin-top: 20rpx; }
+.category-sidebar { width: 160rpx; height: 100%; flex: 0 0 160rpx; padding: 14rpx 0; box-sizing: border-box; border: 1px solid var(--line); border-radius: 14rpx; background: var(--surface); }
+.category-side-item { position: relative; min-height: 84rpx; margin-bottom: 8rpx; display: flex; flex-direction: row; align-items: center; gap: 8rpx; padding: 8rpx 12rpx; box-sizing: border-box; color: var(--muted); }
+.category-side-item.active { color: var(--ink); background: var(--accent-bg); }
+.category-side-mark { width: 5rpx; height: 34rpx; flex-shrink: 0; border-radius: 999rpx; background: transparent; }
+.category-side-item.active .category-side-mark { background: var(--accent); }
+.category-side-name { min-width: 0; flex: 1; font-size: 23rpx; font-weight: 700; white-space: nowrap; }
+.category-side-count { width: 28rpx; height: 28rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-invert); background: var(--accent); font-size: 18rpx; }
+.tag-panel { flex: 1; min-width: 0; height: 100%; padding: 22rpx 0 0; box-sizing: border-box; }
+.category-heading { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; margin-bottom: 14rpx; }
+.category-title { color: var(--ink); font-size: 30rpx; font-weight: 700; }
+.category-count { color: var(--muted); font-size: 22rpx; }
+.tag-grid { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: 14rpx 10rpx; }
+.tag-item { position: relative; width: calc((100% - 10rpx) / 2); min-height: 132rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10rpx; padding: 16rpx 8rpx; box-sizing: border-box; border: 2rpx solid var(--line); border-radius: 14rpx; background: var(--surface); }
+.tag-item.selected { border-color: var(--accent); background: var(--accent-bg); }
+.tag-emoji { font-size: 34rpx; line-height: 1; }
+.tag-text { max-width: 100%; color: var(--ink2); font-size: 22rpx; line-height: 1.3; text-align: center; }
+.tag-item.selected .tag-text { color: var(--accent2); font-weight: 700; }
+.tag-check { position: absolute; top: 8rpx; right: 8rpx; width: 30rpx; height: 30rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--accent); color: var(--text-invert); font-size: 20rpx; font-weight: 700; }
+.tag-bottom-spacer { height: 60rpx; }
+@media (min-width: 600px) {
+	.category-sidebar { width: 176rpx; flex-basis: 176rpx; }
+	.tag-item { width: calc((100% - 20rpx) / 3); }
 }
-
-
-/* Nav Bar */
-.nav-bar { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 30rpx 24rpx 30rpx; position: relative; }
-.nav-back { width: 72rpx; height: 72rpx; border-radius: 50%; background-color: var(--bg-card); display: flex; align-items: center; justify-content: center; }
-.back-icon { font-size: 36rpx; color: var(--text-primary); font-weight: 700; }
-.nav-title { font-size: 34rpx; font-weight: 700; color: var(--text-primary); }
-.nav-save { padding: 16rpx 32rpx; border-radius: var(--radius-full); background-color: var(--accent); box-shadow: 0 8rpx 24rpx rgba(126, 200, 160, 0.25); }
-.save-text { font-size: 24rpx; font-weight: 700; color: var(--text-inverse); }
-
-/* Content */
-.tag-content { flex: 1; padding: 24rpx 32rpx; }
-
-/* Selected section */
-.selected-section { display: flex; flex-direction: column; gap: 16rpx; margin-bottom: 32rpx; padding: 24rpx; background-color: var(--bg-card); border-radius: var(--radius-md); }
-.section-label { font-size: 26rpx; font-weight: 600; color: var(--text-primary); }
-.empty-hint { font-size: 24rpx; color: var(--text-muted); padding: 16rpx 0; }
-
-/* Categories */
-.categories-section { display: flex; flex-direction: column; gap: 28rpx; }
-.category { display: flex; flex-direction: column; gap: 16rpx; }
-.category-title { font-size: 26rpx; font-weight: 700; color: var(--text-primary); padding-left: 8rpx; }
-
-/* Tag Row */
-.tag-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16rpx; }
-.tag-item {
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	gap: 6rpx;
-	padding: 12rpx 24rpx;
-	border-radius: var(--radius-full);
-	background-color: var(--bg-card-soft);
-	border: 2rpx solid transparent;
-}
-.tag-item.selected {
-	background-color: var(--accent-soft);
-	border-color: var(--accent);
-}
-.tag-text { font-size: 24rpx; color: var(--text-secondary); }
-.tag-item.selected .tag-text { color: var(--accent-dark); font-weight: 600; }
-.tag-remove { font-size: 28rpx; color: var(--accent-dark); font-weight: 700; margin-left: 4rpx; }
-
-.tag-bottom-spacer { height: 100rpx; }
 </style>

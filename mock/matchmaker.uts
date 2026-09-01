@@ -26,40 +26,6 @@ export const mockMatchmakerContact = {
 /** 角色申请 Mock 记录。提交后会同步写入本地存储，仅用于开发和联调。 */
 export const mockRoleApplications: any[] = []
 
-/** 牵线首页 Banner */
-export const mockMatchmakerBanners = [
-  {
-    id: 1,
-    image: PORTRAIT.main,
-    title: '专业牵线，幸福相伴',
-    subtitle: '一对一梳理关系期待，再把你介绍给更合适的人。',
-    statValue: '126',
-    statLabel: '本月促成初次见面',
-    buttonText: '查看服务',
-    type: 'service'
-  },
-  {
-    id: 2,
-    image: PORTRAIT.alt,
-    title: '私人定制，不仓促地靠近',
-    subtitle: '从资料梳理、沟通节奏到候选筛选，都由专属红娘陪你推进。',
-    statValue: '86%',
-    statLabel: '用户愿意继续沟通',
-    buttonText: '了解方案',
-    type: 'custom'
-  },
-  {
-    id: 3,
-    image: PORTRAIT.man,
-    title: 'AI 红娘，先帮你看清自己',
-    subtitle: '只做交集分析、关系提醒和破冰建议，不替你承诺结果。',
-    statValue: '3',
-    statLabel: '步理清匹配线索',
-    buttonText: '体验 AI',
-    type: 'ai'
-  }
-]
-
 /** 服务红娘 */
 export const mockServiceMatchmakers = [
   {
@@ -73,8 +39,6 @@ export const mockServiceMatchmakers = [
     serviceCount: 356,
     successCount: 128,
     successRate: 0.98,
-    rating: 4.9,
-    ratingCount: 182,
     tags: ['恋爱脱单', '高学历优质单身', '婚姻规划', '情感修复'],
     badge: '平台认证',
     price: 199,
@@ -92,8 +56,6 @@ export const mockServiceMatchmakers = [
     serviceCount: 286,
     successCount: 88,
     successRate: 0.58,
-    rating: 4.8,
-    ratingCount: 164,
     tags: ['高知青年', '同城见面', '资料优化'],
     badge: '服务口碑',
     price: 199,
@@ -111,10 +73,8 @@ export const mockServiceMatchmakers = [
     serviceCount: 268,
     successCount: 82,
     successRate: 0.55,
-    rating: 4.8,
-    ratingCount: 151,
     tags: ['安全感', '沟通方式', '长期规划'],
-    badge: '好评推荐',
+    badge: '专业推荐',
     price: 199,
     status: 'online',
     caseRecord: '帮助 82 对用户完成稳定沟通与线下见面。'
@@ -130,8 +90,6 @@ export const mockServiceMatchmakers = [
     serviceCount: 239,
     successCount: 74,
     successRate: 0.54,
-    rating: 4.7,
-    ratingCount: 129,
     tags: ['择偶梳理', '高效率', '关系目标'],
     badge: '认真推荐',
     price: 169,
@@ -153,8 +111,6 @@ export const mockCustomMatchmakers = [
     serviceCount: 168,
     successCount: 56,
     successRate: 0.67,
-    rating: 4.9,
-    ratingCount: 96,
     tags: ['耐心细致', '长期陪伴', '节奏跟进'],
     badge: '专属定制',
     price: 699,
@@ -171,8 +127,6 @@ export const mockCustomMatchmakers = [
     serviceCount: 152,
     successCount: 49,
     successRate: 0.63,
-    rating: 4.8,
-    ratingCount: 81,
     tags: ['资料表达', '关系边界', '一对一反馈'],
     badge: '定制顾问',
     price: 699,
@@ -189,8 +143,6 @@ export const mockCustomMatchmakers = [
     serviceCount: 133,
     successCount: 44,
     successRate: 0.62,
-    rating: 4.7,
-    ratingCount: 68,
     tags: ['候选筛选', '复盘反馈', '长期规划'],
     badge: '高配定制',
     price: 899,
@@ -200,46 +152,6 @@ export const mockCustomMatchmakers = [
 
 /** 向后兼容旧命名 */
 export const mockVolunteerMatchmakers = mockCustomMatchmakers
-
-/** AI 合拍线索推荐（不是直接匹配） */
-export const mockAiRecommendations = [
-  {
-    userId: 1,
-    name: '苏晚晴',
-    age: 26,
-    city: '杭州',
-    avatar: PORTRAIT.main,
-    matchScore: 92,
-    tags: ['看展', '咖啡', '长期关系'],
-    title: '关系目标接近',
-    introduction: '你们都更重视稳定节奏和认真沟通。',
-    aiSuggestion: '可以从城市散步、看展偏好和周末节奏切入，先聊彼此如何理解长期关系。'
-  },
-  {
-    userId: 5,
-    name: '徐锦瑟',
-    age: 25,
-    city: '南京',
-    avatar: PORTRAIT.alt,
-    matchScore: 90,
-    tags: ['心理学', '表达', '成长'],
-    title: '情绪沟通优势明显',
-    introduction: '双方都愿意解释自己的感受，不太回避冲突。',
-    aiSuggestion: '适合先聊最近一次让你觉得被理解的关系体验，再过渡到亲密关系边界。'
-  },
-  {
-    userId: 2,
-    name: '林雨桐',
-    age: 28,
-    city: '南京',
-    avatar: PORTRAIT.community,
-    matchScore: 88,
-    tags: ['徒步', '烘焙', '沟通'],
-    title: '生活节奏互补',
-    introduction: '你们都偏爱有安排但不过度紧绷的周末方式。',
-    aiSuggestion: '可以从周末计划、旅行节奏和“独处与陪伴”的平衡感开始聊。'
-  }
-]
 
 /** 私人定制方案（对齐私人定制-思维导图说明文档） */
 export const mockCustomPlans = [

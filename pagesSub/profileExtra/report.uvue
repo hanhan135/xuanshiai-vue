@@ -1,0 +1,96 @@
+<template>
+	<view class="report-page">
+		<view class="report-nav"><view class="nav-back" @tap="goBack"><text>‹</text></view><text class="nav-title">举报</text><view class="nav-placeholder"></view></view>
+		<scroll-view class="report-scroll" scroll-y enhanced show-scrollbar="false">
+			<view class="report-card">
+				<text class="section-title">请选择举报原因</text>
+				<view class="reason-grid"><view v-for="reason in reasons" :key="reason.id" class="reason-item" :class="{ selected: selectedReason === reason.id }" @tap="selectedReason = reason.id"><text>{{ reason.label }}</text></view></view>
+				<view class="section-divider"></view>
+				<text class="section-title">举报内容</text>
+				<textarea class="detail-input" :value="detail" maxlength="200" placeholder="请详细描述你所遇到的情况，以便客服人员快速为你进行处理" @input="onDetailInput"></textarea>
+				<text class="word-count">已输入{{ detail.length }}/200字</text>
+				<view class="section-divider"></view>
+				<text class="section-title">证据截图</text>
+				<view class="evidence-row"><view v-for="(image, index) in evidence" :key="index" class="evidence-item"><image :src="image" mode="aspectFill"></image><view class="evidence-delete" @tap="removeEvidence(index)"><text>×</text></view></view><view v-if="evidence.length < 3" class="evidence-add" @tap="chooseEvidence"><text class="evidence-plus">+</text><text>上传图片</text></view></view>
+			</view>
+		</scroll-view>
+		<view class="submit-bar"><view class="submit-button" :class="{ disabled: submitting || selectedReason === '' }" @tap="submitReport"><text>{{ submitting ? '提交中...' : '提交' }}</text></view></view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import { reportContent } from '@/api'
+
+	const userId = ref(0)
+	const userName = ref('该用户')
+	const selectedReason = ref('sexual')
+	const detail = ref('')
+	const evidence = ref([] as string[])
+	const submitting = ref(false)
+	const reasons = [
+		{ id: 'sexual', label: '色情相关' },
+		{ id: 'fake', label: '头像、虚假资料' },
+		{ id: 'harass', label: '骚扰信息' },
+		{ id: 'fraud', label: '婚托、饭托、酒托' },
+		{ id: 'scam', label: '诈骗钱财、虚假中奖信息' },
+		{ id: 'other', label: '其他' }
+	]
+
+	onMounted(() => {
+		const pages = getCurrentPages()
+		const page = pages[pages.length - 1]
+		if (page != null && page.options != null) {
+			if (page.options.userId != null) userId.value = Number(page.options.userId)
+			if (page.options.userName != null) userName.value = decodeURIComponent('' + page.options.userName)
+		}
+	})
+	const goBack = () => uni.navigateBack({ delta: 1 })
+	const onDetailInput = (event: any) => detail.value = event.detail.value
+	const chooseEvidence = () => {
+		uni.chooseImage({ count: 3 - evidence.value.length, sizeType: ['compressed'], sourceType: ['album', 'camera'], success: (res: any) => {
+			const paths = res != null && res.tempFilePaths != null ? res.tempFilePaths as string[] : []
+			for (let i = 0; i < paths.length; i++) evidence.value.push('' + paths[i])
+		} })
+	}
+	const removeEvidence = (index: number) => { if (index >= 0 && index < evidence.value.length) evidence.value.splice(index, 1) }
+	const submitReport = async () => {
+		if (submitting.value || selectedReason.value === '' || userId.value <= 0) return
+		submitting.value = true
+		try {
+			const res = await reportContent('user', userId.value, selectedReason.value, detail.value)
+			if (res.success) {
+				uni.showToast({ title: '举报已提交', icon: 'success' })
+				setTimeout(() => goBack(), 600)
+			} else uni.showToast({ title: res.message != null ? '' + res.message : '提交失败，请重试', icon: 'none' })
+		} catch (e) { uni.showToast({ title: '网络异常，请稍后重试', icon: 'none' }) }
+		finally { submitting.value = false }
+	}
+</script>
+
+<style scoped>
+.report-page { min-height: 100vh; background: #F4F5F9; color: var(--ink); }
+.report-nav { height: 100px; padding: 44px 18px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: var(--paper); }
+.nav-back, .nav-placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.nav-back text { font-size: 38px; line-height: 36px; }
+.nav-title { font-size: 22px; font-weight: 800; font-family: var(--serif); }
+.report-scroll { height: calc(100vh - 100px); padding: 24px 24px 120px; box-sizing: border-box; }
+.report-card { padding: 24px 18px 30px; border-radius: 22px; background: var(--paper); }
+.section-title { display: block; font-size: 21px; font-weight: 800; }
+.reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
+.reason-item { min-height: 52px; padding: 0 8px; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; background: #F3F5F9; font-size: 14px; color: var(--ink2); }
+.reason-item.selected { background: #F9E5FB; color: #B44CC6; font-weight: 700; }
+.section-divider { height: 1px; margin: 28px 0; background: #E7E8ED; }
+.detail-input { width: 100%; height: 126px; margin-top: 20px; padding: 16px; box-sizing: border-box; border-radius: 14px; background: #F4F5F7; color: var(--ink2); font-size: 14px; line-height: 1.5; }
+.word-count { display: block; margin-top: -24px; padding-right: 14px; text-align: right; font-size: 12px; color: var(--muted); }
+.evidence-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.evidence-item, .evidence-add { position: relative; width: 92px; height: 112px; border-radius: 10px; overflow: hidden; background: #F3F5F9; }
+.evidence-item image { width: 100%; height: 100%; }
+.evidence-add { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+.evidence-plus { font-size: 38px; font-weight: 300; line-height: 38px; }
+.evidence-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); color: var(--text-invert); }
+.submit-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 18px 20px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(244,245,249,0), #F4F5F9 25%); }
+.submit-button { height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #E99AF5, #F4B8F7); color: var(--ink); font-size: 18px; font-weight: 800; }
+.submit-button.disabled { opacity: .55; }
+.nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nav-back text { font-size: 16px; line-height: 1; color: #2C2C2C; }
+</style>

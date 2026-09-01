@@ -1,0 +1,189 @@
+/**
+ * 墨相师·AI 引路人 对话 WebSocket 封装
+ * 支持语音(半双工实时 ASR)和文字(直接发送文本)双模式
+ * 流式回复:ai_content 增量推送
+ */
+
+import { buildWsUrl, getAccessToken } from './config.uts'
+
+export interface MasterWSCallbacks {
+	onSessionReady?: () => void
+	onPartialTranscript?: (text: string) => void
+	onFinalTranscript?: (text: string) => void
+	onAIThinking?: () => void
+	onAIContent?: (text: string) => void
+	onAIReply?: (text: string) => void
+	onTTSAudio?: (audioUrl: string, durationMs: number) => void
+	onError?: (code: string, message: string) => void
+	onClose?: () => void
+}
+
+export class MasterWS {
+	private socketTask: any = null
+	private callbacks: MasterWSCallbacks
+	private connected = false
+	private reconnectAttempts = 0
+	private maxReconnect = 3
+	private manuallyClosed = false
+
+	constructor(callbacks: MasterWSCallbacks) {
+		this.callbacks = callbacks
+	}
+
+	connect(): boolean {
+		this.manuallyClosed = false
+		const token = getAccessToken()
+		if (token == '') {
+			this.callbacks.onError?.('AUTH_REQUIRED', '未登录,请先登录')
+			return false
+		}
+		const url = buildWsUrl('/voice/moxiang-master', token)
+		console.log('🔌 [MasterWS] connecting /voice/moxiang-master')
+		this.socketTask = uni.connectSocket({
+			url: url,
+			success: () => {},
+			fail: (err: any) => {
+				console.error('❌ [MasterWS] connect failed', err)
+				this.callbacks.onError?.('WS_CONNECT_FAILED', '连接失败')
+			}
+		})
+		this.bindEvents()
+		return true
+	}
+
+	private bindEvents() {
+		if (this.socketTask == null) return
+		this.socketTask.onOpen(() => {
+			console.log('✅ [MasterWS] connected')
+			this.connected = true
+			this.reconnectAttempts = 0
+			this.send({ type: 'session_start' })
+		})
+		this.socketTask.onMessage((res: any) => {
+			this.handleMessage(res.data)
+		})
+		this.socketTask.onClose(() => {
+			console.log('🔌 [MasterWS] closed')
+			this.connected = false
+			if (!this.manuallyClosed && this.reconnectAttempts < this.maxReconnect) {
+				this.reconnectAttempts++
+				console.log('🔄 [MasterWS] reconnecting attempt', this.reconnectAttempts)
+				setTimeout(() => {
+					if (!this.manuallyClosed) {
+						this.connect()
+					}
+				}, 1000 * this.reconnectAttempts)
+			} else {
+				this.callbacks.onClose?.()
+			}
+		})
+		this.socketTask.onError((err: any) => {
+			console.error('❌ [MasterWS] error', err)
+			this.callbacks.onError?.('WS_ERROR', '连接异常')
+		})
+	}
+
+	private handleMessage(data: any) {
+		let msg: any = null
+		try {
+			if (typeof data == 'string') {
+				msg = JSON.parse(data)
+			} else {
+				msg = data
+			}
+		} catch (e) {
+			console.error('❌ [MasterWS] parse message failed', e)
+			return
+		}
+		if (msg == null || msg.type == null) return
+		const type = String(msg.type)
+		switch (type) {
+			case 'session_ready':
+				this.callbacks.onSessionReady?.()
+				break
+			case 'partial_transcript':
+				this.callbacks.onPartialTranscript?.(String(msg.text != null ? msg.text : ''))
+				break
+			case 'final_transcript':
+				this.callbacks.onFinalTranscript?.(String(msg.text != null ? msg.text : ''))
+				break
+			case 'ai_thinking':
+				this.callbacks.onAIThinking?.()
+				break
+			case 'ai_content':
+				this.callbacks.onAIContent?.(String(msg.text != null ? msg.text : ''))
+				break
+			case 'ai_reply':
+				this.callbacks.onAIReply?.(String(msg.text != null ? msg.text : ''))
+				break
+			case 'tts_audio':
+				this.callbacks.onTTSAudio?.(
+					String(msg.audio_url != null ? msg.audio_url : ''),
+					Number(msg.duration_ms != null ? msg.duration_ms : 0)
+				)
+				break
+			case 'error':
+				this.callbacks.onError?.(
+					String(msg.code != null ? msg.code : 'UNKNOWN'),
+					String(msg.message != null ? msg.message : '墨相师对话出错')
+				)
+				break
+		}
+	}
+
+	// ===== 文字模式 =====
+	sendTextMessage(text: string) {
+		this.send({ type: 'text_message', text: text })
+	}
+
+	// ===== 语音模式 =====
+	sendAudioStart() {
+		this.send({ type: 'audio_start' })
+	}
+
+	sendAudioChunk(base64Data: string, seq: number) {
+		this.send({ type: 'audio_chunk', data: base64Data, seq: seq })
+	}
+
+	sendAudioEnd() {
+		this.send({ type: 'audio_end' })
+	}
+
+	// 请求 TTS 播报最新回复
+	sendListen() {
+		this.send({ type: 'listen' })
+	}
+
+	// 编辑转写文本重新生成
+	sendReviseText(text: string) {
+		this.send({ type: 'revise_text', text: text })
+	}
+
+	sendCancel() {
+		this.send({ type: 'cancel' })
+	}
+
+	private send(msg: any) {
+		if (!this.connected || this.socketTask == null) return
+		try {
+			this.socketTask.send({ data: JSON.stringify(msg) })
+		} catch (e) {
+			console.error('❌ [MasterWS] send failed', e)
+		}
+	}
+
+	disconnect() {
+		this.manuallyClosed = true
+		this.connected = false
+		if (this.socketTask != null) {
+			try {
+				this.socketTask.close({})
+			} catch (e) {}
+			this.socketTask = null
+		}
+	}
+
+	isConnected(): boolean {
+		return this.connected
+	}
+}

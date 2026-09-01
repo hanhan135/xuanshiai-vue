@@ -1,0 +1,186 @@
+<template>
+	<view class="page">
+		<view class="nav-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<view class="nav-back" @tap="goBack"><text class="nav-back-icon">‹</text></view>
+			<text class="nav-title">择偶标准</text>
+			<view class="nav-placeholder"></view>
+		</view>
+
+		<view v-if="loading" class="state"><text>正在加载择偶标准...</text></view>
+		<scroll-view v-else class="content" scroll-y enhanced show-scrollbar="false">
+			<view class="section-card">
+				<text class="section-title">择偶要求</text>
+				<view class="field-row">
+					<text class="field-label">年龄下限</text>
+					<picker class="field-picker" mode="selector" :range="ageOptions" :value="ageMinIndex" @change="onAgeMinChange"><text class="field-value">{{ ageText(ageMin) }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">年龄上限</text>
+					<picker class="field-picker" mode="selector" :range="ageOptions" :value="ageMaxIndex" @change="onAgeMaxChange"><text class="field-value">{{ ageText(ageMax) }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">身高下限</text>
+					<picker class="field-picker" mode="selector" :range="heightOptions" :value="heightMinIndex" @change="onHeightMinChange"><text class="field-value">{{ heightText(heightMin) }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">身高上限</text>
+					<picker class="field-picker" mode="selector" :range="heightOptions" :value="heightMaxIndex" @change="onHeightMaxChange"><text class="field-value">{{ heightText(heightMax) }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">最低学历</text>
+					<picker class="field-picker" mode="selector" :range="educationOptions" :value="educationIndex" @change="onEducationChange"><text class="field-value">{{ educationText }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">接受异地</text>
+					<picker class="field-picker" mode="selector" :range="booleanOptions" :value="acceptLongDistance ? 1 : 0" @change="onLongDistanceChange"><text class="field-value">{{ acceptLongDistance ? '接受' : '不接受' }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">接受跨省</text>
+					<picker class="field-picker" mode="selector" :range="booleanOptions" :value="acceptCrossProvince ? 1 : 0" @change="onCrossProvinceChange"><text class="field-value">{{ acceptCrossProvince ? '接受' : '不接受' }}</text><text class="field-arrow">›</text></picker>
+				</view>
+				<view class="field-row">
+					<text class="field-label">其他要求</text>
+					<picker class="field-picker" mode="selector" :range="extraOptions" :value="extraIndex" @change="onExtraChange"><text class="field-value">{{ extraRequirement || '无其他要求' }}</text><text class="field-arrow">›</text></picker>
+				</view>
+			</view>
+			<view class="content-spacer"></view>
+		</scroll-view>
+
+		<view class="footer">
+			<view class="cancel-button" @tap="goBack"><text>取消</text></view>
+			<view class="save-button" :class="{ disabled: saving }" @tap="save"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import { getOwnPreferences, updateOwnPreferences } from '@/api'
+
+const systemInfo = uni.getSystemInfoSync()
+const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+const loading = ref(true)
+const saving = ref(false)
+const ageMin = ref(null as any)
+const ageMax = ref(null as any)
+const heightMin = ref(null as any)
+const heightMax = ref(null as any)
+const educationMin = ref(null as any)
+const acceptLongDistance = ref(false)
+const acceptCrossProvince = ref(false)
+const extraRequirement = ref('')
+
+const numericOptions = (start: number, end: number, suffix: string): string[] => {
+	const values = ['不限'] as string[]
+	for (let value = start; value <= end; value++) values.push('' + value + suffix)
+	return values
+}
+const ageOptions = numericOptions(18, 60, '岁')
+const heightOptions = numericOptions(140, 220, 'cm')
+const educationOptions = ['不限', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+const booleanOptions = ['不接受', '接受']
+const extraOptions = ['无其他要求', '不吸烟', '少饮酒', '有稳定工作', '重视家庭', '愿意认真沟通']
+
+const ageMinIndex = computed(() => ageMin.value == null ? 0 : Number(ageMin.value) - 17)
+const ageMaxIndex = computed(() => ageMax.value == null ? 0 : Number(ageMax.value) - 17)
+const heightMinIndex = computed(() => heightMin.value == null ? 0 : Number(heightMin.value) - 139)
+const heightMaxIndex = computed(() => heightMax.value == null ? 0 : Number(heightMax.value) - 139)
+const educationIndex = computed(() => educationMin.value == null ? 0 : Math.max(0, Math.min(educationOptions.length - 1, Number(educationMin.value))))
+const educationText = computed(() => educationOptions[educationIndex.value])
+const extraIndex = computed(() => {
+	const index = extraOptions.indexOf(extraRequirement.value)
+	return index >= 0 ? index : 0
+})
+const ageText = (value: any): string => value == null ? '不限' : '' + value + '岁'
+const heightText = (value: any): string => value == null ? '不限' : '' + value + 'cm'
+
+const onAgeMinChange = (event: any) => ageMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 17
+const onAgeMaxChange = (event: any) => ageMax.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 17
+const onHeightMinChange = (event: any) => heightMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 139
+const onHeightMaxChange = (event: any) => heightMax.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 139
+const onEducationChange = (event: any) => educationMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value)
+const onLongDistanceChange = (event: any) => acceptLongDistance.value = Number(event.detail.value) == 1
+const onCrossProvinceChange = (event: any) => acceptCrossProvince.value = Number(event.detail.value) == 1
+const onExtraChange = (event: any) => extraRequirement.value = Number(event.detail.value) == 0 ? '' : extraOptions[Number(event.detail.value)]
+
+const load = async () => {
+	loading.value = true
+	try {
+		const response = await getOwnPreferences()
+		if (!response.success || response.data == null) {
+			uni.showToast({ title: response.message != null ? '' + response.message : '择偶标准加载失败', icon: 'none' })
+			return
+		}
+		const data = response.data as any
+		ageMin.value = data.age_min
+		ageMax.value = data.age_max
+		heightMin.value = data.height_min
+		heightMax.value = data.height_max
+		educationMin.value = data.education_min
+		acceptLongDistance.value = data.accept_long_distance == true
+		acceptCrossProvince.value = data.accept_cross_province == true
+		extraRequirement.value = data.extra_requirement != null ? '' + data.extra_requirement : ''
+	} finally {
+		loading.value = false
+	}
+}
+
+const save = async () => {
+	if (saving.value) return
+	if (ageMin.value != null && ageMax.value != null && Number(ageMin.value) > Number(ageMax.value)) {
+		uni.showToast({ title: '年龄下限不能大于上限', icon: 'none' })
+		return
+	}
+	if (heightMin.value != null && heightMax.value != null && Number(heightMin.value) > Number(heightMax.value)) {
+		uni.showToast({ title: '身高下限不能大于上限', icon: 'none' })
+		return
+	}
+	saving.value = true
+	try {
+		const response = await updateOwnPreferences({
+			age_min: ageMin.value,
+			age_max: ageMax.value,
+			height_min: heightMin.value,
+			height_max: heightMax.value,
+			education_min: educationMin.value,
+			accept_long_distance: acceptLongDistance.value,
+			accept_cross_province: acceptCrossProvince.value,
+			extra_requirement: extraRequirement.value != '' ? extraRequirement.value : null
+		})
+		if (!response.success) {
+			uni.showToast({ title: response.message != null ? '' + response.message : '择偶标准保存失败', icon: 'none' })
+			return
+		}
+		uni.showToast({ title: '择偶标准已保存', icon: 'success' })
+		setTimeout(() => goBack(), 500)
+	} finally {
+		saving.value = false
+	}
+}
+
+const goBack = () => { uni.navigateBack({ delta: 1 }) }
+onMounted(() => { load() })
+</script>
+
+<style scoped>
+.page { min-height: 100vh; display: flex; flex-direction: column; background: var(--canvas); color: var(--ink); }
+.nav-bar { flex-shrink: 0; min-height: 88rpx; padding-left: 24rpx; padding-right: 24rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: var(--paper); border-bottom: 1px solid var(--line); }
+.nav-back, .nav-placeholder { width: 72rpx; height: 72rpx; flex-shrink: 0; }
+.nav-back { display: flex; align-items: center; justify-content: center; }
+.nav-back-icon { color: var(--ink); font-size: 56rpx; font-weight: 700; line-height: 1; }
+.nav-title { flex: 1; color: var(--ink); font-size: 34rpx; font-weight: 700; text-align: center; }
+.state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 26rpx; }
+.content { flex: 1; height: 0; padding: 28rpx 24rpx 0; box-sizing: border-box; }
+.section-card { display: flex; flex-direction: column; padding: 28rpx 24rpx; border-radius: 16rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.section-title { padding-bottom: 18rpx; color: var(--ink); font-size: 30rpx; font-weight: 700; }
+.field-row { min-height: 96rpx; display: flex; flex-direction: row; align-items: center; border-top: 1px solid var(--line); }
+.field-label { flex: 1; color: var(--ink2); font-size: 28rpx; }
+.field-picker { min-width: 260rpx; height: 96rpx; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; }
+.field-value { max-width: 230rpx; overflow: hidden; color: var(--ink); font-size: 27rpx; text-overflow: ellipsis; white-space: nowrap; }
+.field-arrow { margin-left: 10rpx; color: var(--muted); font-size: 36rpx; }
+.content-spacer { height: 180rpx; }
+.footer { flex-shrink: 0; display: flex; flex-direction: row; gap: 20rpx; padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
+.cancel-button, .save-button { flex: 1; height: 88rpx; display: flex; align-items: center; justify-content: center; border-radius: 44rpx; font-size: 28rpx; font-weight: 700; }
+.cancel-button { background: var(--warm); color: var(--ink2); }
+.save-button { background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-sm); }
+.save-button.disabled { opacity: 0.55; pointer-events: none; }
+</style>

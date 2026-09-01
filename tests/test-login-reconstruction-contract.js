@@ -7,7 +7,7 @@ const login = fs.readFileSync(path.join(root, 'pages', 'auth', 'login.uvue'), 'u
 const authApi = fs.readFileSync(path.join(root, 'api', 'auth.uts'), 'utf8')
 const apiIndex = fs.readFileSync(path.join(root, 'api', 'index.uts'), 'utf8')
 
-assert.match(login, /认真、真实、有边界的婚恋平台/)
+assert.match(login, /认真认识一个人，慢慢走进一段关系/)
 assert.match(login, /agreementChecked/)
 assert.match(login, /《用户协议》/)
 assert.match(login, /《隐私政策》/)
@@ -21,7 +21,7 @@ assert.match(login, /loginByWechat/)
 assert.doesNotMatch(login, /open-type="getPhoneNumber"/)
 assert.doesNotMatch(login, /uni\.request\(/)
 
-assert.match(login, /调试登录，选择身份/)
+assert.match(login, /演示登录，选择身份/)
 assert.match(login, /startLocalDemoSession/)
 assert.match(login, /首次登录/)
 assert.doesNotMatch(login, /loginWithMockSms|auth\/sms\/send|auth\/phone\/login/)

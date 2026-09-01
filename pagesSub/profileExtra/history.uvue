@@ -12,9 +12,9 @@
 		</view>
 		<scroll-view class="record-scroll" scroll-y>
 			<view class="vip-hint" @tap="goVip"><text class="ic ic-vip ic-huiyuan hint-icon"></text><text class="hint-copy">开通会员可查看 3 天内的浏览记录</text><text class="hint-link">去开通 ›</text></view>
-			<view class="sub-tabs"><view class="sub-tab active"><text>每日推荐</text></view><view class="sub-tab"><text>广场</text></view></view>
+			<view class="sub-tabs"><view class="sub-tab" :class="{ active: historyMode == 'recommend' }" @tap="selectHistoryMode('recommend')"><text>每日推荐</text></view><view class="sub-tab" :class="{ active: historyMode == 'plaza' }" @tap="selectHistoryMode('plaza')"><text>广场</text></view></view>
 			<view class="filter-row"><text class="result-count">共 {{ historyUsers.length }} 条浏览记录</text><view class="filter-button" @tap="toggleFilter"><text class="ic ic-sys ic-xiala filter-icon"></text><text>筛选</text></view></view>
-			<view class="record-card" v-for="user in historyUsers" :key="user.name" @tap="openUser(user.name)">
+			<view class="record-card" v-for="user in historyUsers" :key="user.id" @tap="openUser(user.id)">
 				<image class="record-avatar" :src="user.avatar" mode="aspectFill"></image>
 				<view class="record-info"><text class="record-name">{{ user.name }} · {{ user.age }}岁</text><text class="record-job">{{ user.job }}</text><text class="record-city">{{ user.city }}</text></view>
 				<text class="record-time">{{ user.time }}</text>
@@ -39,16 +39,35 @@
 const filterVisible = ref(false)
 const filterName = ref('全部')
 const draftFilter = ref('全部')
-const historyUsers = [
-	{ name: '赵琳', age: 27, job: '产品经理', city: '北京 · 朝阳区', time: '2小时前', avatar: '/static/portraits/profile-woman-main.jpg' },
-	{ name: '陈浩', age: 29, job: '算法工程师', city: '杭州 · 西湖区', time: '5小时前', avatar: '/static/portraits/profile-man-alt.jpg' },
-	{ name: '刘悦', age: 25, job: '设计师', city: '上海 · 静安区', time: '8小时前', avatar: '/static/portraits/profile-woman-alt.jpg' },
-	{ name: '周明', age: 31, job: '医生', city: '广州 · 天河区', time: '12小时前', avatar: '/static/portraits/profile-man-light.jpg' },
-	{ name: '吴雪', age: 26, job: '律师', city: '深圳 · 南山区', time: '1天前', avatar: '/static/portraits/profile-woman-community.jpg' }
-]
-const visitors = [
-	{ name: '匿****名', distance: '2.5km', hot: 128 }, { name: '匿****名', distance: '5.1km', hot: 96 }, { name: '匿****名', distance: '8.3km', hot: 203 }, { name: '匿****名', distance: '3.7km', hot: 75 }
-]
+import { getBrowseHistory, getVisitors } from '@/api'
+import { resolveMediaUrl } from '@/api/config.uts'
+const historyUsers = ref<any[]>([])
+const visitors = ref<any[]>([])
+const historyMode = ref('recommend')
+
+const loadHistory = async () => {
+	const res = await getBrowseHistory(1, 20)
+	if (!res.success || res.data == null) return
+	const rows = res.data.items != null && Array.isArray(res.data.items) ? res.data.items as any[] : []
+	const result: any[] = []
+	for (let i = 0; i < rows.length; i++) {
+		const card = rows[i].target != null ? rows[i].target : {}
+		result.push({ name: card.nickname != null ? card.nickname : '用户', age: card.age != null ? card.age : '', job: card.occupation != null ? card.occupation : '未填写', city: card.city_code != null ? card.city_code : '未填写', time: rows[i].viewed_at != null ? ('' + rows[i].viewed_at).replace('T', ' ').slice(0, 16) : '', avatar: resolveMediaUrl(card.avatar), id: card.user_id })
+	}
+	historyUsers.value = result
+}
+
+const loadVisitors = async () => {
+	const res = await getVisitors(1, 20)
+	if (!res.success || res.data == null) return
+	const rows = res.data.items != null && Array.isArray(res.data.items) ? res.data.items as any[] : []
+	const result: any[] = []
+	for (let i = 0; i < rows.length; i++) {
+		const card = rows[i].target != null ? rows[i].target : {}
+		result.push({ name: card.nickname != null ? card.nickname : '匿名用户', distance: card.distance_km != null ? Number(card.distance_km).toFixed(1) + 'km' : '未知', hot: card.match_score != null ? Math.round(Number(card.match_score)) : 0 })
+	}
+	visitors.value = result
+}
 const goBack = () => { uni.navigateBack({}) }
 const goVisitors = () => { uni.redirectTo({ url: '/pagesSub/profileExtra/visitors' }) }
 const goVip = () => { uni.navigateTo({ url: '/pagesSub/profileExtra/vip' }) }
@@ -56,8 +75,10 @@ const toggleFilter = () => { filterVisible.value = true }
 const selectFilter = (name: string) => { draftFilter.value = name }
 const applyFilter = () => { filterName.value = draftFilter.value; filterVisible.value = false }
 const closeFilter = () => { filterVisible.value = false; draftFilter.value = filterName.value }
-const openUser = (name: string) => { uni.showToast({ title: '正在打开' + name + '的资料', icon: 'none' }) }
+const selectHistoryMode = (mode: string) => { historyMode.value = mode }
+const openUser = (id: number) => { if (id > 0) uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id }) }
 const noop = () => {}
+onMounted(() => { loadHistory(); loadVisitors() })
 </script>
 
 <style>

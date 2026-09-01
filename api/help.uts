@@ -1,0 +1,59 @@
+/**
+ * 客服与帮助 API。
+ * 当前后端客服契约尚未接入，默认使用本地 Mock；真实接口明确后再替换非 Mock 分支。
+ */
+
+import { USE_MOCK } from './config.uts'
+import { mockHelpQuickActions, mockHelpCategories, getMockAiSupportReply, submitMockFeedback } from '@/mock/help'
+
+export interface HelpQuickAction {
+  id: string
+  title: string
+  prompt: string
+}
+
+export interface HelpFaqItem {
+  id: string
+  question: string
+  prompt: string
+}
+
+export interface HelpCategory {
+  id: string
+  title: string
+  icon: string
+  items: HelpFaqItem[]
+}
+
+export interface HelpCenterData {
+  categories: HelpCategory[]
+}
+
+export function getHelpCenter(): Promise<{ success: boolean, data: HelpCenterData | null, message?: string }> {
+  if (USE_MOCK) {
+    return Promise.resolve({ success: true, data: { categories: mockHelpCategories as HelpCategory[] } })
+  }
+  return Promise.resolve({ success: false, data: null, message: '帮助内容暂未接入，请稍后重试' })
+}
+
+export function getHelpQuickActions(): Promise<{ success: boolean, data: HelpQuickAction[], message?: string }> {
+  if (USE_MOCK) {
+    return Promise.resolve({ success: true, data: mockHelpQuickActions })
+  }
+  return Promise.resolve({ success: false, data: [], message: '客服服务暂未接入，请稍后重试' })
+}
+
+export function sendAiSupportMessage(content: string): Promise<{ success: boolean, data: AiSupportMessage | null, message?: string }> {
+  if (USE_MOCK) {
+    const reply = getMockAiSupportReply(content)
+    return Promise.resolve({ success: true, data: reply })
+  }
+  return Promise.resolve({ success: false, data: null, message: 'AI 客服服务暂未接入，请稍后重试' })
+}
+
+export function submitFeedback(content: string): Promise<{ success: boolean, data: any, message?: string }> {
+  if (USE_MOCK) {
+    return Promise.resolve(submitMockFeedback(content))
+  }
+  return Promise.resolve({ success: false, data: null, message: '意见箱服务暂未接入，请稍后重试' })
+}

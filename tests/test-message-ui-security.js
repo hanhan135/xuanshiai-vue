@@ -4,11 +4,12 @@ const path = require('path')
 const vm = require('vm')
 
 const root = path.resolve(__dirname, '..')
-const messageCenter = fs.readFileSync(path.join(root, 'components/XsaMessageCenter.uvue'), 'utf8')
-const chatDetail = fs.readFileSync(path.join(root, 'pagesSub/chat/detail.uvue'), 'utf8')
-const messageApi = fs.readFileSync(path.join(root, 'api/message.uts'), 'utf8')
-const requestApi = fs.readFileSync(path.join(root, 'api/request.uts'), 'utf8')
-const reportSheet = fs.readFileSync(path.join(root, 'components/XsaReportSheet.uvue'), 'utf8')
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n')
+const messageCenter = read('components/XsaMessageCenter.uvue')
+const chatDetail = read('pagesSub/chat/detail.uvue')
+const messageApi = read('api/message.uts')
+const requestApi = read('api/request.uts')
+const reportSheet = read('components/XsaReportSheet.uvue')
 
 function includes(source, expected, label) {
   assert.ok(source.includes(expected), `${label}: missing ${expected}`)

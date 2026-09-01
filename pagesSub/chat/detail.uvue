@@ -1,5 +1,5 @@
 <template>
-	<view class="chat-page" :class="{ 'parent-mode': isParentMode }">
+	<view class="chat-page" :class="{ 'parent-mode': isParentMode, 'ai-avatar-mode': isAiAvatarMode }">
 		<view class="permission-state" v-if="permissionLoading">
 			<text class="state-title">正在确认聊天权限...</text>
 		</view>
@@ -21,8 +21,22 @@
 				:scroll-into-view="scrollToView"
 				scroll-with-animation
 			>
+				<view v-if="isAiAvatarMode" class="ai-avatar-notice">
+					<view class="ai-avatar-notice-head">
+						<view class="ai-avatar-notice-copy">
+							<text class="ai-avatar-notice-title">AI 分身对话</text>
+							<text class="ai-avatar-notice-desc">只参考当前公开填写的资料，不是真人消息，对方不会收到提醒。</text>
+						</view>
+						<button class="ai-avatar-clear" :disabled="aiAvatarSending" @click="clearAiAvatarHistory">清空记录</button>
+					</view>
+					<scroll-view v-if="aiQuickQuestions.length > 0" class="ai-quick-list" scroll-x show-scrollbar="false">
+						<view v-for="question in aiQuickQuestions" :key="question.id" class="ai-quick-question" @click="askQuickQuestion(question.prompt)">
+							<text>{{ question.label }}</text>
+						</view>
+					</scroll-view>
+				</view>
 				<view class="chat-loading" v-if="loading">
-					<text class="text-muted">正在加载聊天记录...</text>
+					<text class="text-muted">{{ isAiAvatarMode ? '正在读取 AI 分身聊天记录…' : '正在加载聊天记录...' }}</text>
 				</view>
 				<view class="chat-error" v-else-if="chatError !== '' && messages.length === 0">
 					<text class="state-desc text-muted">{{ chatError }}</text>
@@ -60,6 +74,7 @@
 						></image>
 
 							<view class="bubble-column" :class="{ mine: message.isMine }">
+								<text class="ai-message-source" v-if="isAiAvatarMode && !message.isMine">{{ getAiMessageLabel(message) }}</text>
 								<view class="message-bubble" :class="message.type">
 									<text class="revoked-content" v-if="message.revoked == true">消息已撤回</text>
 									<view class="protected-content" v-else-if="isParentMode && message.protectedContent">
@@ -108,24 +123,24 @@
 				</view>
 			</scroll-view>
 
-			<view class="input-bar" :class="{ expanded: showMore }">
+			<view class="input-bar" :class="{ expanded: showMore && !isAiAvatarMode }">
 				<view class="input-wrapper">
 					<input
 						class="input"
 						type="text"
 						:value="inputText"
 						@input="onInput"
-						placeholder="说点什么..."
+						:placeholder="isAiAvatarMode ? '询问公开资料…' : '说点什么...'"
 						confirm-type="send"
 						@confirm="sendMessage"
 					/>
-					<button class="send-btn" @click="sendMessage" :disabled="sendingText || inputText.trim() == ''">发送</button>
-					<button class="tool-btn more-toggle" @click="toggleMoreMenu">
+					<button class="send-btn" @click="sendMessage" :disabled="sendingText || inputText.trim() == '' || (isAiAvatarMode && (aiAvatarSending || aiAvatarError != ''))">{{ isAiAvatarMode && aiAvatarSending ? '发送中…' : '发送' }}</button>
+					<button v-if="!isAiAvatarMode" class="tool-btn more-toggle" @click="toggleMoreMenu">
 						<text class="icon">{{ showMore ? '×' : '+' }}</text>
 					</button>
 				</view>
 
-				<view class="more-actions" v-if="showMore">
+				<view class="more-actions" v-if="showMore && !isAiAvatarMode">
 						<view class="menu-grid">
 							<view class="menu-item" v-if="!isParentMode && !isPaperPlaneConversation" @click="chooseChatImage">
 								<view class="menu-icon">▧</view>
@@ -143,6 +158,10 @@
 								<view class="menu-icon">⌁</view>
 								<text class="menu-text">联系方式</text>
 							</view>
+							<view class="menu-item" v-if="!isParentMode && !isPaperPlaneConversation" @click="openAiAdvisor">
+								<view class="menu-icon">✦</view>
+								<text class="menu-text">AI军师</text>
+							</view>
 							<view class="menu-item" v-if="!isPaperPlaneConversation" @click="openChatReport">
 							<view class="menu-icon">⚑</view>
 							<text class="menu-text">举报</text>
@@ -153,6 +172,7 @@
 		</template>
 
 			<XsaReportSheet
+				v-if="!isAiAvatarMode"
 			:visible="reportVisible"
 			target-type="chatUser"
 			:target-id="userId"
@@ -164,7 +184,15 @@
 				@reported="reportVisible = false"
 			/>
 
-			<XsaSheet :visible="contactVisible" title="联系方式交换" @close="closeContactExchange">
+			<XsaAiAdvisorSheet
+				v-if="!isParentMode && !isAiAvatarMode"
+				:visible="aiAdvisorVisible"
+				:target-user-id="userId"
+				:initial-message="aiAdvisorInitialMessage"
+				@close="aiAdvisorVisible = false"
+			/>
+
+			<XsaSheet v-if="!isAiAvatarMode" :visible="contactVisible" title="联系方式交换" @close="closeContactExchange">
 				<view class="contact-sheet">
 					<text class="contact-note">双方已同意认识。对方明确确认前，不会显示你提交的联系方式。</text>
 					<view class="contact-type-row">
@@ -200,6 +228,7 @@
 <script setup lang="uts">
 	import XsaButton from '@/components/XsaButton.uvue'
 	import XsaReportSheet from '@/components/XsaReportSheet.uvue'
+	import XsaAiAdvisorSheet from '@/components/XsaAiAdvisorSheet.uvue'
 	import XsaSheet from '@/components/XsaSheet.uvue'
 	import type { MessageSubject, ParentContext } from '@/api'
 	import {
@@ -215,7 +244,13 @@
 		respondContactExchange,
 		getPaperPlaneMessages,
 		sendPaperPlaneMessage,
-		readPaperPlaneConversation
+		readPaperPlaneConversation,
+		getAiAvatarProfile,
+		getAiAvatarQuickQuestions,
+		getAiAvatarConversation,
+		sendAiAvatarMessage,
+		resolveAiAvatarHandoffs,
+		clearAiAvatarConversation
 	} from '@/api'
 
 	const messages = ref([] as any[])
@@ -231,6 +266,14 @@
 	const initialMode = uni.getStorageSync('xsa_onboarding_mode')
 	const roleMode = ref(initialMode != null && String(initialMode) == 'parent' ? 'parent' : 'self')
 	const isParentMode = computed(() => roleMode.value == 'parent')
+	const isAiAvatarMode = ref(false)
+	const aiAvatarProfile = ref(null as any)
+	const aiQuickQuestions = ref([] as any[])
+	const aiAvatarSending = ref(false)
+	const aiAvatarRestricted = ref(false)
+	const aiAvatarError = ref('')
+	const aiAdvisorVisible = ref(false)
+	const aiAdvisorInitialMessage = ref('')
 	const isPaperPlaneConversation = computed(() => paperPlaneConversationId.value > 0)
 	const activeMessageSubject = ref(null as MessageSubject | null)
 	const activeParentContext = ref(null as ParentContext | null)
@@ -257,6 +300,7 @@
 	let activeTextSendAttempt = 0
 	let voiceRecorder: any = null
 	let discardVoiceRecording = false
+	let aiHandoffTimer: any = null
 
 	onMounted(() => {
 		setupVoiceRecorder()
@@ -287,14 +331,41 @@
 				userId.value = parsedUserId
 			}
 		}
+		const aiAvatarRequested = options != null && options.mode === 'ai-avatar'
+		if (aiAvatarRequested) {
+			if (isParentMode.value) {
+				permissionLoading.value = false
+				permissionError.value = '父母端不支持 AI 分身代聊'
+				return
+			}
+			if (userId.value <= 0) {
+				permissionLoading.value = false
+				permissionError.value = '暂时无法获取 AI 分身资料'
+				return
+			}
+			isAiAvatarMode.value = true
+			aiAvatarRestricted.value = options != null && (options.locked === 'true' || options.locked === true)
+			chatAllowed.value = true
+			permissionLoading.value = false
+			loadAiAvatarMode()
+			return
+		}
 		verifyChatPermission()
 	})
 
 	onShow(() => {
+		if (isAiAvatarMode.value) {
+			refreshAiAvatarHistory()
+			return
+		}
 		if (!isPaperPlaneConversation.value && userId.value > 0) verifyChatPermission()
 	})
 
 	onUnmounted(() => {
+		if (aiHandoffTimer != null) {
+			clearTimeout(aiHandoffTimer)
+			aiHandoffTimer = null
+		}
 		if (voiceRecorder != null && voiceRecording.value) {
 			discardVoiceRecording = true
 			voiceRecorder.stop()
@@ -333,11 +404,159 @@
 	}
 
 	const retryHistory = () => {
+		if (isAiAvatarMode.value) {
+			loadAiAvatarMode()
+			return
+		}
 		if (isPaperPlaneConversation.value) {
 			loadPaperPlaneMessages()
 			return
 		}
 		loadChatMessages()
+	}
+
+	const mapAiAvatarMessages = (rows: any[]): any[] => {
+		return rows.map((message: any, index: number) => ({
+			...message,
+			time: typeof message.time == 'number' ? formatTime(message.time) : (message.time != null ? String(message.time) : ''),
+			showTime: message.showTime == true || index == 0,
+			avatar: message.avatar != null && String(message.avatar).length > 0
+				? String(message.avatar)
+				: (message.isMine == true ? '/static/portraits/profile-man-light.jpg' : '/static/portraits/profile-woman-main.jpg'),
+			status: 'sent'
+		}))
+	}
+
+	const getAiMessageLabel = (msg: any): string => {
+		if (msg != null && msg.source === 'owner-answer') return '本人补充回答（演示）'
+		if (msg != null && msg.source === 'mock-person') return '本人回答（模拟）'
+		if (msg != null && msg.source === 'ai-avatar' && msg.handoffStatus === 'pending') return '已转交（演示）'
+		return 'AI 分身'
+	}
+
+	const scheduleAiHandoff = (rows: any[]) => {
+		if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
+		if (aiHandoffTimer != null) clearTimeout(aiHandoffTimer)
+		let dueAt = 0
+		for (let index = 0; index < rows.length; index++) {
+			const message = rows[index]
+			if (message.handoffStatus === 'pending' && message.handoffDueAt != null) {
+				const candidate = Number(message.handoffDueAt)
+				if (dueAt == 0 || candidate < dueAt) dueAt = candidate
+			}
+		}
+		if (dueAt == 0) return
+		const delay = Math.max(350, dueAt - Date.now())
+		aiHandoffTimer = setTimeout(() => {
+			aiHandoffTimer = null
+			if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
+			const resolved = resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
+			if (resolved.success && resolved.data != null) {
+				messages.value = mapAiAvatarMessages(resolved.data as any[])
+				scrollToBottom()
+				scheduleAiHandoff(resolved.data as any[])
+			}
+		}, delay)
+	}
+
+	const loadAiAvatarMode = async () => {
+		if (!isAiAvatarMode.value || isParentMode.value || userId.value <= 0) return
+		loading.value = true
+		aiAvatarError.value = ''
+		chatError.value = ''
+		try {
+			const profileRes = await getAiAvatarProfile(userId.value, aiAvatarRestricted.value)
+			if (!profileRes.success || profileRes.data == null) {
+				aiAvatarError.value = responseMessage(profileRes, '公开资料暂时无法读取')
+				chatError.value = aiAvatarError.value
+				return
+			}
+			aiAvatarProfile.value = profileRes.data
+			const name = profileRes.data.name != null ? String(profileRes.data.name) : 'Ta'
+			uni.setNavigationBarTitle({ title: 'AI 分身 · ' + name })
+			const quickRes = getAiAvatarQuickQuestions()
+			if (quickRes.success && quickRes.data != null && Array.isArray(quickRes.data)) aiQuickQuestions.value = quickRes.data as any[]
+			const historyRes = getAiAvatarConversation(userId.value, aiAvatarProfile.value)
+			if (!historyRes.success || historyRes.data == null) {
+				aiAvatarError.value = responseMessage(historyRes, 'AI 分身聊天记录暂时无法读取')
+				chatError.value = aiAvatarError.value
+				return
+			}
+			messages.value = mapAiAvatarMessages(historyRes.data as any[])
+			scheduleAiHandoff(historyRes.data as any[])
+			scrollToBottom()
+		} catch (error) {
+			aiAvatarError.value = '网络或资料服务异常，请稍后重试'
+			chatError.value = aiAvatarError.value
+		} finally {
+			loading.value = false
+		}
+	}
+
+	const refreshAiAvatarHistory = () => {
+		if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
+		const resolved = resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
+		if (resolved.success && resolved.data != null) {
+			messages.value = mapAiAvatarMessages(resolved.data as any[])
+			scheduleAiHandoff(resolved.data as any[])
+			scrollToBottom()
+		}
+	}
+
+	const clearAiAvatarHistory = () => {
+		if (!isAiAvatarMode.value || aiAvatarSending.value || aiAvatarProfile.value == null) return
+		uni.showModal({
+			title: '清空 AI 分身记录',
+			content: '清空后将无法在当前设备查看这段对话，确定继续吗？',
+			confirmText: '清空',
+			success: (result: any) => {
+				if (result.confirm !== true) return
+				if (aiHandoffTimer != null) {
+					clearTimeout(aiHandoffTimer)
+					aiHandoffTimer = null
+				}
+				const cleared = clearAiAvatarConversation(userId.value)
+				if (!cleared.success) {
+					uni.showToast({ title: responseMessage(cleared, '清空失败'), icon: 'none' })
+					return
+				}
+				const history = getAiAvatarConversation(userId.value, aiAvatarProfile.value)
+				if (history.success && history.data != null) {
+					messages.value = mapAiAvatarMessages(history.data as any[])
+					scrollToBottom()
+				}
+				uni.showToast({ title: '记录已清空', icon: 'success' })
+			}
+		})
+	}
+
+	const askQuickQuestion = (prompt: string) => {
+		if (!isAiAvatarMode.value || aiAvatarSending.value) return
+		inputText.value = prompt
+		sendMessage()
+	}
+
+	const sendAiAvatarText = async (content: string) => {
+		if (!isAiAvatarMode.value || aiAvatarSending.value || aiAvatarProfile.value == null) return
+		const question = content.trim()
+		if (question.length == 0) return
+		aiAvatarSending.value = true
+		inputText.value = ''
+		try {
+			const res = sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
+			if (!res.success || res.data == null) {
+				uni.showToast({ title: responseMessage(res, '发送失败，请重试'), icon: 'none' })
+				return
+			}
+			const rows = res.data.messages as any[]
+			messages.value = mapAiAvatarMessages(rows)
+			scheduleAiHandoff(rows)
+			scrollToBottom()
+		} catch (error) {
+			uni.showToast({ title: '发送失败，请稍后重试', icon: 'none' })
+		} finally {
+			aiAvatarSending.value = false
+		}
 	}
 
 	const responseMessage = (res: any, fallback: string): string => {
@@ -795,6 +1014,10 @@
 	const sendMessage = async () => {
 		const content = inputText.value.trim()
 		if (content == '' || sendingText.value || !chatAllowed.value) return
+		if (isAiAvatarMode.value) {
+			await sendAiAvatarText(content)
+			return
+		}
 		if (isPaperPlaneConversation.value) {
 			await sendPaperPlaneText(content)
 			return
@@ -1104,6 +1327,7 @@
 	}
 
 	const toggleMoreMenu = () => {
+		if (isAiAvatarMode.value) return
 		showMore.value = !showMore.value
 	}
 
@@ -1112,6 +1336,7 @@
 	}
 
 	const openPeerProfile = () => {
+		if (isAiAvatarMode.value) return
 		if (userId.value <= 0) {
 			uni.showToast({ title: '暂时无法获取对方资料', icon: 'none' })
 			return
@@ -1124,8 +1349,25 @@
 	}
 
 	const openChatReport = () => {
+		if (isAiAvatarMode.value) return
 		closeMoreMenu()
 		reportVisible.value = true
+	}
+
+	const openAiAdvisor = () => {
+		if (isParentMode.value || isPaperPlaneConversation.value || isAiAvatarMode.value) return
+		closeMoreMenu()
+		let latestPeerMessage = ''
+		const rows = messages.value as any[]
+		for (let index = rows.length - 1; index >= 0; index--) {
+			const message = rows[index]
+			if (message != null && message.isMine !== true && message.type === 'text' && message.content != null && String(message.content).trim().length > 0) {
+				latestPeerMessage = String(message.content).trim()
+				break
+			}
+		}
+		aiAdvisorInitialMessage.value = latestPeerMessage.length > 0 ? latestPeerMessage : inputText.value.trim()
+		aiAdvisorVisible.value = true
 	}
 
 	const scrollToBottom = () => {
@@ -1268,6 +1510,37 @@
 	.voice-content { display: flex; flex-direction: row; align-items: center; min-width: 160px; }
 	.voice-player { width: 180px; height: 40px; }
 	.video-content { display: block; width: 220px; height: 160px; border-radius: 8px; }
+
+	.ai-avatar-notice {
+		margin: 12px 16px 4px;
+		padding: 14px;
+		border: 1px solid var(--line);
+		border-radius: 14px;
+		background: var(--accent-bg);
+	}
+
+	.ai-avatar-notice-head {
+		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 12px;
+	}
+
+	.ai-avatar-notice-copy {
+		min-width: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.ai-avatar-notice-title { color: var(--accent2); font-size: 15px; font-weight: 700; }
+	.ai-avatar-notice-desc { color: var(--ink2); font-size: 12px; line-height: 1.5; }
+	.ai-avatar-clear { flex-shrink: 0; margin: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent2); font-size: 12px; line-height: 1.3; }
+	.ai-avatar-clear[disabled] { opacity: 0.55; }
+	.ai-quick-list { margin-top: 12px; white-space: nowrap; }
+	.ai-quick-question { display: inline-flex; margin-right: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink2); font-size: 12px; }
+	.ai-message-source { display: block; margin-bottom: 4px; color: var(--accent2); font-size: 11px; line-height: 1.3; }
 
 	.input-bar {
 		background: var(--surface);

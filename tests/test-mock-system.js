@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Mock 数据系统测试脚本
  * 测试 API 层是否能正常返回 Mock 数据
  */
@@ -43,8 +43,12 @@ try {
     'mock/user.uts',
     'mock/message.uts',
     'mock/community.uts',
+    'mock/security.uts',
     'mock/matchmaker.uts',
-    'mock/spotlight.uts'
+    'mock/help.uts',
+    'mock/spotlight.uts',
+    'mock/ai-avatar.uts',
+    'mock/ai-advisor.uts'
   ]
 
   mockFiles.forEach(file => {
@@ -72,8 +76,12 @@ try {
     'api/user.uts',
     'api/message.uts',
     'api/community.uts',
+    'api/security.uts',
     'api/matchmaker.uts',
-    'api/spotlight.uts'
+    'api/help.uts',
+    'api/spotlight.uts',
+    'api/ai-avatar.uts',
+    'api/ai-advisor.uts'
   ]
 
   apiFiles.forEach(file => {
@@ -123,7 +131,79 @@ try {
   console.log(`   ❌ 页面文件检查失败: ${error.message}\n`)
 }
 
-// 5. 总结
+// 5. AI 分身隔离与持久化检查
+console.log('5. 测试 AI 分身前端隔离...')
+try {
+  const fs = require('fs')
+  const path = require('path')
+  const apiContent = fs.readFileSync(path.join(__dirname, '../api/ai-avatar.uts'), 'utf-8')
+  const mockContent = fs.readFileSync(path.join(__dirname, '../mock/ai-avatar.uts'), 'utf-8')
+  const chatContent = fs.readFileSync(path.join(__dirname, '../pagesSub/chat/detail.uvue'), 'utf-8')
+  const profileContent = fs.readFileSync(path.join(__dirname, '../pagesSub/userExtra/user/detail.uvue'), 'utf-8')
+  const ownerContent = fs.readFileSync(path.join(__dirname, '../pagesSub/profileExtra/my-ai-avatar.uvue'), 'utf-8')
+  const checks = [
+    ['独立本地存储键', apiContent.includes('xsa-ai-avatar-conversations-v1-')],
+    ['当前账号作用域', apiContent.includes('tokenScope()') && apiContent.includes('USER_ID_STORAGE_KEY')],
+    ['本人主页按登录账号识别', profileContent.includes("uni.getStorageSync('xsa_user_id')") && profileContent.includes('viewerId == parsed')],
+    ['旧版无账号记录不再迁移', !apiContent.includes('legacyStorageKey') && !apiContent.includes('legacyProfileStorageKey')],
+    ['本人答案忽略空格和标点差异', mockContent.includes('normalizeQuestion') && mockContent.includes('normalizeQuestion(item.question) == normalizedQuestion')],
+    ['AI 资料进入前重新校验隐私', apiContent.includes('getMembershipStatus') && apiContent.includes('hasVipProfileFlag') && apiContent.includes('snapshotUpdatedAt')],
+    ['网络降级不暴露敏感资料', apiContent.includes('profile.interests = []') && apiContent.includes('profile.customAnswers = []') && apiContent.includes('profile.stale = true')],
+    ['本人管理数据接口', apiContent.includes('getAiAvatarOwnerDashboard') && ownerContent.includes('getAiAvatarOwnerDashboard')],
+    ['本人回答回写访客会话', apiContent.includes('updateVisitorHandoff') && apiContent.includes('submitAiAvatarOwnerAnswer')],
+    ['本人回答来源标记', mockContent.includes("source: 'owner-answer'") && chatContent.includes("msg.source === 'owner-answer'")],
+    ['受限资料不暴露本人答案', apiContent.includes('profile.customAnswers = []') && apiContent.includes('profile.restricted === true') && mockContent.includes('profile.restricted !== true')],
+    ['管理页不再硬编码数据', !ownerContent.includes('const chatRecords = ref<any[]>([\n') && !ownerContent.includes('const pendingQuestions = ref<any[]>([\n') && !ownerContent.includes('const myAnswers = ref<any[]>([\n')],
+    ['本地历史读取', apiContent.includes('getAiAvatarConversation')],
+    ['首次欢迎消息持久化', apiContent.includes('messages = [initialMessage(profile)]') && apiContent.includes('writeMessages(userId, messages)')],
+    ['模拟转交恢复', apiContent.includes('resolveAiAvatarHandoffs')],
+    ['真实资料字段兼容', apiContent.includes('education_level') && apiContent.includes('relationship_expectation')],
+    ['公开资料快照', apiContent.includes('saveAiAvatarProfileSnapshot') && profileContent.includes('city: user.value.city')],
+    ['地区表不重复打包', !apiContent.includes("@/static/location.json")],
+    ['兴趣问题分类边界', mockContent.includes("'电影'") && mockContent.includes("'喜欢什么样的人'") && !mockContent.includes("'喜欢什么样',")],
+    ['个人主页入口', profileContent.includes('mode=ai-avatar')],
+    ['自己主页按钮宽度隔离', profileContent.includes('flex: 0 0 480rpx')],
+    ['聊天页 AI 模式', chatContent.includes("options.mode === 'ai-avatar'")],
+    ['清空记录取消待回复定时器', chatContent.includes('clearTimeout(aiHandoffTimer)') && chatContent.includes('aiHandoffTimer = null')],
+    ['真人预览隔离', chatContent.includes('if (isAiAvatarMode.value)')]
+  ]
+  checks.forEach(([name, passed]) => {
+    console.log(`   ${passed ? '✅' : '❌'} ${name}`)
+    if (!passed) process.exitCode = 1
+  })
+  console.log('')
+} catch (error) {
+  process.exitCode = 1
+  console.log(`   ❌ AI 分身检查失败: ${error.message}\n`)
+}
+
+// 6. AI 军师前端闭环检查
+console.log('6. 测试 AI 军师前端闭环...')
+try {
+  const fs = require('fs')
+  const path = require('path')
+  const apiContent = fs.readFileSync(path.join(__dirname, '../api/ai-advisor.uts'), 'utf-8')
+  const mockContent = fs.readFileSync(path.join(__dirname, '../mock/ai-advisor.uts'), 'utf-8')
+  const chatContent = fs.readFileSync(path.join(__dirname, '../pagesSub/chat/detail.uvue'), 'utf-8')
+  const sheetContent = fs.readFileSync(path.join(__dirname, '../components/XsaAiAdvisorSheet.uvue'), 'utf-8')
+  const checks = [
+    ['军师接口封装', apiContent.includes('/ai/advisor/sessions') && apiContent.includes('/advice')],
+    ['结构化建议 Mock', mockContent.includes('suggestions') && mockContent.includes('risk_level')],
+    ['聊天页入口', chatContent.includes('openAiAdvisor') && chatContent.includes('AI军师')],
+    ['场景和语气选择', sheetContent.includes('ADVISOR_SCENARIOS') && sheetContent.includes('ADVISOR_TONES')],
+    ['复制而不自动发送', sheetContent.includes('setClipboardData') && !sheetContent.includes('sendMessageApi')],
+    ['错误状态处理', sheetContent.includes('advisorErrorMessage') && sheetContent.includes('errorMessage')]
+  ]
+  checks.forEach(([name, passed]) => {
+    console.log(`   ${passed ? '✅' : '❌'} ${name}`)
+    if (!passed) process.exitCode = 1
+  })
+  console.log('')
+} catch (error) {
+  process.exitCode = 1
+  console.log(`   ❌ AI 军师检查失败: ${error.message}\n`)
+}
+// 7. 总结
 console.log('====================================')
 console.log('测试完成！')
 console.log('====================================\n')

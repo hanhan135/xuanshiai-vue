@@ -1,0 +1,90 @@
+<template>
+	<view class="vw-waveform" :class="['vw-state-' + state, { 'vw-atelier': theme == 'atelier', 'vw-atelier-dark': theme == 'atelier-dark' }]">
+		<view
+			v-for="(bar, i) in bars"
+			:key="i"
+			class="vw-bar"
+			:style="{ animationDelay: (i * 0.08) + 's' }"
+		></view>
+	</view>
+</template>
+
+<script setup lang="uts">
+interface Props {
+	state?: string
+	theme?: string
+}
+const props = withDefaults(defineProps<Props>(), {
+	state: 'idle',
+	theme: 'default'
+})
+const bars = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+</script>
+
+<style scoped>
+.vw-waveform {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	height: 48px;
+}
+.vw-bar {
+	width: 4px;
+	height: 10px;
+	border-radius: 2px;
+	background: var(--line);
+}
+.vw-state-idle .vw-bar {
+	height: 10px;
+	background: var(--line);
+	animation: vw-idle 2.4s ease-in-out infinite;
+}
+.vw-state-listening .vw-bar {
+	background: var(--accent);
+	animation: vw-pulse-bar 0.9s ease-in-out infinite;
+}
+.vw-state-speaking .vw-bar {
+	background: var(--sage);
+	animation: vw-speak-bar 1.2s ease-in-out infinite;
+}
+.vw-state-transcribing .vw-bar {
+	background: var(--muted);
+	animation: vw-transcribe 1s ease-in-out infinite;
+}
+.vw-state-reviewing .vw-bar {
+	height: 16px;
+	background: var(--accent2);
+	animation: none;
+}
+
+/* 调香室主题(琥珀色系) */
+.vw-atelier .vw-bar { background: var(--at-line, #E6DAC4); }
+.vw-atelier.vw-state-listening .vw-bar { background: var(--at-honey, #D9A441); }
+.vw-atelier.vw-state-speaking .vw-bar { background: #C97B57; }
+.vw-atelier.vw-state-transcribing .vw-bar { background: var(--at-mist, #9A8C77); }
+.vw-atelier.vw-state-reviewing .vw-bar { background: var(--at-amber, #B4762B); }
+/* 调香室 · 深色沉浸模式(实时对话层) */
+.vw-atelier-dark .vw-bar { background: rgba(246, 238, 224, 0.22); }
+.vw-atelier-dark.vw-state-listening .vw-bar { background: #E8B54F; }
+.vw-atelier-dark.vw-state-speaking .vw-bar { background: #E09468; }
+.vw-atelier-dark.vw-state-transcribing .vw-bar { background: rgba(246, 238, 224, 0.55); }
+.vw-atelier-dark.vw-state-reviewing .vw-bar { background: #E8B54F; }
+@keyframes vw-idle {
+	0%, 100% { transform: scaleY(1); opacity: 0.6; }
+	50% { transform: scaleY(1.4); opacity: 1; }
+}
+@keyframes vw-pulse-bar {
+	0%, 100% { height: 10px; opacity: 0.7; }
+	50% { height: 28px; opacity: 1; }
+}
+@keyframes vw-speak-bar {
+	0%, 100% { height: 12px; opacity: 0.6; }
+	50% { height: 32px; opacity: 1; }
+}
+@keyframes vw-transcribe {
+	0%, 100% { height: 6px; opacity: 0.5; }
+	50% { height: 16px; opacity: 0.9; }
+}
+</style>
