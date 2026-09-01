@@ -54,7 +54,6 @@
 					</view>
 					<text class="ai-zone-title">宣誓爱 AI</text>
 				</view>
-				<text class="ai-zone-sub">用对话建构理想型画像，让 AI 分身替你回应世界的善意。</text>
 				<view class="ai-zone-actions">
 					<view class="zone-btn" @tap="onPortrait">
 						<text class="ic ic-social ic-touxiang zone-btn-icon zone-btn-icon-green"></text>
@@ -576,8 +575,8 @@ page {
 	display: flex;
 	flex-direction: column;
 	width: 100%;
-	padding: 24px;
-	border-radius: 24px;
+	padding: 16px 18px;
+	border-radius: 20px;
 	background-image: linear-gradient(135deg, #FBF9F5 0%, #F2EEE6 100%);
 	margin-top: -8px;
 	margin-bottom: -8px;
@@ -587,13 +586,13 @@ page {
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 9px;
+	gap: 8px;
 }
 
 .ai-zone-spark {
-	width: 30px;
-	height: 30px;
-	border-radius: 10px;
+	width: 26px;
+	height: 26px;
+	border-radius: 9px;
 	background-color: var(--profile-dark);
 	display: flex;
 	align-items: center;
@@ -601,45 +600,38 @@ page {
 }
 
 .ai-zone-spark-icon {
-	font-size: 15px;
+	font-size: 13px;
 	color: var(--profile-rose);
 }
 
 .ai-zone-title {
-	font-size: 17px;
+	font-size: 16px;
 	font-weight: 700;
 	color: var(--profile-text);
 	letter-spacing: 0.5px;
-}
-
-.ai-zone-sub {
-	margin-top: 10px;
-	font-size: 13px;
-	line-height: 1.6;
-	color: var(--profile-text-secondary);
 }
 
 .ai-zone-actions {
 	display: flex;
 	flex-direction: row;
 	gap: 10px;
-	margin-top: 16px;
+	margin-top: 12px;
 }
 
 .zone-btn {
 	flex: 1;
-	height: 76px;
-	border-radius: 18px;
+	height: 58px;
+	border-radius: 14px;
 	background-color: rgba(255, 255, 255, 0.85);
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: 10px;
-	padding: 0 16px;
+	gap: 8px;
+	padding: 0 14px;
 }
 
 .zone-btn-icon {
-	font-size: 22px;
+	font-size: 20px;
 	flex-shrink: 0;
 }
 
@@ -649,11 +641,11 @@ page {
 .zone-btn-text {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 2px;
 }
 
 .zone-btn-name {
-	font-size: 15px;
+	font-size: 14px;
 	font-weight: 600;
 	color: var(--profile-text);
 }
