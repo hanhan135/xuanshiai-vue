@@ -274,15 +274,6 @@
 			</view>
 		</view>
 
-<view class="preview-entry" @tap="openHelpPreview">
-				<text class="preview-entry-title">客服与帮助页面预览</text>
-				<text class="preview-entry-desc">打开可交互的前端页面</text>
-			</view>
-			<view class="preview-entry" @tap="openSecurityPreview">
-				<text class="preview-entry-title">安全中心页面预览</text>
-				<text class="preview-entry-desc">打开黑名单与安全指南</text>
-			</view>
-
 		<!-- 退出登录 -->
 		<view class="section-card">
 			<view class="logout-btn" @click="handleLogout">
@@ -600,14 +591,6 @@ const showFeedback = () => {
 	uni.navigateTo({ url: '/pagesSub/profileExtra/help?open=feedback', fail: () => { uni.showToast({ title: '意见反馈打开失败，请重试', icon: 'none' }) } })
 }
 
-const openHelpPreview = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/help', fail: () => { uni.showToast({ title: '客服与帮助打开失败，请重试', icon: 'none' }) } })
-}
-
-const openSecurityPreview = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/security', fail: () => { uni.showToast({ title: '安全中心打开失败，请重试', icon: 'none' }) } })
-}
-
 // 退出登录
 const handleLogout = () => {
 	uni.showModal({
@@ -821,10 +804,6 @@ switch {
 	justify-content: flex-end;
 	gap: 32rpx;
 }
-
-.preview-entry { display: flex; flex-direction: column; gap: 4px; padding: 14px 0; border-top: 1px solid var(--line); }
-.preview-entry-title { color: var(--accent2); font-size: 14px; font-weight: 700; }
-.preview-entry-desc { color: var(--muted); font-size: 12px; }
 
 /* ---- 退出登录 ---- */
 .logout-btn {
