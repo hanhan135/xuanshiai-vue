@@ -732,7 +732,7 @@
 	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
-	import locationJson from '@/static/location.json'
+	import locationJson from '@/data/location.json'
 	import {
 		recordProfileView,
 		resetDailyIfNeeded,

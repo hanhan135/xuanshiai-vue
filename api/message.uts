@@ -605,6 +605,82 @@ export async function getChatPermission(userId: number, subject: MessageSubject 
   return protectSubjectResponse(okResponse(permission), subjectContext)
 }
 
+/**
+ * Resolve the current subject's chat-session ID for one approved conversation.
+ * The lookup is intentionally permission-first: a target-user ID must never be
+ * treated as a chat-session ID outside the isolated message Mock.
+ */
+export async function getChatSessionId(
+  targetUserId: number,
+  subject: MessageSubject | null = null
+) {
+  const subjectContext = resolveMessageSubject(subject)
+  if (subjectContext.valid != true) return messageSubjectFailure(subjectContext)
+  const parentBackendFailure = parentBackendUnavailable(subjectContext)
+  if (parentBackendFailure != null) return parentBackendFailure
+  if (!isPositiveInteger(targetUserId)) return failResponse('无效的会话用户', 'INVALID_USER')
+
+  const permissionRes = await getChatPermission(targetUserId, subject)
+  const permission = permissionRes != null ? permissionRes.data : null
+  if (permissionRes == null || permissionRes.success != true) {
+    return protectSubjectResponse(
+      permissionRes != null ? permissionRes : failResponse('聊天权限检查失败', 'CHAT_PERMISSION_FAILED'),
+      subjectContext
+    )
+  }
+  if (permission == null || permission.canChat != true) {
+    const reason = permission != null && permission.reason != null
+      ? '' + permission.reason
+      : '双方同意后才能开始聊天'
+    return protectSubjectResponse(failResponse(reason, 'CHAT_NOT_ALLOWED', permission), subjectContext)
+  }
+
+  let cursor = ''
+  for (let pageIndex = 0; pageIndex < 20; pageIndex++) {
+    const pageRes = await getConversationPage(cursor, 50, 'standard', subject)
+    if (pageRes == null || pageRes.success != true || pageRes.data == null) {
+      return protectSubjectResponse(
+        pageRes != null ? pageRes : failResponse('聊天会话加载失败', 'CHAT_SESSION_LOOKUP_FAILED'),
+        subjectContext
+      )
+    }
+    const rows = Array.isArray(pageRes.data.list) ? pageRes.data.list as any[] : [] as any[]
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]
+      const rowTargetId = row != null && row.userId != null
+        ? Number(row.userId)
+        : row != null && row.target != null && row.target.user_id != null
+          ? Number(row.target.user_id)
+          : 0
+      if (rowTargetId != targetUserId) continue
+      const sessionId = row.sessionId != null
+        ? Number(row.sessionId)
+        : row.session_id != null
+          ? Number(row.session_id)
+          : Number(row.id)
+      if (!isPositiveInteger(sessionId)) {
+        return protectSubjectResponse(
+          failResponse('聊天会话标识无效', 'INVALID_CHAT_SESSION', row),
+          subjectContext
+        )
+      }
+      return protectSubjectResponse(okResponse({ id: sessionId }), subjectContext)
+    }
+
+    const hasMore = pageRes.data.hasMore == true
+    const nextCursor = pageRes.data.nextCursor != null ? String(pageRes.data.nextCursor).trim() : ''
+    if (!hasMore) break
+    if (nextCursor == '' || nextCursor == cursor) {
+      return protectSubjectResponse(
+        failResponse('聊天会话分页响应无效', 'INVALID_CHAT_SESSION_PAGE', pageRes.data),
+        subjectContext
+      )
+    }
+    cursor = nextCursor
+  }
+  return protectSubjectResponse(failResponse('当前没有可用聊天会话', 'SESSION_NOT_FOUND'), subjectContext)
+}
+
 /** 将全部会话标为已读。 */
 export async function markAllMessagesRead(subject: MessageSubject | null = null) {
   const subjectContext = resolveMessageSubject(subject)

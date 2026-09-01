@@ -430,6 +430,11 @@ export async function getOwnProfile() {
   return request({ url: '/users/me/profile', method: 'GET' })
 }
 
+/** 固定标签目录为公开只读数据，不需要携带登录态。 */
+export async function getProfileTagOptions() {
+  return request({ url: '/profile/tag-options', method: 'GET', skipAuth: true })
+}
+
 export async function updateOwnProfile(data: any) {
   if (USE_MOCK) {
     const keys = Object.keys(data != null ? data : {})
@@ -446,6 +451,40 @@ export async function updateOwnProfile(data: any) {
     })
   }
   return request({ url: '/users/me/profile', method: 'PATCH', data })
+}
+
+/**
+ * 修改当前登录用户的昵称。
+ *
+ * 昵称有独立的后端契约，避免在保存基础资料时把昵称混入通用资料更新；
+ * 服务端仍负责登录态、长度和内容边界校验。
+ */
+export async function updateOwnNickname(nickname: string) {
+  const value = nickname != null ? nickname.trim() : ''
+  if (value == '') return failRes('昵称不能为空', 422)
+
+  if (USE_MOCK) {
+    mockMeProfile.name = value
+    mockMeProfile.nickname = value
+    return request({
+      url: '/user/me/nickname',
+      cloudFunctionName: 'user',
+      action: 'updateNickname',
+      method: 'PATCH',
+      data: { nickname: value },
+      mockData: {
+        user_id: mockMeProfile.id,
+        nickname: value,
+        updated_at: ''
+      }
+    })
+  }
+
+  return request({
+    url: '/users/me/nickname',
+    method: 'PATCH',
+    data: { nickname: value }
+  })
 }
 
 export async function getOwnPreferences() {

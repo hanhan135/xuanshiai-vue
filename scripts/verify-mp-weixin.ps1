@@ -72,7 +72,9 @@ if (-not (Test-Path -LiteralPath $appJsonPath -PathType Leaf)) {
 }
 
 try {
-  $appConfig = Get-Content -LiteralPath $appJsonPath -Raw | ConvertFrom-Json
+  # npm invokes Windows PowerShell 5.1 on some hosts, whose implicit text
+  # encoding can misread the UTF-8 Chinese strings emitted by HBuilderX.
+  $appConfig = Get-Content -LiteralPath $appJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
   $allFiles = @(Get-ChildItem -LiteralPath $ArtifactPath -Recurse -File)
 } catch {
   Write-Host "ERROR: Unable to read mp-weixin artifact: $($_.Exception.Message)" -ForegroundColor Red

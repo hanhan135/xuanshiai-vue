@@ -493,6 +493,7 @@ export const mockUserDetail = {
 export const mockMeProfile = {
   id: 9001,
   name: '顾言澄',
+  nickname: '顾言澄',
   age: 29,
   gender: 1,
   city: '南京',

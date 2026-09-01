@@ -19,10 +19,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const avatarSrc = computed(() : string => {
-	if (props.state == 'listening') return '/static/moxiang-master-listening.png'
-	if (props.state == 'thinking') return '/static/moxiang-master-thinking.png'
-	if (props.state == 'speaking') return '/static/moxiang-master-speaking.png'
-	return '/static/moxiang-master-idle.png'
+	if (props.state == 'listening') return '/pagesSub/profileExtra/static/moxiang/moxiang-master-listening.jpg'
+	if (props.state == 'thinking') return '/pagesSub/profileExtra/static/moxiang/moxiang-master-thinking.jpg'
+	if (props.state == 'speaking') return '/pagesSub/profileExtra/static/moxiang/moxiang-master-speaking.jpg'
+	return '/pagesSub/profileExtra/static/moxiang/moxiang-master-idle.jpg'
 })
 </script>
 
@@ -63,7 +63,7 @@ const avatarSrc = computed(() : string => {
 	50% { transform: scale(1.12); opacity: 1; }
 }
 
-/* 立绘主体:AI 动漫角色形象 PNG */
+/* 立绘主体：AI 引路人角色形象 */
 .mm-figure {
 	position: relative;
 	width: 80px;
