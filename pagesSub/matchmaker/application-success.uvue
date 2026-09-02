@@ -2,22 +2,21 @@
 	<view class="success-page">
 		<view class="success-content">
 			<view class="success-mark"><text>OK</text></view>
-			<text class="eyebrow">{{ isMock ? '模拟资料已保存到本设备' : '资料已送达审核队列' }}</text>
+			<text class="eyebrow">资料已送达审核队列</text>
 			<text class="title">申请成功</text>
-			<text class="copy">{{ isMock ? '当前为模拟提交，记录不会进入平台审核。后端恢复后关闭 Mock 开关即可改为真实入库。' : '你的' + applicationLabel + '申请已提交。平台会在 1-3 个工作日内完成审核，并通过站内通知告知结果。' }}</text>
+			<text class="copy">你的{{ applicationLabel }}申请已提交。平台会在 1-3 个工作日内完成审核，并通过站内通知告知结果。</text>
 			<view class="status-row">
 				<text class="status-label">当前状态</text>
 				<text class="status-value">待审核</text>
 			</view>
 			<view class="home-button" @click="goMatchmakerHome"><text>返回牵线主页</text></view>
 		</view>
-		<text class="footer-copy">{{ isMock ? '此记录仅用于当前设备的流程演示' : '审核通过后将开通对应的服务权限' }}</text>
+		<text class="footer-copy">审核通过后将开通对应的服务权限</text>
 	</view>
 </template>
 
 <script setup lang="uts">
 const applicationLabel = ref('角色')
-const isMock = ref(false)
 
 onMounted(() => {
 	try {
@@ -25,7 +24,6 @@ onMounted(() => {
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
 		const type = options != null && options.type != null ? String(options.type) : ''
-		isMock.value = options != null && options.mock == '1'
 		if (type == 'service_matchmaker') applicationLabel.value = '服务红娘'
 		if (type == 'partner') applicationLabel.value = '合伙人'
 		if (type == 'promoter') applicationLabel.value = '推广红娘'
