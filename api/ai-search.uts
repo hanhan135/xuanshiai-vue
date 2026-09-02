@@ -1,0 +1,144 @@
+const AI_API_URL = 'https://api.deepseek.com/chat/completions'
+const AI_API_KEY = 'sk-3924286d6f294858b6e11e82617e96a0'
+const AI_MODEL = 'deepseek-chat'
+let lastVariationIndex = -1
+
+function textValue(value: any): string {
+  return value == null ? '' : ('' + value).trim()
+}
+
+function responseText(payload: any): string {
+  if (payload == null) return ''
+  if (typeof payload == 'string') return payload.trim()
+  if (payload.output_text != null) return textValue(payload.output_text)
+  if (payload.text != null) return textValue(payload.text)
+  if (payload.content != null && typeof payload.content == 'string') return textValue(payload.content)
+  if (payload.message != null && typeof payload.message == 'object') {
+    const messageText = responseText(payload.message)
+    if (messageText != '') return messageText
+  }
+  if (payload.choices != null && Array.isArray(payload.choices) && payload.choices.length > 0) {
+    const choiceText = responseText(payload.choices[0])
+    if (choiceText != '') return choiceText
+  }
+  if (payload.output != null && Array.isArray(payload.output)) {
+    for (let index = 0; index < payload.output.length; index++) {
+      const item = payload.output[index]
+      const itemText = responseText(item)
+      if (itemText != '') return itemText
+    }
+  }
+  if (payload.delta != null) return responseText(payload.delta)
+  return ''
+}
+
+function errorText(data: any): string {
+  if (data == null) return 'AI 暂时不可用，请稍后重试'
+  if (data.detail != null) {
+    const detail = textValue(data.detail)
+    if (detail.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+    return detail
+  }
+  if (data.error != null) {
+    if (typeof data.error == 'string') {
+      const error = textValue(data.error)
+      if (error.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+      return error
+    }
+    if (data.error.message != null) {
+      const errorMessage = textValue(data.error.message)
+      if (errorMessage.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+      return errorMessage
+    }
+  }
+  if (data.message != null) return textValue(data.message)
+  return 'AI 暂时不可用，请稍后重试'
+}
+
+function singleSuggestion(value: string): string {
+  const paragraphs = value.split(/\r?\n\s*\r?\n/)
+  let suggestion = ''
+  for (let index = 0; index < paragraphs.length; index++) {
+    const paragraph = textValue(paragraphs[index])
+    if (paragraph != '') {
+      suggestion = paragraph
+      break
+    }
+  }
+  return suggestion.replace(/\s+/g, ' ').replace(/^[-*•\d.、\s]+/, '').replace(/^(希望遇见|希望找一位|想找一位|想找一个|期待遇见|期待找一位)/, '').trim()
+}
+
+function profileTagHints(profile: any): string {
+  if (profile == null || typeof profile != 'object') return '无'
+  const hints: string[] = []
+  const groups = [profile.interest_tags, profile.personality_tags]
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    const group = groups[groupIndex]
+    if (Array.isArray(group)) {
+      for (let index = 0; index < group.length; index++) {
+        const tag = textValue(group[index])
+        if (tag != '') hints.push(tag)
+      }
+    }
+  }
+  if (profile.tag_selections != null && typeof profile.tag_selections == 'object') {
+    const keys = Object.keys(profile.tag_selections)
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+      const values = profile.tag_selections[keys[keyIndex]]
+      if (!Array.isArray(values)) continue
+      for (let valueIndex = 0; valueIndex < values.length; valueIndex++) {
+        const tag = textValue(values[valueIndex])
+        if (tag != '') hints.push(tag)
+      }
+    }
+  }
+  return hints.length > 0 ? hints.join('、') : '无'
+}
+
+export async function generateIdealPartner(profile: any, preferences: any): Promise<any> {
+  const variationModes = ['先写性格与相处感受，再补基础条件', '先写兴趣与共同活动，再补性格和条件', '先写年龄身高等基础条件，再写相处期待', '先写生活节奏与边界感，再补兴趣和条件']
+  let variationIndex = Math.floor(Math.random() * variationModes.length)
+  if (variationModes.length > 1 && variationIndex == lastVariationIndex) variationIndex = (variationIndex + 1) % variationModes.length
+  lastVariationIndex = variationIndex
+  const variationMode = variationModes[variationIndex]
+  const tagHints = profileTagHints(profile)
+  const prompt = '请根据以下用户资料和择偶要求，生成一段适合填写在婚恋搜索框中的理想对象条件。第一句必须直接从真实的年龄、身高、收入、学历或地域条件开始，例如“18到23岁，身高160cm以上，有稳定收入。”；禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头。第二、三句优先结合“资料标签线索”中真实存在的兴趣、性格和关系期待，写出具体的共同活动或相处方式。不要编造资料中没有的爱好或条件。整体必须是类似“18到23岁，身高160cm以上，有稳定收入。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间，互动频率适中。”的字段条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头。每次都要重新组织语言、重点和句式，不要照搬模板。长度在 50 到 75 字之间自然变化，不要每次都写成相同长度。不要写“年龄：”“身高：”这种冒号标签，也不要写“我来自”“我的资料是”等自我介绍。只能生成一个候选，不得提供第二个版本、备选、换行或分段。只输出内容本身，不要标题、引号、Markdown、解释或免责声明；语气真诚具体，不承诺结果。\n\n资料标签线索：\n' + tagHints + '\n\n用户资料：\n' + JSON.stringify(profile != null ? profile : {}) + '\n\n择偶要求：\n' + JSON.stringify(preferences != null ? preferences : {})
+  return new Promise<any>((resolve) => {
+    uni.request({
+      url: AI_API_URL,
+      method: 'POST',
+      data: {
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: '你是婚恋资料助手，只帮助用户整理真诚、具体、自然的择偶期待。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 1.0,
+        max_tokens: 220
+      },
+      header: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + AI_API_KEY
+      },
+      timeout: 30000,
+      success: (res: any) => {
+        const status = res.statusCode != null ? Number(res.statusCode) : 0
+        const raw = res.data
+        if (status < 200 || status >= 300) {
+          resolve({ success: false, data: null, code: status, message: errorText(raw) })
+          return
+        }
+        const generated = singleSuggestion(responseText(raw).replace(/^['"“”]+|['"“”]+$/g, '').trim())
+        if (generated == '') {
+          resolve({ success: false, data: null, code: -1, message: 'AI 返回内容为空，请稍后重试' })
+          return
+        }
+        resolve({ success: true, data: generated, code: 0, message: 'success' })
+      },
+      fail: (error: any) => {
+        console.error('[AI Search] request failed', error)
+        resolve({ success: false, data: null, code: -1, message: 'AI 暂时不可用，请稍后重试' })
+      }
+    })
+  })
+}

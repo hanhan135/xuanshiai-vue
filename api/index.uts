@@ -86,6 +86,8 @@ export {
   advisorErrorMessage
 } from './ai-advisor.uts'
 
+export { generateIdealPartner } from './ai-search.uts'
+
 // 社区相关
 export {
   getDynamicList,

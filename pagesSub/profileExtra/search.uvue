@@ -15,7 +15,7 @@
 			<view v-if="activeTab === 0" class="search-panel ai-panel">
 				<view class="ai-input-wrap">
 					<textarea class="ai-input" :value="aiQuery" maxlength="300" :placeholder="aiPlaceholder" @input="onAiInput"></textarea>
-					<view class="ai-input-foot"><view class="ai-template-trigger" @tap="requestAiSuggestedQuery"><text class="ai-trigger-star">✦</text><text class="ai-trigger-text">猜你喜欢</text><view class="ai-trigger-shine"></view></view></view>
+					<view class="ai-input-foot"><view class="ai-template-trigger" @tap="requestAiSuggestedQuery"><text class="ai-trigger-text">{{ aiGenerating ? '生成中' : '猜你喜欢' }}</text><view class="ai-trigger-shine"></view></view></view>
 				</view>
 
 				<view class="ai-drift-field">
@@ -166,7 +166,7 @@
 <script setup lang="uts">
 	import XsaSheet from '@/components/XsaSheet.uvue'
 	import XsaTag from '@/components/XsaTag.uvue'
-	import { getOwnProfile, updateOwnProfile, getRecommendUsers } from '@/api'
+	import { getOwnProfile, getOwnPreferences, updateOwnProfile, getRecommendUsers, generateIdealPartner } from '@/api'
 
 	const systemInfo = uni.getSystemInfoSync()
 	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
@@ -212,6 +212,8 @@
 	}
 
 	const aiQuery = ref('')
+	const aiGenerating = ref(false)
+	let aiTypingTimer: any = null
 
 	const hometownOptions = ['不限', '江苏', '浙江', '上海', '安徽']
 	const residenceOptions = ['不限', '南京', '杭州', '上海', '深圳']
@@ -285,9 +287,47 @@
 	const goBack = () => uni.navigateBack({ delta: 1 })
 	const handleBack = () => { if (resultState.value != 'idle') openSearchEditor(); else goBack() }
 	const onAiInput = (event: any) => { aiQuery.value = toText(event.detail.value) }
-	const requestAiSuggestedQuery = () => {
-		// TODO: 接入 AI 档案分析后，将生成的搜索词回填到 aiQuery。
-		uni.showToast({ title: 'AI 推荐功能待接入', icon: 'none' })
+	const stopAiTyping = () => {
+		if (aiTypingTimer != null) {
+			clearInterval(aiTypingTimer)
+			aiTypingTimer = null
+		}
+	}
+	const typeAiText = (value: string) => {
+		stopAiTyping()
+		aiQuery.value = ''
+		let index = 0
+		aiTypingTimer = setInterval(() => {
+			if (index >= value.length) {
+				stopAiTyping()
+				return
+			}
+			aiQuery.value += value.charAt(index)
+			index += 1
+		}, 45)
+	}
+	const requestAiSuggestedQuery = async () => {
+		if (aiGenerating.value) return
+		aiGenerating.value = true
+		stopAiTyping()
+		try {
+			const profileResult = await getOwnProfile()
+			const preferencesResult = await getOwnPreferences()
+			const profile = profileResult.success ? profilePayload(profileResult.data) : {}
+			const preferences = preferencesResult.success ? profilePayload(preferencesResult.data) : {}
+			ownGender.value = profile.gender
+			const result = await generateIdealPartner(profile, preferences)
+			if (!result.success || result.data == null) {
+				uni.showToast({ title: result.message != null ? toText(result.message) : '暂时无法生成，请稍后重试', icon: 'none' })
+				return
+			}
+			typeAiText(toText(result.data))
+		} catch (error) {
+			console.error('[Search] AI suggestion failed', error)
+			uni.showToast({ title: 'AI 暂时不可用，请稍后重试', icon: 'none' })
+		} finally {
+			aiGenerating.value = false
+		}
 	}
 	const onHometownChange = (event: any) => { hometownIndex.value = Number(event.detail.value) }
 	const onResidenceChange = (event: any) => { residenceIndex.value = Number(event.detail.value) }
@@ -483,6 +523,7 @@
 	}
 
 	onMounted(() => { loadOwnMbti(); loadHistory() })
+	onUnmounted(() => { stopAiTyping() })
 </script>
 
 <style scoped>
