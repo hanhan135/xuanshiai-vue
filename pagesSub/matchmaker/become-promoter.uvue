@@ -22,6 +22,15 @@
 					</view>
 				</view>
 
+				<!-- 推广红娘管理中心入口：紧随招募 Banner，首屏可见。 -->
+				<view class="management-entry ready management-entry-priority" @click="openPromoterCenter">
+					<view class="management-entry-copy">
+						<view class="management-entry-title-row"><text class="management-entry-title">推广红娘管理中心</text></view>
+						<text class="management-entry-desc">进入工作台管理客源、奖励、分成与提现。</text>
+					</view>
+					<view class="management-entry-action"><text>进入中心</text></view>
+				</view>
+
 				<!-- 基本信息 -->
 				<view class="form-card">
 					<text class="section-title">基本信息</text>
@@ -246,6 +255,10 @@ const wechatConsult = () => {
 	qrVisible.value = true
 }
 
+const openPromoterCenter = () => {
+	uni.navigateTo({ url: '/pagesSub/matchmaker/promoter-center' })
+}
+
 // ===== 表单输入 =====
 const onRealNameInput = (e: any) => { realName.value = e.detail.value }
 const onPhoneInput = (e: any) => { phone.value = e.detail.value }
@@ -394,6 +407,17 @@ const submitApplication = async () => {
 .bottom-spacer {
 	height: 148rpx;
 }
+
+/* 推广红娘管理中心入口：与「我要做红娘」的红娘管理中心入口使用同款层级和尺寸。 */
+.management-entry { padding: 26rpx; border: 1px solid var(--line); border-radius: 20rpx; background: var(--warm); display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 18rpx; }
+.management-entry-priority { margin-bottom: 2rpx; }
+.management-entry.ready { background: var(--match-mist); border-color: var(--accent); }
+.management-entry-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8rpx; }
+.management-entry-title-row { display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.management-entry-title { font-size: 28rpx; font-weight: 800; color: var(--ink); }
+.management-entry-desc { font-size: 21rpx; line-height: 1.5; color: var(--ink2); }
+.management-entry-action { min-width: 136rpx; height: 64rpx; padding: 0 16rpx; border-radius: 14rpx; background: var(--accent); display: flex; flex-direction: row; align-items: center; justify-content: center; color: var(--paper); font-size: 21rpx; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.management-entry-action:active { opacity: .78; transform: scale(.98); }
 
 /* ===== Banner ===== */
 .banner-card {

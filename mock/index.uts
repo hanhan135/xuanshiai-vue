@@ -59,6 +59,11 @@ export {
 export {
   mockMatchmakerContact,
   mockRoleApplications,
+  mockMatchmakerManagementCenterAccess,
+  mockMatchmakerManagementCenterSnapshot,
+  mockPartnerCenterSnapshot,
+  mockPromoterCenterSnapshot,
+  mockMatchmakerReviewMembers,
   mockServiceMatchmakers,
   mockCustomMatchmakers,
   mockCustomPlans,
