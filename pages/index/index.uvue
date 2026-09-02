@@ -47,20 +47,10 @@
 			</view>
 
 			<!-- 筛选搜索栏 -->
-			<view v-if="currentTab === 0" class="filter-bar">
+			<view v-if="currentTab === 0 || currentTab === 1" class="filter-bar">
 				<view class="search-box" @click="onSearch">
 					<text class="ic ic-home ic-search search-icon"></text>
-					<text class="search-placeholder">按城市、年龄、学历、MBTI筛选…</text>
-				</view>
-			</view>
-			<view v-if="currentTab === 1" class="filter-bar filter-bar-square">
-				<view class="search-box square-search-box" @click="onSearch">
-					<text class="ic ic-home ic-search search-icon"></text>
-					<text class="search-placeholder">按城市、年龄、学历、MBTI…</text>
-				</view>
-				<view class="ai-match-btn" @click="showAiScore">
-					<text class="ic ic-home ic-star ai-match-icon"></text>
-					<text class="ai-match-text">AI匹配</text>
+					<text class="search-placeholder">{{ currentTab === 0 ? '按城市、年龄、学历、MBTI筛选…' : '按城市、年龄、学历、MBTI…' }}</text>
 				</view>
 			</view>
 
@@ -1237,14 +1227,9 @@
 
 /* ==================== 筛选栏 ==================== */
 .filter-bar { padding: 0 40rpx; }
-.filter-bar-square { display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
-.square-search-box { flex: 1; width: auto; }
 .search-box { display: flex; flex-direction: row; align-items: center; gap: 16rpx; height: 80rpx; border-radius: var(--radius-xl); background-color: var(--bg-card); padding: 0 24rpx; }
 .search-icon { font-size: 28rpx; opacity: 0.5; }
 .search-placeholder { font-size: 26rpx; color: var(--text-muted); }
-.ai-match-btn { display: flex; flex-direction: row; align-items: center; gap: 6rpx; padding: 10rpx 20rpx; border-radius: var(--radius-xl); background-color: var(--accent); flex-shrink: 0; height: 78rpx; box-sizing: border-box; }
-.ai-match-icon { font-size: 24rpx; color: var(--text-inverse); }
-.ai-match-text { font-size: 24rpx; color: var(--text-inverse); font-weight: 600; }
 
 /* ==================== 滚动内容区 ==================== */
 
