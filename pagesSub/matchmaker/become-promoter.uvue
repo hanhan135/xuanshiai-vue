@@ -255,6 +255,10 @@ const wechatConsult = () => {
 	qrVisible.value = true
 }
 
+const openPromoterCenter = () => {
+	uni.navigateTo({ url: '/pagesSub/matchmaker/promoter-center' })
+}
+
 // ===== 表单输入 =====
 const onRealNameInput = (e: any) => { realName.value = e.detail.value }
 const onPhoneInput = (e: any) => { phone.value = e.detail.value }
@@ -625,10 +629,6 @@ const submitApplication = async () => {
 	width: 64rpx;
 	height: 64rpx;
 	flex-shrink: 0;
-}
-
-const openPromoterCenter = () => {
-	uni.navigateTo({ url: '/pagesSub/matchmaker/promoter-center' })
 }
 
 .phone-brand {
