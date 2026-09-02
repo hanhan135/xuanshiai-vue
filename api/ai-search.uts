@@ -55,7 +55,39 @@ function errorText(data: any): string {
   return 'AI 暂时不可用，请稍后重试'
 }
 
-function singleSuggestion(value: string): string {
+function preferenceSource(preferences: any): any {
+  if (preferences == null || typeof preferences != 'object') return {}
+  if (preferences.preferences != null && typeof preferences.preferences == 'object') return preferences.preferences
+  if (preferences.data != null && typeof preferences.data == 'object') return preferences.data
+  return preferences
+}
+
+function validAge(value: any): number | null {
+  if (value == null || textValue(value) == '') return null
+  const age = Number(value)
+  return age >= 18 && age <= 100 ? Math.round(age) : null
+}
+
+function ageRangeText(preferences: any): string {
+  const source = preferenceSource(preferences)
+  const minimum = validAge(source.age_min)
+  const maximum = validAge(source.age_max)
+  if (minimum == null && maximum == null) return ''
+  return (minimum != null ? '' + minimum : '18') + '到' + (maximum != null ? '' + maximum : '60') + '岁'
+}
+
+function normalizeAgeOpening(value: string, preferences: any): string {
+  const range = ageRangeText(preferences)
+  if (range == '') return value
+  const firstEnd = value.indexOf('。')
+  const firstSentence = firstEnd >= 0 ? value.substring(0, firstEnd) : value
+  const remainder = firstEnd >= 0 ? value.substring(firstEnd) : ''
+  const agePattern = /(?:年龄s*)?(?:\d{1,3}\s*岁?\s*(?:到|至|-|~)\s*\d{1,3}\s*岁?|\d{1,3}\s*岁?\s*(?:以上|以下|起|及以内)|到\s*\d{1,3}\s*岁)/g
+  const cleanedSentence = firstSentence.replace(agePattern, '').replace(/^[\s，,、:：-]+/, '').trim()
+  return cleanedSentence == '' ? range + remainder : range + '，' + cleanedSentence + remainder
+}
+
+function singleSuggestion(value: string, preferences: any): string {
   const paragraphs = value.split(/\r?\n\s*\r?\n/)
   let suggestion = ''
   for (let index = 0; index < paragraphs.length; index++) {
@@ -65,7 +97,8 @@ function singleSuggestion(value: string): string {
       break
     }
   }
-  return suggestion.replace(/\s+/g, ' ').replace(/^[-*•\d.、\s]+/, '').replace(/^(希望遇见|希望找一位|想找一位|想找一个|期待遇见|期待找一位)/, '').trim()
+  const cleaned = suggestion.replace(/\s+/g, ' ').replace(/^[-*•\d.、\s]+/, '').replace(/^(希望遇见|希望找一位|想找一位|想找一个|期待遇见|期待找一位)/, '').trim()
+  return normalizeAgeOpening(cleaned, preferences)
 }
 
 function profileTagHints(profile: any): string {
@@ -102,7 +135,7 @@ export async function generateIdealPartner(profile: any, preferences: any): Prom
   lastVariationIndex = variationIndex
   const variationMode = variationModes[variationIndex]
   const tagHints = profileTagHints(profile)
-  const prompt = '请根据以下用户资料和择偶要求，生成一段适合填写在婚恋搜索框中的理想对象条件。第一句必须直接从真实的年龄、身高、收入、学历或地域条件开始，例如“18到23岁，身高160cm以上，有稳定收入。”；禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头。第二、三句优先结合“资料标签线索”中真实存在的兴趣、性格和关系期待，写出具体的共同活动或相处方式。不要编造资料中没有的爱好或条件。整体必须是类似“18到23岁，身高160cm以上，有稳定收入。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间，互动频率适中。”的字段条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头。每次都要重新组织语言、重点和句式，不要照搬模板。长度在 50 到 75 字之间自然变化，不要每次都写成相同长度。不要写“年龄：”“身高：”这种冒号标签，也不要写“我来自”“我的资料是”等自我介绍。只能生成一个候选，不得提供第二个版本、备选、换行或分段。只输出内容本身，不要标题、引号、Markdown、解释或免责声明；语气真诚具体，不承诺结果。\n\n资料标签线索：\n' + tagHints + '\n\n用户资料：\n' + JSON.stringify(profile != null ? profile : {}) + '\n\n择偶要求：\n' + JSON.stringify(preferences != null ? preferences : {})
+  const prompt = '请根据以下用户资料和择偶要求，生成一段适合填写在婚恋搜索框中的理想对象条件。第一句必须直接从完整的年龄范围开始，例如“18到23岁”或“18岁到60岁”，不能只写“到60岁”“23岁以下”或省略另一端；如果后台只返回 age_max，就把年龄下限补为 18 岁，如果只返回 age_min，就把年龄上限补为 60 岁，如果没有年龄要求就不要编造年龄。第一句还要尽量包含真实的身高、收入、学历或地域条件。禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头。第二、三句优先结合“资料标签线索”中真实存在的兴趣、性格和关系期待，写出具体的共同活动或相处方式。不要编造资料中没有的爱好或条件。整体必须是类似“18到23岁，身高160cm以上，有稳定收入。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间，互动频率适中。”的字段条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头。每次都要重新组织语言、重点和句式，不要照搬模板。长度在 50 到 75 字之间自然变化，不要每次都写成相同长度。不要写“年龄：”“身高：”这种冒号标签，也不要写“我来自”“我的资料是”等自我介绍。只能生成一个候选，不得提供第二个版本、备选、换行或分段。只输出内容本身，不要标题、引号、Markdown、解释或免责声明；语气真诚具体，不承诺结果。\n\n资料标签线索：\n' + tagHints + '\n\n用户资料：\n' + JSON.stringify(profile != null ? profile : {}) + '\n\n择偶要求：\n' + JSON.stringify(preferences != null ? preferences : {})
   return new Promise<any>((resolve) => {
     uni.request({
       url: AI_API_URL,
@@ -128,7 +161,7 @@ export async function generateIdealPartner(profile: any, preferences: any): Prom
           resolve({ success: false, data: null, code: status, message: errorText(raw) })
           return
         }
-        const generated = singleSuggestion(responseText(raw).replace(/^['"“”]+|['"“”]+$/g, '').trim())
+        const generated = singleSuggestion(responseText(raw).replace(/^['"“”]+|['"“”]+$/g, '').trim(), preferences)
         if (generated == '') {
           resolve({ success: false, data: null, code: -1, message: 'AI 返回内容为空，请稍后重试' })
           return
