@@ -1,26 +1,27 @@
 ﻿<template>
 	<view class="chat-page">
+		<!-- AI 分身头部 -->
+		<view v-if="isAiAvatarMode" class="ai-head">
+			<view class="ai-head-clear" @tap="clearAiAvatarHistory"><text>清空</text></view>
+			<view class="ai-head-avatar">
+				<image class="ai-head-img" :src="peerAvatar" mode="aspectFill"></image>
+				<view class="ai-head-badge"><text class="ai-head-badge-text">Ai</text></view>
+			</view>
+			<text class="ai-head-name">{{ peerName }}的AI分身</text>
+			<view class="ai-head-pill">
+				<view class="ai-head-pill-chip"><text class="ai-head-pill-chip-text">AI</text></view>
+				<text class="ai-head-pill-text">对话内容对方不可见</text>
+			</view>
+		</view>
+
 		<!-- 消息列表 -->
 		<scroll-view
 			class="message-list"
+			:class="{ 'ai-thread': isAiAvatarMode }"
 			scroll-y
 			:scroll-into-view="scrollToView"
 			scroll-with-animation
 		>
-			<view v-if="isAiAvatarMode" class="ai-avatar-notice">
-				<view class="ai-avatar-notice-head">
-					<view class="ai-avatar-notice-copy">
-						<text class="ai-avatar-notice-title">AI 分身对话</text>
-						<text class="ai-avatar-notice-desc">只参考 {{ peerName }} 当前公开资料，不是真人消息，对方不会收到提醒。</text>
-					</view>
-					<view class="ai-avatar-clear" @tap="clearAiAvatarHistory"><text>清空</text></view>
-				</view>
-				<scroll-view class="ai-quick-list" scroll-x show-scrollbar="false">
-					<view v-for="question in aiQuickQuestions" :key="question.id" class="ai-quick-question" @tap="askQuickQuestion(question.prompt)">
-						<text>{{ question.label }}</text>
-					</view>
-				</scroll-view>
-			</view>
 			<view v-if="isAiAvatarMode && loading" class="ai-avatar-loading"><text>正在读取 AI 分身聊天记录…</text></view>
 			<view v-if="isAiAvatarMode && aiAvatarError != ''" class="ai-avatar-error">
 				<text class="ai-avatar-error-title">AI 分身暂时无法打开</text>
@@ -61,7 +62,7 @@
 							class="avatar"
 							:src="msg.avatar"
 							mode="aspectFill"
-							v-if="!msg.isMine"
+							v-if="!msg.isMine && !isAiAvatarMode"
 							@click="openPeerProfile"
 						></image>
 
@@ -79,6 +80,10 @@
 						</view>
 						<!-- 文本消息 -->
 						<text class="text-content" v-if="msg.type === 'text'">{{ msg.content }}</text>
+						<view class="ai-handoff-state" v-if="isAiAvatarMode && !msg.isMine && msg.handoffStatus === 'pending'">
+							<view class="ai-handoff-dot"></view>
+							<text class="ai-handoff-text">等待{{ peerName }}回答</text>
+						</view>
 
 						<!-- 图片消息 -->
 						<image
@@ -139,8 +144,21 @@
 						class="avatar"
 						:src="msg.avatar"
 						mode="aspectFill"
-						v-if="msg.isMine"
+						v-if="msg.isMine && !isAiAvatarMode"
 					></image>
+					</view>
+				</view>
+			</view>
+
+			<!-- AI 分身打字中 -->
+			<view v-if="isAiAvatarMode && aiTyping" class="message-item">
+				<view class="message-content-row">
+					<view class="message-wrapper other">
+						<view class="message-bubble ai-typing-bubble">
+							<view class="ai-typing-dot"></view>
+							<view class="ai-typing-dot" style="animation-delay: 0.12s"></view>
+							<view class="ai-typing-dot" style="animation-delay: 0.24s"></view>
+						</view>
 					</view>
 				</view>
 			</view>
@@ -165,8 +183,15 @@
 			><text>撤回</text></view>
 		</view>
 
+		<!-- 快捷提问（访客未发言时展示） -->
+		<scroll-view v-if="aiShowQuick" class="ai-quick-list" scroll-x show-scrollbar="false">
+			<view v-for="question in aiQuickQuestions" :key="question.id" class="ai-quick-question" @tap="askQuickQuestion(question.prompt)">
+				<text>{{ question.label }}</text>
+			</view>
+		</scroll-view>
+
 		<!-- 输入栏 -->
-		<view class="input-bar" v-if="!multiSelectMode && (!isAiAvatarMode || aiAvatarError == '')">
+		<view class="input-bar" :class="{ 'ai-mode': isAiAvatarMode }" v-if="!multiSelectMode && (!isAiAvatarMode || aiAvatarError == '')">
 			<view class="quote-preview" v-if="quotedMessage != null && !isAiAvatarMode">
 				<view class="quote-preview-copy">
 					<text class="quote-preview-name">{{ quotedMessage.name }}</text>
@@ -190,6 +215,7 @@
 				</button>
 				<input
 					class="input"
+					:class="{ 'ai-mode': isAiAvatarMode }"
 					type="text"
 					:value="inputText"
 					@input="onInput"
@@ -201,7 +227,10 @@
 				<button class="tool-btn" v-if="!isAiAvatarMode" @click="showMoreMenu">
 					<text class="icon">+</text>
 				</button>
-				<button class="send-btn" :disabled="isAiAvatarMode && aiAvatarSending" @click="sendMessage">{{ isAiAvatarMode && aiAvatarSending ? '发送中' : '发送' }}</button>
+				<button class="send-btn" :class="{ 'ai-mode': isAiAvatarMode }" :disabled="isAiAvatarMode && aiAvatarSending" @click="sendMessage">{{ isAiAvatarMode ? '↑' : (aiAvatarSending ? '发送中' : '发送') }}</button>
+			</view>
+			<view v-if="isAiAvatarMode" class="ai-disclaimer">
+				<text class="ai-disclaimer-text">内容由 AI 生成，仅参考当前公开资料</text>
 			</view>
 		</view>
 		<view class="multi-action-bar" v-else>
@@ -351,6 +380,7 @@
 			let aiAvatarSending = ref(false)
 			let aiAvatarRestricted = ref(false)
 			let aiAvatarError = ref('')
+			let aiTyping = ref(false)
 			let aiHandoffTimer: any = null
 let contactExchangeRecords = ref([] as any[])
 			let contactExchangeDailyKeys = ref([] as any[])
@@ -382,6 +412,15 @@ let contactExchangeRecords = ref([] as any[])
 			}
 			return false
 		};
+
+		const aiShowQuick = computed(() => {
+			if (!isAiAvatarMode.value || loading.value || multiSelectMode.value || aiAvatarError.value != '') return false
+			const list = messages.value as any[]
+			for (let index = 0; index < list.length; index++) {
+				if (list[index] != null && list[index].isMine === true) return false
+			}
+			return true
+		})
 
 	const mapAiAvatarMessages = (rows: any[]): any[] => {
 		return rows.map((msg: any, idx: number) => ({
@@ -438,7 +477,7 @@ let contactExchangeRecords = ref([] as any[])
 			aiAvatarProfile.value = profileRes.data
 			peerName.value = String(profileRes.data.name)
 			peerAvatar.value = String(profileRes.data.avatar)
-			uni.setNavigationBarTitle({ title: 'AI 分身 · ' + peerName.value })
+			uni.setNavigationBarTitle({ title: 'AI 分身' })
 			const quickRes = getAiAvatarQuickQuestions()
 			if (quickRes.success && quickRes.data != null) aiQuickQuestions.value = quickRes.data as any[]
 			const historyRes = getAiAvatarConversation(userId.value, aiAvatarProfile.value)
@@ -803,29 +842,47 @@ if (options && options.userId) {
 		})
 	}
 
-	// 发送消息
-	const sendAiAvatarText = async (content: string) => {
+	// 发送消息（AI 分身：先上屏访客消息，打字中约 0.7s 后返回分身回复）
+	const sendAiAvatarText = (content: string) => {
 		if (aiAvatarSending.value || aiAvatarProfile.value == null) return
 		const question = content.trim()
 		if (question.length == 0) return
 		aiAvatarSending.value = true
 		inputText.value = ''
 		pasteVisible.value = false
-		try {
-			const res = sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
-			if (!res.success || res.data == null) {
-				uni.showToast({ title: res.message != null ? String(res.message) : '发送失败，请重试', icon: 'none' })
-				return
+		const localId = `local-${Date.now()}`
+		const localMsgs = messages.value as any[]
+		localMsgs.push({
+			id: localId,
+			type: 'text',
+			content: question,
+			time: formatTime(Date.now()),
+			showTime: false,
+			isMine: true,
+			avatar: '/static/portraits/profile-man-light.jpg'
+		})
+		aiTyping.value = true
+		scrollToBottom()
+		setTimeout(() => {
+			try {
+				const res = sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
+				if (!res.success || res.data == null) {
+					messages.value = (messages.value as any[]).filter((item: any) => item.id != localId)
+					uni.showToast({ title: res.message != null ? String(res.message) : '发送失败，请重试', icon: 'none' })
+					return
+				}
+				messages.value = mapAiAvatarMessages(res.data.messages as any[])
+				scheduleAiHandoff(res.data.messages as any[])
+				scrollToBottom()
+			} catch (error) {
+				console.error('AI 分身发送失败', error)
+				messages.value = (messages.value as any[]).filter((item: any) => item.id != localId)
+				uni.showToast({ title: '发送失败，请稍后重试', icon: 'none' })
+			} finally {
+				aiAvatarSending.value = false
+				aiTyping.value = false
 			}
-			messages.value = mapAiAvatarMessages(res.data.messages as any[])
-			scheduleAiHandoff(res.data.messages as any[])
-			scrollToBottom()
-		} catch (error) {
-			console.error('AI 分身发送失败', error)
-			uni.showToast({ title: '发送失败，请稍后重试', icon: 'none' })
-		} finally {
-			aiAvatarSending.value = false
-		}
+		}, 700)
 	}
 
 	const openAiAdvisor = () => {
@@ -1453,53 +1510,107 @@ if (options && options.userId) {
 	overflow-y: auto;
 }
 
-.ai-avatar-notice {
-	margin-bottom: 16px;
-	padding: 14px;
-	border: 1px solid var(--line);
-	border-radius: 12px;
-	background: var(--match-mist);
-	box-sizing: border-box;
-}
-
-.ai-avatar-notice-head {
-	display: flex;
-	flex-direction: row;
-	align-items: flex-start;
-	gap: 10px;
-}
-
-.ai-avatar-notice-copy {
-	flex: 1;
-	min-width: 0;
+/* ==================== AI 分身模式 ==================== */
+.ai-head {
+	position: relative;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-}
-
-.ai-avatar-notice-title {
-	color: var(--ink);
-	font-size: 15px;
-	font-weight: 700;
-}
-
-.ai-avatar-notice-desc {
-	color: var(--ink2);
-	font-size: 12px;
-	line-height: 1.5;
-}
-
-.ai-avatar-clear {
+	align-items: center;
+	padding: 10px 24px 4px;
 	flex-shrink: 0;
+}
+
+.ai-head-clear {
+	position: absolute;
+	right: 16px;
+	top: 6px;
 	padding: 4px 2px;
+}
+
+.ai-head-clear text {
 	color: var(--accent2);
 	font-size: 12px;
 }
 
+.ai-head-avatar {
+	position: relative;
+	width: 68px;
+	height: 68px;
+}
+
+.ai-head-img {
+	width: 68px;
+	height: 68px;
+	border-radius: 50%;
+}
+
+.ai-head-badge {
+	position: absolute;
+	right: 0;
+	bottom: 1px;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--accent2);
+	border: 2px solid var(--canvas);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ai-head-badge-text {
+	font-size: 9px;
+	font-weight: 700;
+	color: var(--text-invert);
+	line-height: 16px;
+}
+
+.ai-head-name {
+	margin-top: 9px;
+	font-size: 17px;
+	font-weight: 700;
+	color: var(--ink);
+}
+
+.ai-head-pill {
+	margin-top: 9px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	background: var(--warm);
+	border-radius: 999px;
+	padding: 5px 12px 5px 6px;
+}
+
+.ai-head-pill-chip {
+	height: 15px;
+	padding: 0 5px;
+	border-radius: 8px;
+	background: var(--accent-bg);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ai-head-pill-chip-text {
+	font-size: 9px;
+	font-weight: 700;
+	color: var(--accent2);
+	line-height: 15px;
+}
+
+.ai-head-pill-text {
+	font-size: 11px;
+	color: var(--ink2);
+}
+
 .ai-quick-list {
 	width: 100%;
-	margin-top: 12px;
+	flex-shrink: 0;
+	padding: 4px 12px 10px;
 	white-space: nowrap;
+	box-sizing: border-box;
 }
 
 .ai-quick-question {
@@ -1514,6 +1625,104 @@ if (options && options.userId) {
 	background: var(--surface);
 	color: var(--accent2);
 	font-size: 12px;
+}
+
+.ai-thread .message-bubble {
+	max-width: 300px;
+}
+
+.ai-handoff-state {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	margin-top: 9px;
+	padding-top: 9px;
+	border-top: 1px solid var(--warm);
+}
+
+.ai-handoff-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--accent);
+}
+
+.ai-handoff-text {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--ink2);
+}
+
+.ai-typing-bubble {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 5px;
+	padding: 14px 16px;
+}
+
+.ai-typing-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--muted);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ai-typing-dot {
+		animation: ai-dot-bounce 1s ease-in-out infinite;
+	}
+}
+
+@keyframes ai-dot-bounce {
+	0% { transform: translateY(0); }
+	50% { transform: translateY(-3px); }
+	100% { transform: translateY(0); }
+}
+
+/* AI 分身输入栏：悬浮药丸 + 圆形发送 + 生成声明 */
+.input-bar.ai-mode {
+	border-top: 0;
+	background: transparent;
+}
+
+.input.ai-mode {
+	height: 44px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 22px;
+	box-sizing: border-box;
+}
+
+.send-btn.ai-mode {
+	min-width: 44px;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border-radius: 22px;
+	font-size: 18px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.send-btn.ai-mode::after {
+	border: 0;
+}
+
+.ai-disclaimer {
+	width: 100%;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	padding-top: 7px;
+}
+
+.ai-disclaimer-text {
+	font-size: 10px;
+	line-height: 14px;
+	color: var(--muted);
 }
 
 .ai-avatar-loading {

@@ -101,31 +101,105 @@ function singleSuggestion(value: string, preferences: any): string {
   return normalizeAgeOpening(cleaned, preferences)
 }
 
-function profileTagHints(profile: any): string {
-  if (profile == null || typeof profile != 'object') return '无'
-  const hints: string[] = []
-  const groups = [profile.interest_tags, profile.personality_tags]
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-    const group = groups[groupIndex]
-    if (Array.isArray(group)) {
-      for (let index = 0; index < group.length; index++) {
-        const tag = textValue(group[index])
-        if (tag != '') hints.push(tag)
-      }
+function hasNumber(value: any): boolean {
+  return value != null && textValue(value) != ''
+}
+
+function tagValues(value: any): string[] {
+  const values: string[] = []
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      const tag = textValue(value[index])
+      if (tag != '') values.push(tag)
     }
   }
-  if (profile.tag_selections != null && typeof profile.tag_selections == 'object') {
-    const keys = Object.keys(profile.tag_selections)
-    for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
-      const values = profile.tag_selections[keys[keyIndex]]
-      if (!Array.isArray(values)) continue
-      for (let valueIndex = 0; valueIndex < values.length; valueIndex++) {
-        const tag = textValue(values[valueIndex])
-        if (tag != '') hints.push(tag)
-      }
-    }
+  return values
+}
+
+function joinedTags(value: any): string {
+  const values = tagValues(value)
+  return values.length > 0 ? values.join('、') : ''
+}
+
+function selectionTagText(profile: any): string {
+  if (profile.tag_selections == null || typeof profile.tag_selections != 'object') return ''
+  const values: string[] = []
+  const keys = Object.keys(profile.tag_selections)
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+    const group = tagValues(profile.tag_selections[keys[keyIndex]])
+    for (let index = 0; index < group.length; index++) values.push(group[index])
   }
-  return hints.length > 0 ? hints.join('、') : '无'
+  return values.join('、')
+}
+
+function genderText(profile: any): string {
+  const gender = textValue(profile.gender)
+  if (gender == '1') return '男'
+  if (gender == '2') return '女'
+  return ''
+}
+
+function educationLabel(value: any): string {
+  if (!hasNumber(value)) return ''
+  const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+  const index = Number(value)
+  return index >= 1 && index < labels.length ? labels[index] : ''
+}
+
+function heightRangeText(source: any): string {
+  if (!hasNumber(source.height_min) && !hasNumber(source.height_max)) return ''
+  const minText = hasNumber(source.height_min) ? Math.round(Number(source.height_min)) + 'cm' : ''
+  const maxText = hasNumber(source.height_max) ? Math.round(Number(source.height_max)) + 'cm' : ''
+  if (minText != '' && maxText != '') return minText + '到' + maxText
+  if (minText != '') return minText + '以上'
+  return maxText + '以下'
+}
+
+function profileContext(profile: any): string {
+  if (profile == null || typeof profile != 'object') return '（暂无资料）'
+  const lines: string[] = []
+  const gender = genderText(profile)
+  if (gender != '') lines.push('性别：' + gender)
+  const age = validAge(profile.age)
+  if (age != null) lines.push('年龄：' + age + '岁')
+  if (hasNumber(profile.height)) lines.push('身高：' + Math.round(Number(profile.height)) + 'cm')
+  const city = textValue(profile.city)
+  if (city != '') lines.push('所在城市：' + city)
+  const hometown = textValue(profile.hometown)
+  if (hometown != '') lines.push('家乡：' + hometown)
+  const job = textValue(profile.job)
+  if (job != '') lines.push('职业：' + job)
+  const school = textValue(profile.school)
+  if (school != '') lines.push('学校：' + school)
+  const mbti = textValue(profile.mbti)
+  if (mbti != '') lines.push('MBTI：' + mbti)
+  const intro = textValue(profile.self_intro) != '' ? textValue(profile.self_intro) : textValue(profile.introduction)
+  if (intro != '') lines.push('自我介绍：' + intro)
+  const interestTags = joinedTags(profile.interest_tags)
+  const personalityTags = joinedTags(profile.personality_tags)
+  lines.push('兴趣标签：' + (interestTags != '' ? interestTags : '未填写'))
+  lines.push('性格标签：' + (personalityTags != '' ? personalityTags : '未填写'))
+  if (interestTags == '' && personalityTags == '') {
+    const selections = selectionTagText(profile)
+    if (selections != '') lines.push('标签线索：' + selections)
+  }
+  return lines.join('\n')
+}
+
+function preferenceContext(preferences: any): string {
+  const source = preferenceSource(preferences)
+  const lines: string[] = []
+  const ageRange = ageRangeText(preferences)
+  lines.push('年龄：' + (ageRange != '' ? ageRange : '不限'))
+  const heightRange = heightRangeText(source)
+  lines.push('身高：' + (heightRange != '' ? heightRange : '不限'))
+  const education = educationLabel(source.education_min)
+  lines.push('最低学历：' + (education != '' ? education : '不限'))
+  lines.push('接受异地：' + (source.accept_long_distance == true ? '是' : '否'))
+  lines.push('接受跨省：' + (source.accept_cross_province == true ? '是' : '否'))
+  const extra = textValue(source.extra_requirement)
+  lines.push('其他要求：' + (extra != '' ? extra : '无'))
+  return lines.join('\n')
 }
 
 export async function generateIdealPartner(profile: any, preferences: any): Promise<any> {
@@ -134,8 +208,7 @@ export async function generateIdealPartner(profile: any, preferences: any): Prom
   if (variationModes.length > 1 && variationIndex == lastVariationIndex) variationIndex = (variationIndex + 1) % variationModes.length
   lastVariationIndex = variationIndex
   const variationMode = variationModes[variationIndex]
-  const tagHints = profileTagHints(profile)
-  const prompt = '请根据以下用户资料和择偶要求，生成一段适合填写在婚恋搜索框中的理想对象条件。第一句必须直接从完整的年龄范围开始，例如“18到23岁”或“18岁到60岁”，不能只写“到60岁”“23岁以下”或省略另一端；如果后台只返回 age_max，就把年龄下限补为 18 岁，如果只返回 age_min，就把年龄上限补为 60 岁，如果没有年龄要求就不要编造年龄。第一句还要尽量包含真实的身高、收入、学历或地域条件。禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头。第二、三句优先结合“资料标签线索”中真实存在的兴趣、性格和关系期待，写出具体的共同活动或相处方式。不要编造资料中没有的爱好或条件。整体必须是类似“18到23岁，身高160cm以上，有稳定收入。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间，互动频率适中。”的字段条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头。每次都要重新组织语言、重点和句式，不要照搬模板。长度在 50 到 75 字之间自然变化，不要每次都写成相同长度。不要写“年龄：”“身高：”这种冒号标签，也不要写“我来自”“我的资料是”等自我介绍。只能生成一个候选，不得提供第二个版本、备选、换行或分段。只输出内容本身，不要标题、引号、Markdown、解释或免责声明；语气真诚具体，不承诺结果。\n\n资料标签线索：\n' + tagHints + '\n\n用户资料：\n' + JSON.stringify(profile != null ? profile : {}) + '\n\n择偶要求：\n' + JSON.stringify(preferences != null ? preferences : {})
+  const prompt = '请为下面这位用户生成一段填写在婚恋搜索框中的理想对象条件，必须个性化：内容要能看出是这位用户在找什么样的人，而不是通用模板。第一句必须直接从完整的年龄范围开始，例如“18到23岁”或“18岁到60岁”，不能只写“到60岁”“23岁以下”或省略另一端；年龄范围以“择偶标准”为准，标准里只给上限就把下限补为18岁，只给下限就把上限补为60岁，完全没提就写18到60岁。身高、学历、异地跨省和其他要求同样只能取自“择偶标准”，标准里没有的项一律不要出现，禁止编造或补写任何数字和条件。第二、三句必须从该用户的“兴趣标签”“性格标签”中挑真实存在的标签，转写成希望与对方一起做的具体活动或相处方式，例如兴趣有音乐就写一起听歌、看演出或分享歌单，性格有耐心就写相处节奏平和、遇事好商量；资料里有自我介绍时可提炼一两个关键词作补充；两类标签都未填写时，只写不依赖具体爱好的相处期待，仍然禁止编造爱好。地域期待可参考“接受异地”“接受跨省”：都不接受就倾向同城或同省。禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头，不要写“年龄：”“身高：”这类冒号标签，也不要写“我来自”“我的资料是”等自我介绍。整体必须是类似“18到23岁，身高160cm以上，本科以上学历。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间。”的条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头，每次都要重新组织语言、重点和句式，不要照搬模板。长度在50到75字之间自然变化。只能生成一个候选，不得提供第二个版本、备选、换行或分段，不承诺关系结果，语气真诚具体。只输出内容本身，不要标题、引号、Markdown、解释或免责声明。\n\n【用户资料】\n' + profileContext(profile) + '\n\n【择偶标准】\n' + preferenceContext(preferences)
   return new Promise<any>((resolve) => {
     uni.request({
       url: AI_API_URL,
@@ -143,7 +216,7 @@ export async function generateIdealPartner(profile: any, preferences: any): Prom
       data: {
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: '你是婚恋资料助手，只帮助用户整理真诚、具体、自然的择偶期待。' },
+          { role: 'system', content: '你是婚恋搜索助手，根据用户的资料、兴趣性格标签和择偶标准，为其生成个性化的理想对象搜索条件，只使用提供的真实数据，不编造。' },
           { role: 'user', content: prompt }
         ],
         temperature: 1.0,

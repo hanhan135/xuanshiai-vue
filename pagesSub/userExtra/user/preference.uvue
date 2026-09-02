@@ -8,47 +8,103 @@
 
 		<view v-if="loading" class="state"><text>正在加载择偶标准...</text></view>
 		<scroll-view v-else class="content" scroll-y enhanced show-scrollbar="false">
-			<view class="section-card">
-				<text class="section-title">择偶要求</text>
-				<view class="field-row">
-					<text class="field-label">年龄下限</text>
-					<picker class="field-picker" mode="selector" :range="ageOptions" :value="ageMinIndex" @change="onAgeMinChange"><text class="field-value">{{ ageText(ageMin) }}</text><text class="field-arrow">›</text></picker>
+			<view class="sync-row">
+				<view class="led" :class="{ 'led-on': !ledDirty }"></view>
+				<text class="sync-text">{{ ledDirty ? '未保存' : '已保存' }}</text>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">年龄</text><text class="mod-tip">拖动旋钮调整范围</text></view>
+				<view class="readout">
+					<text class="readout-main">{{ ageReadout }}</text>
+					<text v-if="ageUnit != ''" class="readout-unit">{{ ageUnit }}</text>
 				</view>
-				<view class="field-row">
-					<text class="field-label">年龄上限</text>
-					<picker class="field-picker" mode="selector" :range="ageOptions" :value="ageMaxIndex" @change="onAgeMaxChange"><text class="field-value">{{ ageText(ageMax) }}</text><text class="field-arrow">›</text></picker>
+				<view id="age-track" class="track" @touchstart="onAgeTrackTouchStart" @touchmove="onAgeTrackTouchMove" @touchend="onTrackTouchEnd">
+					<view class="ticks"><view v-for="i in 21" :key="i" class="tick"></view></view>
+					<view class="zone" :style="{ left: ageLoPct + '%', width: ageZoneWidth + '%' }"></view>
+					<view class="knob" :style="{ left: ageLoPct + '%' }"><view class="knob-dot"></view></view>
+					<view class="knob" :style="{ left: ageHiPct + '%' }"><view class="knob-dot"></view></view>
 				</view>
-				<view class="field-row">
-					<text class="field-label">身高下限</text>
-					<picker class="field-picker" mode="selector" :range="heightOptions" :value="heightMinIndex" @change="onHeightMinChange"><text class="field-value">{{ heightText(heightMin) }}</text><text class="field-arrow">›</text></picker>
+				<view class="scale"><text>18</text><text>28</text><text>39</text><text>49</text><text>60</text></view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">身高</text><text class="mod-tip">拖动旋钮调整范围</text></view>
+				<view class="readout">
+					<text class="readout-main">{{ heightReadout }}</text>
+					<text v-if="heightUnit != ''" class="readout-unit">{{ heightUnit }}</text>
 				</view>
-				<view class="field-row">
-					<text class="field-label">身高上限</text>
-					<picker class="field-picker" mode="selector" :range="heightOptions" :value="heightMaxIndex" @change="onHeightMaxChange"><text class="field-value">{{ heightText(heightMax) }}</text><text class="field-arrow">›</text></picker>
+				<view id="height-track" class="track" @touchstart="onHeightTrackTouchStart" @touchmove="onHeightTrackTouchMove" @touchend="onTrackTouchEnd">
+					<view class="ticks"><view v-for="i in 17" :key="i" class="tick"></view></view>
+					<view class="zone" :style="{ left: heightLoPct + '%', width: heightZoneWidth + '%' }"></view>
+					<view class="knob" :style="{ left: heightLoPct + '%' }"><view class="knob-dot"></view></view>
+					<view class="knob" :style="{ left: heightHiPct + '%' }"><view class="knob-dot"></view></view>
 				</view>
-				<view class="field-row">
-					<text class="field-label">最低学历</text>
-					<picker class="field-picker" mode="selector" :range="educationOptions" :value="educationIndex" @change="onEducationChange"><text class="field-value">{{ educationText }}</text><text class="field-arrow">›</text></picker>
+				<view class="scale"><text>140</text><text>160</text><text>180</text><text>200</text><text>220</text></view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">学历</text><text class="mod-tip">达到或高于所选</text></view>
+				<view class="readout">
+					<text class="readout-main">{{ eduReadout }}</text>
+					<text v-if="eduMin != null" class="readout-unit">及以上</text>
 				</view>
-				<view class="field-row">
-					<text class="field-label">接受异地</text>
-					<picker class="field-picker" mode="selector" :range="booleanOptions" :value="acceptLongDistance ? 1 : 0" @change="onLongDistanceChange"><text class="field-value">{{ acceptLongDistance ? '接受' : '不接受' }}</text><text class="field-arrow">›</text></picker>
+				<view id="edu-track" class="detents" @touchstart="onEduTrackTouchStart">
+					<view class="detent-line"></view>
+					<view class="detent-ind" :style="{ left: 'calc(' + eduIndex + ' * 100% / 9)' }"></view>
 				</view>
-				<view class="field-row">
-					<text class="field-label">接受跨省</text>
-					<picker class="field-picker" mode="selector" :range="booleanOptions" :value="acceptCrossProvince ? 1 : 0" @change="onCrossProvinceChange"><text class="field-value">{{ acceptCrossProvince ? '接受' : '不接受' }}</text><text class="field-arrow">›</text></picker>
-				</view>
-				<view class="field-row">
-					<text class="field-label">其他要求</text>
-					<picker class="field-picker" mode="selector" :range="extraOptions" :value="extraIndex" @change="onExtraChange"><text class="field-value">{{ extraRequirement || '无其他要求' }}</text><text class="field-arrow">›</text></picker>
+				<view class="detent-labels">
+					<text v-for="(label, index) in eduLabels" :key="label" class="detent-label" :class="{ 'detent-label-on': eduIndex == index }" @tap="setEduIndex(index)">{{ label }}</text>
 				</view>
 			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">距离</text><text class="mod-tip">三挡拨段</text></view>
+				<view class="segs">
+					<view class="seg-ind" :style="segIndStyle(3, dist)"></view>
+					<view class="seg seg-tall" @tap="setDist(0)">
+						<text class="seg-name" :class="{ 'seg-name-on': dist == 0 }">最好同城</text>
+						<text class="seg-sub">就在这座城市</text>
+					</view>
+					<view class="seg seg-tall" @tap="setDist(1)">
+						<text class="seg-name" :class="{ 'seg-name-on': dist == 1 }">异地也可以</text>
+						<text class="seg-sub">同省不同城</text>
+					</view>
+					<view class="seg seg-tall" @tap="setDist(2)">
+						<text class="seg-name" :class="{ 'seg-name-on': dist == 2 }">距离不是问题</text>
+						<text class="seg-sub">跨省也接受</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">未来规划</text><text class="mod-tip">对 TA 的期待</text></view>
+				<view v-for="(group, gi) in planGroups" :key="group.key" class="plan-row">
+					<text class="plan-label">{{ group.label }}</text>
+					<view class="segs segs-small">
+						<view class="seg-ind" :style="segIndStyle(group.opts.length, planValue(gi))"></view>
+						<view v-for="(option, oi) in group.opts" :key="option" class="seg" @tap="setPlan(gi, oi)">
+							<text class="seg-name" :class="{ 'seg-name-on': planValue(gi) == oi }">{{ option }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">期待</text><text class="mod-tip">可多选，不选也行</text></view>
+				<view class="keys">
+					<view v-for="option in extraOptions" :key="option" class="key" :class="{ 'key-on': extras.indexOf(option) >= 0 }" @tap="toggleExtra(option)">
+						<text>{{ option }}</text>
+					</view>
+				</view>
+			</view>
+
 			<view class="content-spacer"></view>
 		</scroll-view>
 
 		<view class="footer">
-			<view class="cancel-button" @tap="goBack"><text>取消</text></view>
-			<view class="save-button" :class="{ disabled: saving }" @tap="save"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
+			<view class="cancel-button" hover-class="hv-press" @tap="goBack"><text>取消</text></view>
+			<view class="save-button" :class="{ disabled: saving }" hover-class="hv-press" @tap="save"><text>{{ saving ? '保存中...' : '保存' }}</text></view>
 		</view>
 	</view>
 </template>
@@ -58,49 +114,194 @@ import { getOwnPreferences, updateOwnPreferences } from '@/api'
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+
+const AGE_MIN = 18
+const AGE_MAX = 60
+const HEIGHT_MIN = 140
+const HEIGHT_MAX = 220
+// 学历阶梯按升序展示（不限到博士）；education_min 存旧版降序下标（1 博士 - 8 小学），两者换算为 9 - 下标
+const eduLabels = ['不限', '小学', '初中', '高中', '中专', '大专', '本科', '硕士', '博士']
+const extraOptions = ['不吸烟', '少饮酒', '有稳定工作', '重视家庭', '愿意认真沟通']
+const planGroups = [
+	{ key: 'goal', label: '交友目标', opts: ['倾向恋爱', '倾向结婚'] },
+	{ key: 'pace', label: '见面节奏', opts: ['尽快见面', '先了解再见面', '都行看对方'] },
+	{ key: 'kids', label: '是否想要小孩', opts: ['想要', '看情况决定', '不需要'] }
+] as any[]
+
 const loading = ref(true)
 const saving = ref(false)
+const ledDirty = ref(false)
 const ageMin = ref(null as any)
 const ageMax = ref(null as any)
 const heightMin = ref(null as any)
 const heightMax = ref(null as any)
-const educationMin = ref(null as any)
-const acceptLongDistance = ref(false)
-const acceptCrossProvince = ref(false)
-const extraRequirement = ref('')
+const eduMin = ref(null as any)
+const dist = ref(2)
+const planGoal = ref(1)
+const planPace = ref(2)
+const planKids = ref(1)
+const extras = ref([] as string[])
 
-const numericOptions = (start: number, end: number, suffix: string): string[] => {
-	const values = ['不限'] as string[]
-	for (let value = start; value <= end; value++) values.push('' + value + suffix)
-	return values
+const dragTarget = ref('')
+const dragRect = ref(null as any)
+const dragLo = ref(false)
+
+const clampInt = (value: any, min: number, max: number, fallback: number): number => {
+	if (value == null) return fallback
+	const num = Number(value)
+	if (isNaN(num)) return fallback
+	return Math.min(max, Math.max(min, Math.round(num)))
 }
-const ageOptions = numericOptions(18, 60, '岁')
-const heightOptions = numericOptions(140, 220, 'cm')
-const educationOptions = ['不限', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
-const booleanOptions = ['不接受', '接受']
-const extraOptions = ['无其他要求', '不吸烟', '少饮酒', '有稳定工作', '重视家庭', '愿意认真沟通']
 
-const ageMinIndex = computed(() => ageMin.value == null ? 0 : Number(ageMin.value) - 17)
-const ageMaxIndex = computed(() => ageMax.value == null ? 0 : Number(ageMax.value) - 17)
-const heightMinIndex = computed(() => heightMin.value == null ? 0 : Number(heightMin.value) - 139)
-const heightMaxIndex = computed(() => heightMax.value == null ? 0 : Number(heightMax.value) - 139)
-const educationIndex = computed(() => educationMin.value == null ? 0 : Math.max(0, Math.min(educationOptions.length - 1, Number(educationMin.value))))
-const educationText = computed(() => educationOptions[educationIndex.value])
-const extraIndex = computed(() => {
-	const index = extraOptions.indexOf(extraRequirement.value)
-	return index >= 0 ? index : 0
+const pctOf = (value: number, min: number, max: number): number => (value - min) / (max - min) * 100
+
+const ageLo = computed(() : number => ageMin.value == null ? AGE_MIN : Number(ageMin.value))
+const ageHi = computed(() : number => ageMax.value == null ? AGE_MAX : Number(ageMax.value))
+const heightLo = computed(() : number => heightMin.value == null ? HEIGHT_MIN : Number(heightMin.value))
+const heightHi = computed(() : number => heightMax.value == null ? HEIGHT_MAX : Number(heightMax.value))
+
+const ageLoPct = computed(() : number => pctOf(ageLo.value, AGE_MIN, AGE_MAX))
+const ageHiPct = computed(() : number => pctOf(ageHi.value, AGE_MIN, AGE_MAX))
+const ageZoneWidth = computed(() : number => ageHiPct.value - ageLoPct.value)
+const heightLoPct = computed(() : number => pctOf(heightLo.value, HEIGHT_MIN, HEIGHT_MAX))
+const heightHiPct = computed(() : number => pctOf(heightHi.value, HEIGHT_MIN, HEIGHT_MAX))
+const heightZoneWidth = computed(() : number => heightHiPct.value - heightLoPct.value)
+
+const ageReadout = computed(() : string => {
+	if (ageMin.value == null && ageMax.value == null) return '不限'
+	if (ageMin.value == null) return '' + ageHi.value + ' 岁以内'
+	if (ageMax.value == null) return '' + ageLo.value + ' 岁以上'
+	return '' + ageLo.value + ' ~ ' + ageHi.value
 })
-const ageText = (value: any): string => value == null ? '不限' : '' + value + '岁'
-const heightText = (value: any): string => value == null ? '不限' : '' + value + 'cm'
+const ageUnit = computed(() : string => ageMin.value == null && ageMax.value == null ? '' : '岁')
+const heightReadout = computed(() : string => {
+	if (heightMin.value == null && heightMax.value == null) return '不限'
+	if (heightMin.value == null) return '' + heightHi.value + ' cm 以内'
+	if (heightMax.value == null) return '' + heightLo.value + ' cm 以上'
+	return '' + heightLo.value + ' ~ ' + heightHi.value
+})
+const heightUnit = computed(() : string => heightMin.value == null && heightMax.value == null ? '' : 'cm')
+const eduIndex = computed(() : number => eduMin.value == null ? 0 : 9 - Number(eduMin.value))
+const eduReadout = computed(() : string => eduMin.value == null ? '不限' : eduLabels[eduIndex.value])
 
-const onAgeMinChange = (event: any) => ageMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 17
-const onAgeMaxChange = (event: any) => ageMax.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 17
-const onHeightMinChange = (event: any) => heightMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 139
-const onHeightMaxChange = (event: any) => heightMax.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value) + 139
-const onEducationChange = (event: any) => educationMin.value = Number(event.detail.value) == 0 ? null : Number(event.detail.value)
-const onLongDistanceChange = (event: any) => acceptLongDistance.value = Number(event.detail.value) == 1
-const onCrossProvinceChange = (event: any) => acceptCrossProvince.value = Number(event.detail.value) == 1
-const onExtraChange = (event: any) => extraRequirement.value = Number(event.detail.value) == 0 ? '' : extraOptions[Number(event.detail.value)]
+const markDirty = () => { ledDirty.value = true }
+
+const segIndStyle = (count: number, index: number): string => {
+	const cell = '(100% - 12rpx) / ' + count
+	return 'width: calc(' + cell + '); left: calc(6rpx + ' + cell + ' * ' + index + ');'
+}
+
+const planValue = (gi: number): number => gi == 0 ? planGoal.value : (gi == 1 ? planPace.value : planKids.value)
+
+const setDist = (value: number) => {
+	if (dist.value == value) return
+	dist.value = value
+	markDirty()
+}
+const setPlan = (gi: number, oi: number) => {
+	if (planValue(gi) == oi) return
+	if (gi == 0) planGoal.value = oi
+	else if (gi == 1) planPace.value = oi
+	else planKids.value = oi
+	markDirty()
+}
+const setEduIndex = (index: number) => {
+	if (eduIndex.value == index) return
+	eduMin.value = index == 0 ? null : (9 - index)
+	markDirty()
+}
+const toggleExtra = (option: string) => {
+	const index = extras.value.indexOf(option)
+	if (index >= 0) extras.value.splice(index, 1)
+	else extras.value.push(option)
+	markDirty()
+}
+
+const queryRect = (id: string, callback: (rect: any) => void) => {
+	uni.createSelectorQuery().select('#' + id).boundingClientRect((rect: any) => {
+		callback(rect)
+	}).exec()
+}
+
+const applyTrackValue = (clientX: number, min: number, span: number, setLo: (v: number) => void, setHi: (v: number) => void, getLo: () => number, getHi: () => number) => {
+	const rect = dragRect.value
+	if (rect == null || Number(rect.width) <= 0) return
+	let value = Math.round(min + (clientX - Number(rect.left)) / Number(rect.width) * span)
+	value = Math.min(min + span, Math.max(min, value))
+	if (dragLo.value) setLo(Math.min(value, getHi()))
+	else setHi(Math.max(value, getLo()))
+	markDirty()
+}
+
+const onAgeTrackTouchStart = (e: any) => {
+	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
+	if (touch == null) return
+	queryRect('age-track', (rect: any) => {
+		if (rect == null) return
+		dragRect.value = rect
+		const x = Number(touch.clientX)
+		const loX = Number(rect.left) + Number(rect.width) * (Number(ageMin.value == null ? AGE_MIN : ageMin.value) - AGE_MIN) / (AGE_MAX - AGE_MIN)
+		const hiX = Number(rect.left) + Number(rect.width) * (Number(ageMax.value == null ? AGE_MAX : ageMax.value) - AGE_MIN) / (AGE_MAX - AGE_MIN)
+		dragLo.value = Math.abs(x - loX) <= Math.abs(x - hiX)
+		dragTarget.value = 'age'
+		applyTrackValue(x, AGE_MIN, AGE_MAX - AGE_MIN,
+			(v: number) => { ageMin.value = v },
+			(v: number) => { ageMax.value = v },
+			() : number => ageLo.value,
+			() : number => ageHi.value)
+	})
+}
+const onAgeTrackTouchMove = (e: any) => {
+	if (dragTarget.value != 'age') return
+	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
+	if (touch == null) return
+	applyTrackValue(Number(touch.clientX), AGE_MIN, AGE_MAX - AGE_MIN,
+		(v: number) => { ageMin.value = v },
+		(v: number) => { ageMax.value = v },
+		() : number => ageLo.value,
+		() : number => ageHi.value)
+}
+
+const onHeightTrackTouchStart = (e: any) => {
+	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
+	if (touch == null) return
+	queryRect('height-track', (rect: any) => {
+		if (rect == null) return
+		dragRect.value = rect
+		const x = Number(touch.clientX)
+		const loX = Number(rect.left) + Number(rect.width) * (Number(heightMin.value == null ? HEIGHT_MIN : heightMin.value) - HEIGHT_MIN) / (HEIGHT_MAX - HEIGHT_MIN)
+		const hiX = Number(rect.left) + Number(rect.width) * (Number(heightMax.value == null ? HEIGHT_MAX : heightMax.value) - HEIGHT_MIN) / (HEIGHT_MAX - HEIGHT_MIN)
+		dragLo.value = Math.abs(x - loX) <= Math.abs(x - hiX)
+		dragTarget.value = 'height'
+		applyTrackValue(x, HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
+			(v: number) => { heightMin.value = v },
+			(v: number) => { heightMax.value = v },
+			() : number => heightLo.value,
+			() : number => heightHi.value)
+	})
+}
+const onHeightTrackTouchMove = (e: any) => {
+	if (dragTarget.value != 'height') return
+	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
+	if (touch == null) return
+	applyTrackValue(Number(touch.clientX), HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
+		(v: number) => { heightMin.value = v },
+		(v: number) => { heightMax.value = v },
+		() : number => heightLo.value,
+		() : number => heightHi.value)
+}
+
+const onTrackTouchEnd = () => { dragTarget.value = '' }
+
+const onEduTrackTouchStart = (e: any) => {
+	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
+	if (touch == null) return
+	queryRect('edu-track', (rect: any) => {
+		if (rect == null || Number(rect.width) <= 0) return
+		const p = (Number(touch.clientX) - Number(rect.left)) / Number(rect.width)
+		setEduIndex(Math.min(8, Math.max(0, Math.floor(p * 9))))
+	})
+}
 
 const load = async () => {
 	loading.value = true
@@ -115,10 +316,26 @@ const load = async () => {
 		ageMax.value = data.age_max
 		heightMin.value = data.height_min
 		heightMax.value = data.height_max
-		educationMin.value = data.education_min
-		acceptLongDistance.value = data.accept_long_distance == true
-		acceptCrossProvince.value = data.accept_cross_province == true
-		extraRequirement.value = data.extra_requirement != null ? '' + data.extra_requirement : ''
+		const eduNum = data.education_min == null ? null : Number(data.education_min)
+		eduMin.value = eduNum == null || eduNum == 0 ? null : eduNum
+		const acceptLongDistance = data.accept_long_distance == true
+		const acceptCrossProvince = data.accept_cross_province == true
+		// 跨省必含异地；历史数据出现「跨省接受但异地不接受」时按更宽一档归一
+		dist.value = acceptCrossProvince ? 2 : (acceptLongDistance ? 1 : 0)
+		planGoal.value = clampInt(data.dating_goal, 0, 1, 1)
+		planPace.value = clampInt(data.meet_pace, 0, 2, 2)
+		planKids.value = clampInt(data.want_kids, 0, 2, 1)
+		const rawExtra = data.extra_requirement != null ? '' + data.extra_requirement : ''
+		const parsed: string[] = []
+		if (rawExtra != '' && rawExtra != '无其他要求') {
+			const parts = rawExtra.split(',')
+			for (let i = 0; i < parts.length; i++) {
+				const part = parts[i].trim()
+				if (part != '' && extraOptions.indexOf(part) >= 0 && parsed.indexOf(part) < 0) parsed.push(part)
+			}
+		}
+		extras.value = parsed
+		ledDirty.value = false
 	} finally {
 		loading.value = false
 	}
@@ -141,15 +358,19 @@ const save = async () => {
 			age_max: ageMax.value,
 			height_min: heightMin.value,
 			height_max: heightMax.value,
-			education_min: educationMin.value,
-			accept_long_distance: acceptLongDistance.value,
-			accept_cross_province: acceptCrossProvince.value,
-			extra_requirement: extraRequirement.value != '' ? extraRequirement.value : null
+			education_min: eduMin.value,
+			accept_long_distance: dist.value >= 1,
+			accept_cross_province: dist.value == 2,
+			extra_requirement: extras.value.length > 0 ? extras.value.join(',') : null,
+			dating_goal: planGoal.value,
+			meet_pace: planPace.value,
+			want_kids: planKids.value
 		})
 		if (!response.success) {
 			uni.showToast({ title: response.message != null ? '' + response.message : '择偶标准保存失败', icon: 'none' })
 			return
 		}
+		ledDirty.value = false
 		uni.showToast({ title: '择偶标准已保存', icon: 'success' })
 		setTimeout(() => goBack(), 500)
 	} finally {
@@ -169,17 +390,61 @@ onMounted(() => { load() })
 .nav-back-icon { color: var(--ink); font-size: 56rpx; font-weight: 700; line-height: 1; }
 .nav-title { flex: 1; color: var(--ink); font-size: 34rpx; font-weight: 700; text-align: center; }
 .state { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 26rpx; }
-.content { flex: 1; height: 0; padding: 28rpx 24rpx 0; box-sizing: border-box; }
-.section-card { display: flex; flex-direction: column; padding: 28rpx 24rpx; border-radius: 16rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
-.section-title { padding-bottom: 18rpx; color: var(--ink); font-size: 30rpx; font-weight: 700; }
-.field-row { min-height: 96rpx; display: flex; flex-direction: row; align-items: center; border-top: 1px solid var(--line); }
-.field-label { flex: 1; color: var(--ink2); font-size: 28rpx; }
-.field-picker { min-width: 260rpx; height: 96rpx; display: flex; flex-direction: row; align-items: center; justify-content: flex-end; }
-.field-value { max-width: 230rpx; overflow: hidden; color: var(--ink); font-size: 27rpx; text-overflow: ellipsis; white-space: nowrap; }
-.field-arrow { margin-left: 10rpx; color: var(--muted); font-size: 36rpx; }
-.content-spacer { height: 180rpx; }
+.content { flex: 1; height: 0; padding: 20rpx 24rpx 0; box-sizing: border-box; }
+
+.sync-row { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 10rpx; padding: 4rpx 8rpx 14rpx; }
+.led { width: 14rpx; height: 14rpx; border-radius: 7rpx; background: var(--line); transition: background-color 0.18s ease-out; }
+.led-on { background: var(--sage); }
+.sync-text { color: var(--muted); font-size: 22rpx; }
+
+.mod { background: var(--surface); border: 1px solid var(--line); border-radius: 24rpx; padding: 30rpx 28rpx 24rpx; margin-bottom: 20rpx; box-shadow: var(--shadow-sm); }
+.mod-head { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; }
+.mod-name { color: var(--ink); font-size: 28rpx; font-weight: 700; }
+.mod-tip { color: var(--muted); font-size: 22rpx; }
+
+.readout { display: flex; flex-direction: row; align-items: baseline; margin: 20rpx 0 20rpx; }
+.readout-main { color: var(--ink); font-size: 52rpx; font-weight: 800; line-height: 1.1; }
+.readout-unit { margin-left: 12rpx; color: var(--ink2); font-size: 26rpx; font-weight: 500; }
+
+.track { position: relative; height: 92rpx; }
+.ticks { position: absolute; left: 0; right: 0; top: 22rpx; height: 48rpx; display: flex; flex-direction: row; align-items: stretch; justify-content: space-between; }
+.tick { width: 2rpx; background: var(--line); }
+.zone { position: absolute; top: 28rpx; height: 36rpx; background: var(--accent-glow); border-top: 4rpx solid var(--accent); border-bottom: 4rpx solid var(--accent); }
+.knob { position: absolute; top: 46rpx; width: 40rpx; height: 40rpx; margin-left: -20rpx; margin-top: -20rpx; border-radius: 20rpx; background: var(--surface); border: 3rpx solid var(--ink); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
+.knob-dot { width: 14rpx; height: 14rpx; border-radius: 7rpx; background: var(--accent); }
+.scale { display: flex; flex-direction: row; justify-content: space-between; margin-top: 6rpx; color: var(--muted); font-size: 20rpx; }
+
+.detents { position: relative; height: 76rpx; }
+.detent-line { position: absolute; left: 0; right: 0; top: 37rpx; height: 3rpx; background: var(--line); }
+.detent-ind { position: absolute; top: 6rpx; height: 64rpx; width: calc(100% / 9); border-radius: 16rpx; background: var(--accent-glow); border: 3rpx solid var(--accent); transition: left 0.18s ease-out; }
+.detent-labels { display: flex; flex-direction: row; margin-top: 8rpx; }
+.detent-label { flex: 1; text-align: center; color: var(--muted); font-size: 20rpx; }
+.detent-label-on { color: var(--accent2); font-weight: 700; }
+
+.segs { position: relative; display: flex; flex-direction: row; margin-top: 26rpx; background: var(--canvas); border: 1px solid var(--line); border-radius: 22rpx; padding: 6rpx; }
+.seg-ind { position: absolute; top: 6rpx; bottom: 6rpx; border-radius: 16rpx; background: var(--surface); border: 2rpx solid var(--accent); box-shadow: var(--shadow-sm); transition: left 0.18s ease-out; }
+.seg { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4rpx; }
+.seg-tall { height: 120rpx; }
+.segs-small .seg { height: 72rpx; }
+.segs-small { margin-top: 14rpx; }
+.seg-name { color: var(--ink2); font-size: 26rpx; font-weight: 600; transition: color 0.18s ease-out; }
+.seg-name-on { color: var(--accent2); }
+.seg-sub { color: var(--muted); font-size: 20rpx; }
+
+.plan-row { margin-top: 22rpx; }
+.plan-label { display: block; color: var(--ink2); font-size: 25rpx; font-weight: 700; margin-bottom: 4rpx; }
+
+.keys { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16rpx; margin-top: 26rpx; }
+.key { width: calc((100% - 32rpx) / 3); height: 104rpx; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 2rpx solid var(--line); border-radius: 20rpx; box-shadow: 0 4rpx 0 var(--bg-subtle); }
+.key > text { color: var(--ink2); font-size: 26rpx; font-weight: 600; }
+.key-on { border-color: var(--accent); background: var(--accent-glow); box-shadow: 0 4rpx 0 var(--accent-glow); }
+.key-on > text { color: var(--accent2); }
+
+.hv-press { transform: scale(0.98); opacity: 0.85; }
+
+.content-spacer { height: 40rpx; }
 .footer { flex-shrink: 0; display: flex; flex-direction: row; gap: 20rpx; padding: 20rpx 24rpx calc(20rpx + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
-.cancel-button, .save-button { flex: 1; height: 88rpx; display: flex; align-items: center; justify-content: center; border-radius: 44rpx; font-size: 28rpx; font-weight: 700; }
+.cancel-button, .save-button { flex: 1; height: 88rpx; display: flex; align-items: center; justify-content: center; border-radius: 20rpx; font-size: 28rpx; font-weight: 700; }
 .cancel-button { background: var(--warm); color: var(--ink2); }
 .save-button { background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-sm); }
 .save-button.disabled { opacity: 0.55; pointer-events: none; }
