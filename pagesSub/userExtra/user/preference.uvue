@@ -59,6 +59,20 @@
 			</view>
 
 			<view class="mod">
+				<view class="mod-head"><text class="mod-name">收入</text><text class="mod-tip">对 TA 的年收入底线</text></view>
+				<view class="readout">
+					<text class="readout-main">{{ incomeReadout }}</text>
+				</view>
+				<view id="income-track" class="detents" @touchstart="onIncomeTrackTouchStart">
+					<view class="detent-line"></view>
+					<view class="detent-ind" :style="{ left: 'calc(' + incomeIndex + ' * 100% / 6)', width: 'calc(100% / 6)' }"></view>
+				</view>
+				<view class="detent-labels">
+					<text v-for="(label, index) in incomeLabels" :key="label" class="detent-label" :class="{ 'detent-label-on': incomeIndex == index }" @tap="setIncomeIndex(index)">{{ label }}</text>
+				</view>
+			</view>
+
+			<view class="mod">
 				<view class="mod-head"><text class="mod-name">距离</text><text class="mod-tip">三挡拨段</text></view>
 				<view class="segs">
 					<view class="seg-ind" :style="segIndStyle(3, dist)"></view>
@@ -78,7 +92,62 @@
 			</view>
 
 			<view class="mod">
-				<view class="mod-head"><text class="mod-name">未来规划</text><text class="mod-tip">对 TA 的期待</text></view>
+				<view class="mod-head"><text class="mod-name">更多条件</text><text class="mod-tip">不选即不限</text></view>
+				<view class="plan-row">
+					<text class="plan-label">婚姻状况</text>
+					<view class="segs segs-small">
+						<view class="seg-ind" :style="segIndStyle(marryOptions.length, marryReq)"></view>
+						<view v-for="(option, oi) in marryOptions" :key="option" class="seg" @tap="setMarryReq(oi)">
+							<text class="seg-name" :class="{ 'seg-name-on': marryReq == oi }">{{ option }}</text>
+						</view>
+					</view>
+				</view>
+				<view class="plan-row">
+					<text class="plan-label">住房要求</text>
+					<view class="segs segs-small">
+						<view class="seg-ind" :style="segIndStyle(housingOptions.length, houseReq)"></view>
+						<view v-for="(option, oi) in housingOptions" :key="option" class="seg" @tap="setHouseReq(oi)">
+							<text class="seg-name" :class="{ 'seg-name-on': houseReq == oi }">{{ option }}</text>
+						</view>
+					</view>
+				</view>
+				<view class="plan-row">
+					<text class="plan-label">吸烟要求</text>
+					<view class="segs segs-small">
+						<view class="seg-ind" :style="segIndStyle(smokingOptions.length, smokeReq)"></view>
+						<view v-for="(option, oi) in smokingOptions" :key="option" class="seg" @tap="setSmokeReq(oi)">
+							<text class="seg-name" :class="{ 'seg-name-on': smokeReq == oi }">{{ option }}</text>
+						</view>
+					</view>
+				</view>
+				<view class="plan-row">
+					<text class="plan-label">饮酒要求</text>
+					<view class="segs segs-small">
+						<view class="seg-ind" :style="segIndStyle(drinkingOptions.length, drinkReq)"></view>
+						<view v-for="(option, oi) in drinkingOptions" :key="option" class="seg" @tap="setDrinkReq(oi)">
+							<text class="seg-name" :class="{ 'seg-name-on': drinkReq == oi }">{{ option }}</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">期望地区</text><text class="mod-tip">先选省份，可不选城市</text></view>
+				<picker class="area-row" mode="selector" :range="provinceOptions" :value="provinceIndex" @change="onProvinceChange">
+					<view class="area-row-inner">
+						<text class="area-label">省份</text>
+						<view class="area-value"><text class="area-value-text">{{ provinceDisplay }}</text><text class="area-arrow">›</text></view>
+					</view>
+				</picker>
+				<view v-if="citiesOfPrefProvince.length > 0" class="keys area-keys">
+					<view v-for="city in citiesOfPrefProvince" :key="city.code" class="key" :class="{ 'key-on': prefCities.indexOf(city.code) >= 0 }" @tap="togglePrefCity(city.code)">
+						<text>{{ city.name }}</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="mod">
+				<view class="mod-head"><text class="mod-name">未来规划</text><text class="mod-tip">对 TA 的期待 · 暂不参与保存</text></view>
 				<view v-for="(group, gi) in planGroups" :key="group.key" class="plan-row">
 					<text class="plan-label">{{ group.label }}</text>
 					<view class="segs segs-small">
@@ -111,6 +180,7 @@
 
 <script setup lang="uts">
 import { getOwnPreferences, updateOwnPreferences } from '@/api'
+import locationJson from '@/static/location.json'
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
@@ -121,7 +191,19 @@ const HEIGHT_MIN = 140
 const HEIGHT_MAX = 220
 // 学历阶梯按升序展示（不限到博士）；education_min 存旧版降序下标（1 博士 - 8 小学），两者换算为 9 - 下标
 const eduLabels = ['不限', '小学', '初中', '高中', '中专', '大专', '本科', '硕士', '博士']
-const extraOptions = ['不吸烟', '少饮酒', '有稳定工作', '重视家庭', '愿意认真沟通']
+// 吸烟/饮酒要求已由 smoking/drinking_requirement 结构化承载，不再进 extra_requirement；历史旧选项在下次保存时清除
+const extraOptions = ['有稳定工作', '重视家庭', '愿意认真沟通']
+// 与后端 PreferenceUpdateRequest 对齐：婚姻 0 不限 1 未婚 2 离异 3 丧偶；住房 0 不限 1 有房 2 无房；烟酒 0 不限 1 不抽(饮) 2 可接受
+const marryOptions = ['不限', '未婚', '离异', '丧偶']
+const housingOptions = ['不限', '有房', '无房']
+const smokingOptions = ['不限', '不抽烟', '可接受']
+const drinkingOptions = ['不限', '不饮酒', '可接受']
+// income_min 与资料 income 同尺度（年收入，元），挡位对齐资料收入区间档
+const incomeLabels = ['不限', '10w', '20w', '30w', '50w', '100w']
+const incomeStopValues = [0, 100000, 200000, 300000, 500000, 1000000]
+const provinceList: any[] = Array.isArray(locationJson) ? locationJson as any[] : []
+const provinceOptions: string[] = ['不限']
+for (let i = 0; i < provinceList.length; i++) provinceOptions.push('' + provinceList[i].name)
 const planGroups = [
 	{ key: 'goal', label: '交友目标', opts: ['倾向恋爱', '倾向结婚'] },
 	{ key: 'pace', label: '见面节奏', opts: ['尽快见面', '先了解再见面', '都行看对方'] },
@@ -141,10 +223,19 @@ const planGoal = ref(1)
 const planPace = ref(2)
 const planKids = ref(1)
 const extras = ref([] as string[])
+const smokeReq = ref(0)
+const drinkReq = ref(0)
+const houseReq = ref(0)
+const marryReq = ref(0)
+const incomeMin = ref(null as any)
+const prefProvince = ref('')
+const prefCities = ref([] as string[])
 
 const dragTarget = ref('')
 const dragRect = ref(null as any)
 const dragLo = ref(false)
+const dragStartX = ref(0)
+const dragPending = ref(false)
 
 const clampInt = (value: any, min: number, max: number, fallback: number): number => {
 	if (value == null) return fallback
@@ -183,6 +274,30 @@ const heightReadout = computed(() : string => {
 const heightUnit = computed(() : string => heightMin.value == null && heightMax.value == null ? '' : 'cm')
 const eduIndex = computed(() : number => eduMin.value == null ? 0 : 9 - Number(eduMin.value))
 const eduReadout = computed(() : string => eduMin.value == null ? '不限' : eduLabels[eduIndex.value])
+const incomeIndex = computed(() : number => {
+	const v = incomeMin.value == null ? 0 : Number(incomeMin.value)
+	if (isNaN(v) || v <= 0) return 0
+	let best = 1
+	for (let i = 2; i < incomeStopValues.length; i++) {
+		if (Math.abs(incomeStopValues[i] - v) < Math.abs(incomeStopValues[best] - v)) best = i
+	}
+	return best
+})
+const incomeReadout = computed(() : string => incomeIndex.value == 0 ? '不限' : incomeLabels[incomeIndex.value] + ' 以上')
+const provinceIndex = computed(() : number => {
+	if (prefProvince.value == '') return 0
+	for (let i = 0; i < provinceList.length; i++) {
+		if ('' + provinceList[i].code == prefProvince.value) return i + 1
+	}
+	return 0
+})
+const provinceDisplay = computed(() : string => provinceIndex.value == 0 ? '不限' : provinceOptions[provinceIndex.value])
+const citiesOfPrefProvince = computed(() : any[] => {
+	const idx = provinceIndex.value
+	if (idx == 0) return []
+	const cities = provinceList[idx - 1].city
+	return Array.isArray(cities) ? cities as any[] : []
+})
 
 const markDirty = () => { ledDirty.value = true }
 
@@ -210,6 +325,46 @@ const setEduIndex = (index: number) => {
 	eduMin.value = index == 0 ? null : (9 - index)
 	markDirty()
 }
+const setIncomeIndex = (index: number) => {
+	if (incomeIndex.value == index) return
+	incomeMin.value = index == 0 ? null : incomeStopValues[index]
+	markDirty()
+}
+const setMarryReq = (v: number) => { if (marryReq.value != v) { marryReq.value = v; markDirty() } }
+const setHouseReq = (v: number) => { if (houseReq.value != v) { houseReq.value = v; markDirty() } }
+const setSmokeReq = (v: number) => { if (smokeReq.value != v) { smokeReq.value = v; markDirty() } }
+const setDrinkReq = (v: number) => { if (drinkReq.value != v) { drinkReq.value = v; markDirty() } }
+
+const provinceCodeByCity = (code: string): string => {
+	if (code.length < 2) return ''
+	for (let i = 0; i < provinceList.length; i++) {
+		if (('' + provinceList[i].code).substring(0, 2) == code.substring(0, 2)) return '' + provinceList[i].code
+	}
+	return ''
+}
+
+const onProvinceChange = (e: any) => {
+	const raw = e.detail != null && e.detail.value != null ? Number(e.detail.value) : 0
+	const next = raw >= 1 && raw <= provinceList.length ? '' + provinceList[raw - 1].code : ''
+	if (next == prefProvince.value) return
+	prefProvince.value = next
+	prefCities.value = []
+	markDirty()
+}
+
+const togglePrefCity = (raw: any) => {
+	const code = '' + raw
+	const index = prefCities.value.indexOf(code)
+	if (index >= 0) prefCities.value.splice(index, 1)
+	else {
+		if (prefCities.value.length >= 20) {
+			uni.showToast({ title: '最多选择 20 个城市', icon: 'none' })
+			return
+		}
+		prefCities.value.push(code)
+	}
+	markDirty()
+}
 const toggleExtra = (option: string) => {
 	const index = extras.value.indexOf(option)
 	if (index >= 0) extras.value.splice(index, 1)
@@ -233,6 +388,16 @@ const applyTrackValue = (clientX: number, min: number, span: number, setLo: (v: 
 	markDirty()
 }
 
+// 上下限旋钮重合（如同为极端值）时无法按就近判定归属，改按首次滑动方向挑有活动空间的旋钮
+const resolveDragLo = (dx: number, min: number, max: number, getLo: () => number, getHi: () => number): boolean => {
+	if (dx > 0) {
+		if (getHi() < max) return false
+		return getLo() < getHi()
+	}
+	if (getLo() > min) return true
+	return getHi() > getLo()
+}
+
 const onAgeTrackTouchStart = (e: any) => {
 	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
 	if (touch == null) return
@@ -242,9 +407,12 @@ const onAgeTrackTouchStart = (e: any) => {
 		const x = Number(touch.clientX)
 		const loX = Number(rect.left) + Number(rect.width) * (Number(ageMin.value == null ? AGE_MIN : ageMin.value) - AGE_MIN) / (AGE_MAX - AGE_MIN)
 		const hiX = Number(rect.left) + Number(rect.width) * (Number(ageMax.value == null ? AGE_MAX : ageMax.value) - AGE_MIN) / (AGE_MAX - AGE_MIN)
+		const tie = Math.abs(x - loX) == Math.abs(x - hiX)
 		dragLo.value = Math.abs(x - loX) <= Math.abs(x - hiX)
+		dragStartX.value = x
+		dragPending.value = tie
 		dragTarget.value = 'age'
-		applyTrackValue(x, AGE_MIN, AGE_MAX - AGE_MIN,
+		if (!tie) applyTrackValue(x, AGE_MIN, AGE_MAX - AGE_MIN,
 			(v: number) => { ageMin.value = v },
 			(v: number) => { ageMax.value = v },
 			() : number => ageLo.value,
@@ -255,7 +423,14 @@ const onAgeTrackTouchMove = (e: any) => {
 	if (dragTarget.value != 'age') return
 	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
 	if (touch == null) return
-	applyTrackValue(Number(touch.clientX), AGE_MIN, AGE_MAX - AGE_MIN,
+	const x = Number(touch.clientX)
+	if (dragPending.value) {
+		const dx = x - Number(dragStartX.value)
+		if (Math.abs(dx) < 2) return
+		dragPending.value = false
+		dragLo.value = resolveDragLo(dx, AGE_MIN, AGE_MAX, () : number => ageLo.value, () : number => ageHi.value)
+	}
+	applyTrackValue(x, AGE_MIN, AGE_MAX - AGE_MIN,
 		(v: number) => { ageMin.value = v },
 		(v: number) => { ageMax.value = v },
 		() : number => ageLo.value,
@@ -271,9 +446,12 @@ const onHeightTrackTouchStart = (e: any) => {
 		const x = Number(touch.clientX)
 		const loX = Number(rect.left) + Number(rect.width) * (Number(heightMin.value == null ? HEIGHT_MIN : heightMin.value) - HEIGHT_MIN) / (HEIGHT_MAX - HEIGHT_MIN)
 		const hiX = Number(rect.left) + Number(rect.width) * (Number(heightMax.value == null ? HEIGHT_MAX : heightMax.value) - HEIGHT_MIN) / (HEIGHT_MAX - HEIGHT_MIN)
+		const tie = Math.abs(x - loX) == Math.abs(x - hiX)
 		dragLo.value = Math.abs(x - loX) <= Math.abs(x - hiX)
+		dragStartX.value = x
+		dragPending.value = tie
 		dragTarget.value = 'height'
-		applyTrackValue(x, HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
+		if (!tie) applyTrackValue(x, HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
 			(v: number) => { heightMin.value = v },
 			(v: number) => { heightMax.value = v },
 			() : number => heightLo.value,
@@ -284,24 +462,34 @@ const onHeightTrackTouchMove = (e: any) => {
 	if (dragTarget.value != 'height') return
 	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
 	if (touch == null) return
-	applyTrackValue(Number(touch.clientX), HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
+	const x = Number(touch.clientX)
+	if (dragPending.value) {
+		const dx = x - Number(dragStartX.value)
+		if (Math.abs(dx) < 2) return
+		dragPending.value = false
+		dragLo.value = resolveDragLo(dx, HEIGHT_MIN, HEIGHT_MAX, () : number => heightLo.value, () : number => heightHi.value)
+	}
+	applyTrackValue(x, HEIGHT_MIN, HEIGHT_MAX - HEIGHT_MIN,
 		(v: number) => { heightMin.value = v },
 		(v: number) => { heightMax.value = v },
 		() : number => heightLo.value,
 		() : number => heightHi.value)
 }
 
-const onTrackTouchEnd = () => { dragTarget.value = '' }
+const onTrackTouchEnd = () => { dragTarget.value = ''; dragPending.value = false }
 
-const onEduTrackTouchStart = (e: any) => {
+const detentTap = (id: string, e: any, stops: number, apply: (index: number) => void) => {
 	const touch = e.touches != null && e.touches.length > 0 ? e.touches[0] : null
 	if (touch == null) return
-	queryRect('edu-track', (rect: any) => {
+	queryRect(id, (rect: any) => {
 		if (rect == null || Number(rect.width) <= 0) return
 		const p = (Number(touch.clientX) - Number(rect.left)) / Number(rect.width)
-		setEduIndex(Math.min(8, Math.max(0, Math.floor(p * 9))))
+		apply(Math.min(stops - 1, Math.max(0, Math.floor(p * stops))))
 	})
 }
+
+const onEduTrackTouchStart = (e: any) => { detentTap('edu-track', e, eduLabels.length, setEduIndex) }
+const onIncomeTrackTouchStart = (e: any) => { detentTap('income-track', e, incomeLabels.length, setIncomeIndex) }
 
 const load = async () => {
 	loading.value = true
@@ -322,9 +510,23 @@ const load = async () => {
 		const acceptCrossProvince = data.accept_cross_province == true
 		// 跨省必含异地；历史数据出现「跨省接受但异地不接受」时按更宽一档归一
 		dist.value = acceptCrossProvince ? 2 : (acceptLongDistance ? 1 : 0)
-		planGoal.value = clampInt(data.dating_goal, 0, 1, 1)
-		planPace.value = clampInt(data.meet_pace, 0, 2, 2)
-		planKids.value = clampInt(data.want_kids, 0, 2, 1)
+		smokeReq.value = clampInt(data.smoking_requirement, 0, 2, 0)
+		drinkReq.value = clampInt(data.drinking_requirement, 0, 2, 0)
+		houseReq.value = clampInt(data.housing_requirement, 0, 2, 0)
+		marryReq.value = clampInt(data.marriage_status, 0, 3, 0)
+		const incomeNum = data.income_min == null ? null : Number(data.income_min)
+		incomeMin.value = incomeNum != null && !isNaN(incomeNum) && incomeNum > 0 ? incomeNum : null
+		const rawProvince = data.preferred_province_code != null ? '' + data.preferred_province_code : ''
+		const rawCities: string[] = []
+		if (Array.isArray(data.preferred_city_codes)) {
+			const cityRaw = data.preferred_city_codes as any[]
+			for (let i = 0; i < cityRaw.length; i++) {
+				const code = cityRaw[i] == null ? '' : '' + cityRaw[i]
+				if (code != '' && rawCities.indexOf(code) < 0) rawCities.push(code)
+			}
+		}
+		prefCities.value = rawCities
+		prefProvince.value = rawProvince != '' ? rawProvince : (rawCities.length > 0 ? provinceCodeByCity(rawCities[0]) : '')
 		const rawExtra = data.extra_requirement != null ? '' + data.extra_requirement : ''
 		const parsed: string[] = []
 		if (rawExtra != '' && rawExtra != '无其他要求') {
@@ -361,10 +563,14 @@ const save = async () => {
 			education_min: eduMin.value,
 			accept_long_distance: dist.value >= 1,
 			accept_cross_province: dist.value == 2,
-			extra_requirement: extras.value.length > 0 ? extras.value.join(',') : null,
-			dating_goal: planGoal.value,
-			meet_pace: planPace.value,
-			want_kids: planKids.value
+			income_min: incomeMin.value,
+			marriage_status: marryReq.value,
+			preferred_province_code: prefProvince.value != '' ? prefProvince.value : null,
+			preferred_city_codes: prefCities.value,
+			housing_requirement: houseReq.value,
+			smoking_requirement: smokeReq.value,
+			drinking_requirement: drinkReq.value,
+			extra_requirement: extras.value.length > 0 ? extras.value.join(',') : null
 		})
 		if (!response.success) {
 			uni.showToast({ title: response.message != null ? '' + response.message : '择偶标准保存失败', icon: 'none' })
@@ -439,6 +645,14 @@ onMounted(() => { load() })
 .key > text { color: var(--ink2); font-size: 26rpx; font-weight: 600; }
 .key-on { border-color: var(--accent); background: var(--accent-glow); box-shadow: 0 4rpx 0 var(--accent-glow); }
 .key-on > text { color: var(--accent2); }
+
+.area-row { display: block; margin-top: 22rpx; background: var(--canvas); border: 1px solid var(--line); border-radius: 20rpx; padding: 22rpx 24rpx; }
+.area-row-inner { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.area-label { color: var(--ink2); font-size: 26rpx; font-weight: 600; }
+.area-value { display: flex; flex-direction: row; align-items: center; }
+.area-value-text { color: var(--ink); font-size: 26rpx; font-weight: 600; }
+.area-arrow { margin-left: 10rpx; color: var(--muted); font-size: 30rpx; }
+.area-keys { margin-top: 18rpx; }
 
 .hv-press { transform: scale(0.98); opacity: 0.85; }
 
