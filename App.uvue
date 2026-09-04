@@ -8,6 +8,23 @@
 		setAuthTokens
 	} from './api/config.uts'
 
+	let parentRouteRedirecting = false
+	const enforceParentRoute = () => {
+		const storedMode = uni.getStorageSync('xsa_onboarding_mode')
+		if (storedMode == null || String(storedMode) != 'parent' || parentRouteRedirecting) return
+		const pages = getCurrentPages()
+		const currentPage = pages.length > 0 ? pages[pages.length - 1] : null
+		const route = currentPage != null && currentPage.route != null ? String(currentPage.route) : ''
+		if (
+			route == '' || route == 'pages/parent/parent' || route == 'pages/parent/user-detail' ||
+			route == 'pages/profile/certification' || route == 'pagesSub/chat/detail' ||
+			route == 'pages/auth/login' || route == 'pages/auth/register' ||
+			route == 'pagesSub/userExtra/onboarding/profile'
+		) return
+		parentRouteRedirecting = true
+		uni.reLaunch({ url: '/pages/parent/parent', complete: () => { parentRouteRedirecting = false } })
+	}
+
 	const tryAutoEnterFastApiCommunity = (): boolean => {
 		if (FASTAPI_AUTO_ENTER_COMMUNITY != true) return false
 		if (FASTAPI_DEV_ACCESS_TOKEN == '' || FASTAPI_DEV_USER_ID <= 0) return false
@@ -57,6 +74,8 @@
 
 	onShow(() => {
 		console.log('App Show')
+		enforceParentRoute()
+		setTimeout(() => enforceParentRoute(), 0)
 	})
 
 	onHide(() => {

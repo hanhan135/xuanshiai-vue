@@ -1,38 +1,14 @@
-﻿<#
+<#
 .SYNOPSIS
-  宣誓爱微信小程序产物质量检查门禁。
+  Quality gate for the Xuanshiai mp-weixin build artifact.
 
 .DESCRIPTION
-  包装 .zcode/skills/debug-wechat-build-artifacts/scripts/inspect-wechat-artifact.ps1，
-  为 xuanshiai-vue 项目提供固定的默认路径和预算参数。
-  可从 npm script、CI 或命令行直接调用。
+  This project-local checker intentionally has no dependency on an uncommitted
+  developer skill directory. It checks lazy loading, package and media sizes,
+  suspicious static files, and app.json page declarations against generated
+  artifact files.
 
-  退出代码：0 = 全部通过，2 = 质量审计失败，1 = 运行时/参数错误。
-
-.PARAMETER ArtifactPath
-  产物目录（mp-weixin）。默认从项目约定路径推导：
-    <项目根>/xuanshiai-vue/unpackage/dist/dev/mp-weixin
-
-.PARAMETER ConfigPath
-  project.config.json 所在路径，用于提取 AppID 等元信息。
-  默认从 ArtifactPath 同级查找。
-
-.PARAMETER MainPackageLimitBytes
-  主包大小限制，默认 2 MiB。
-
-.PARAMETER SubpackageLimitBytes
-  单个分包大小限制，默认 2 MiB。
-
-.PARAMETER MediaLimitBytes
-  媒体文件阈值，默认 200 KiB。
-
-.EXAMPLE
-  # 使用项目默认产物路径
-  powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-mp-weixin.ps1
-
-  # 指定自定义产物路径
-  powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-mp-weixin.ps1 `
-    -ArtifactPath "D:\build\mp-weixin"
+  Exit codes: 0 = pass, 2 = quality failure, 1 = missing artifact or runtime error.
 #>
 
 [CmdletBinding()]
@@ -46,118 +22,164 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# 解析技能脚本路径 — 从本包装脚本相对定位
+function Get-FileSize([object[]]$Files) {
+  $total = [long]0
+  foreach ($file in $Files) { $total += [long]$file.Length }
+  return $total
+}
+
+function Format-Size([long]$Bytes) {
+  return ('{0:N1} KiB' -f ($Bytes / 1KB))
+}
+
+function Get-PagePaths([object]$AppConfig) {
+  $paths = @()
+  foreach ($page in @($AppConfig.pages)) {
+    if ($page -is [string]) { $paths += $page }
+    elseif ($null -ne $page.path) { $paths += [string]$page.path }
+  }
+  $packages = @()
+  if ($null -ne $AppConfig.subPackages) { $packages = @($AppConfig.subPackages) }
+  elseif ($null -ne $AppConfig.subpackages) { $packages = @($AppConfig.subpackages) }
+  foreach ($package in $packages) {
+    $root = if ($null -ne $package.root) { ([string]$package.root).Trim('/') } else { '' }
+    if ($root.Length -eq 0) { continue }
+    foreach ($page in @($package.pages)) {
+      $path = if ($page -is [string]) { $page } elseif ($null -ne $page.path) { [string]$page.path } else { '' }
+      if ($path.Length -gt 0) { $paths += ($root + '/' + $path.TrimStart('/')) }
+    }
+  }
+  return @($paths | Select-Object -Unique)
+}
+
 $wrapperDir = Split-Path -Parent $PSCommandPath
 $projectRoot = Split-Path -Parent $wrapperDir
-$skillDir = Resolve-Path (Join-Path $projectRoot '..\.zcode\skills\debug-wechat-build-artifacts')
-$checker = Join-Path $skillDir 'scripts\inspect-wechat-artifact.ps1'
+if (-not $ArtifactPath) { $ArtifactPath = Join-Path $projectRoot 'unpackage\dist\dev\mp-weixin' }
+if (-not $ConfigPath) { $ConfigPath = Join-Path $ArtifactPath 'project.config.json' }
 
-if (-not (Test-Path -LiteralPath $checker -PathType Leaf)) {
-  Write-Error "技能脚本未找到: $checker"
-  exit 1
-}
+Write-Host '=== Xuanshiai mp-weixin artifact quality check ===' -ForegroundColor Cyan
+Write-Host "Artifact: $ArtifactPath" -ForegroundColor Gray
 
-# 默认产物路径
-if (-not $ArtifactPath) {
-  $ArtifactPath = Join-Path $projectRoot 'unpackage\dist\dev\mp-weixin'
-}
-if (-not $ConfigPath) {
-  $ConfigPath = Join-Path $ArtifactPath 'project.config.json'
-}
-
-Write-Host "=== 宣誓爱微信小程序产物质量检查 ===" -ForegroundColor Cyan
-Write-Host "产物目录:       $ArtifactPath" -ForegroundColor Gray
-Write-Host "技能脚本:       $checker" -ForegroundColor Gray
-
-# 前置校验
 if (-not (Test-Path -LiteralPath $ArtifactPath -PathType Container)) {
-  Write-Error "产物目录不存在：$ArtifactPath"
-  Write-Host "请先执行 npm run build:mp-weixin 或 npm run dev:mp-weixin 生成产物。" -ForegroundColor Yellow
+  Write-Host "ERROR: Artifact directory does not exist: $ArtifactPath. Build mp-weixin with HBuilderX or an installed Uni CLI first." -ForegroundColor Red
   exit 1
 }
 
-# 执行质量审计
-$params = @(
-  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$checker`""
-  '-ArtifactPath', "`"$ArtifactPath`""
-  '-IncludeQualityAudit'
-  '-SummaryOnly'
-  '-MainPackageLimitBytes', "$MainPackageLimitBytes"
-  '-SubpackageLimitBytes', "$SubpackageLimitBytes"
-  '-MediaLimitBytes', "$MediaLimitBytes"
-)
-
-$raw = & powershell.exe $params 2>&1 | Out-String
-$exitCode = $LASTEXITCODE
+$appJsonPath = Join-Path $ArtifactPath 'app.json'
+if (-not (Test-Path -LiteralPath $appJsonPath -PathType Leaf)) {
+  Write-Host "ERROR: Compiled app.json was not found: $appJsonPath" -ForegroundColor Red
+  exit 1
+}
 
 try {
-  $result = $raw | ConvertFrom-Json
+  # npm invokes Windows PowerShell 5.1 on some hosts, whose implicit text
+  # encoding can misread the UTF-8 Chinese strings emitted by HBuilderX.
+  $appConfig = Get-Content -LiteralPath $appJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $allFiles = @(Get-ChildItem -LiteralPath $ArtifactPath -Recurse -File)
 } catch {
-  Write-Warning "脚本输出解析失败，展示原始输出："
-  Write-Host $raw
+  Write-Host "ERROR: Unable to read mp-weixin artifact: $($_.Exception.Message)" -ForegroundColor Red
   exit 1
 }
 
-# 输出摘要
-if ($result.qualityAudit) {
-  $qa = $result.qualityAudit
-  Write-Host "`n--- 懒加载 ---" -ForegroundColor Cyan
-  if ($qa.lazyCodeLoading.enabled) {
-    Write-Host "  [通过] lazyCodeLoading = requiredComponents" -ForegroundColor Green
-  } else {
-    Write-Host "  [失败] $($qa.lazyCodeLoading.value)" -ForegroundColor Red
-  }
+$artifactRoot = (Resolve-Path -LiteralPath $ArtifactPath).Path.TrimEnd('\') + '\'
+$failures = @()
 
-  Write-Host "`n--- 包体积 ---" -ForegroundColor Cyan
-  $pkg = $qa.packages
-  if ($pkg.main.passed) {
-    Write-Host "  [通过] 主包 $([math]::Round($pkg.main.bytes / 1KB, 1)) KiB / 上限 $([math]::Round($pkg.main.limitBytes / 1KB, 1)) KiB" -ForegroundColor Green
-  } else {
-    Write-Host "  [失败] 主包 $([math]::Round($pkg.main.bytes / 1KB, 1)) KiB 超过上限 $([math]::Round($pkg.main.limitBytes / 1KB, 1)) KiB" -ForegroundColor Red
-  }
-  foreach ($sp in $pkg.subpackages) {
-    if ($sp.passed) {
-      Write-Host "  [通过] 分包 $($sp.root) $([math]::Round($sp.bytes / 1KB, 1)) KiB / 上限 $([math]::Round($sp.limitBytes / 1KB, 1)) KiB" -ForegroundColor Green
-    } else {
-      Write-Host "  [失败] 分包 $($sp.root) $([math]::Round($sp.bytes / 1KB, 1)) KiB 超过上限 $([math]::Round($sp.limitBytes / 1KB, 1)) KiB" -ForegroundColor Red
-    }
-  }
-
-  Write-Host "`n--- 媒体资源 ---" -ForegroundColor Cyan
-  if ($qa.media.oversized.Count -eq 0) {
-    Write-Host "  [通过] 所有 $($qa.media.totalCount) 个媒体文件未超限" -ForegroundColor Green
-  } else {
-    Write-Host "  [失败] $($qa.media.oversized.Count) 个文件超过 $([math]::Round($qa.media.limitBytes / 1KB, 0)) KiB：" -ForegroundColor Red
-    foreach ($m in $qa.media.oversized) {
-      Write-Host "    - $($m.relativePath) ($($m.sizeKB) KiB)" -ForegroundColor Yellow
-    }
-  }
-
-  Write-Host "`n--- 可疑静态文件 ---" -ForegroundColor Cyan
-  if ($qa.suspiciousStatic.Count -eq 0) {
-    Write-Host "  [通过] 未发现可疑残留" -ForegroundColor Green
-  } else {
-    Write-Host "  [警告] $($qa.suspiciousStatic.Count) 个可疑文件：" -ForegroundColor Yellow
-    foreach ($s in $qa.suspiciousStatic) {
-      Write-Host "    - $($s.relativePath) : $($s.reason)" -ForegroundColor Yellow
-    }
-  }
-
-  Write-Host "`n--- 页面声明 vs 产物 ---" -ForegroundColor Cyan
-  $pageCheck = $result.checks | Where-Object { $_.name -eq 'pages-declared-vs-generated' } | Select-Object -First 1
-  if ($pageCheck -and $pageCheck.passed) {
-    Write-Host "  [通过] $($pageCheck.detail)" -ForegroundColor Green
-  } elseif ($pageCheck) {
-    Write-Host "  [失败] $($pageCheck.detail)" -ForegroundColor Red
-  }
-}
-
-# 结果
-Write-Host "`n=== 结论 ===" -ForegroundColor Cyan
-if ($result.ok) {
-  Write-Host "  通过！" -ForegroundColor Green
-  exit 0
+Write-Host "`n--- Lazy loading ---" -ForegroundColor Cyan
+if ([string]$appConfig.lazyCodeLoading -eq 'requiredComponents') {
+  Write-Host '  [PASS] lazyCodeLoading = requiredComponents' -ForegroundColor Green
 } else {
-  Write-Host "  失败。检查上方红色标记项。" -ForegroundColor Red
-  exit 2
+  $failures += 'lazyCodeLoading is not requiredComponents'
+  Write-Host "  [FAIL] lazyCodeLoading = $($appConfig.lazyCodeLoading)" -ForegroundColor Red
 }
+
+$packages = @()
+if ($null -ne $appConfig.subPackages) { $packages = @($appConfig.subPackages) }
+elseif ($null -ne $appConfig.subpackages) { $packages = @($appConfig.subpackages) }
+$subRoots = @($packages | ForEach-Object { if ($null -ne $_.root) { ([string]$_.root).Trim('/') } } | Where-Object { $_.Length -gt 0 })
+
+$mainFiles = @()
+foreach ($file in $allFiles) {
+  $relative = $file.FullName.Substring($artifactRoot.Length).Replace('\', '/')
+  $inSubpackage = $false
+  foreach ($root in $subRoots) {
+    if ($relative.StartsWith($root + '/', [System.StringComparison]::OrdinalIgnoreCase)) {
+      $inSubpackage = $true
+      break
+    }
+  }
+  if (-not $inSubpackage) { $mainFiles += $file }
+}
+
+Write-Host "`n--- Package size ---" -ForegroundColor Cyan
+$mainBytes = Get-FileSize $mainFiles
+if ($mainBytes -le $MainPackageLimitBytes) {
+  Write-Host "  [PASS] main $(Format-Size $mainBytes) / limit $(Format-Size $MainPackageLimitBytes)" -ForegroundColor Green
+} else {
+  $failures += 'main package exceeds its size limit'
+  Write-Host "  [FAIL] main $(Format-Size $mainBytes) / limit $(Format-Size $MainPackageLimitBytes)" -ForegroundColor Red
+}
+foreach ($root in $subRoots) {
+  $prefix = $root + '/'
+  $files = @($allFiles | Where-Object {
+    $relative = $_.FullName.Substring($artifactRoot.Length).Replace('\', '/')
+    $relative.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)
+  })
+  $bytes = Get-FileSize $files
+  if ($bytes -le $SubpackageLimitBytes) {
+    Write-Host "  [PASS] subpackage $root $(Format-Size $bytes) / limit $(Format-Size $SubpackageLimitBytes)" -ForegroundColor Green
+  } else {
+    $failures += "subpackage $root exceeds its size limit"
+    Write-Host "  [FAIL] subpackage $root $(Format-Size $bytes) / limit $(Format-Size $SubpackageLimitBytes)" -ForegroundColor Red
+  }
+}
+
+Write-Host "`n--- Media ---" -ForegroundColor Cyan
+$mediaExtensions = @('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.mp3', '.wav', '.aac', '.m4a', '.mp4')
+$oversizedMedia = @($allFiles | Where-Object { $mediaExtensions -contains $_.Extension.ToLowerInvariant() -and $_.Length -gt $MediaLimitBytes })
+if ($oversizedMedia.Count -eq 0) {
+  Write-Host "  [PASS] all media files are within $(Format-Size $MediaLimitBytes)" -ForegroundColor Green
+} else {
+  $failures += 'one or more media files exceed the size limit'
+  Write-Host "  [FAIL] $($oversizedMedia.Count) media files exceed $(Format-Size $MediaLimitBytes):" -ForegroundColor Red
+  foreach ($file in $oversizedMedia) {
+    $relative = $file.FullName.Substring($artifactRoot.Length).Replace('\', '/')
+    Write-Host "    - $relative ($(Format-Size $file.Length))" -ForegroundColor Yellow
+  }
+}
+
+Write-Host "`n--- Suspicious static files ---" -ForegroundColor Cyan
+$suspiciousExtensions = @('.pen', '.psd', '.sketch', '.fig', '.zip', '.rar')
+$suspiciousFiles = @($allFiles | Where-Object { $suspiciousExtensions -contains $_.Extension.ToLowerInvariant() })
+if ($suspiciousFiles.Count -eq 0) {
+  Write-Host '  [PASS] no suspicious static files found' -ForegroundColor Green
+} else {
+  Write-Host "  [WARN] $($suspiciousFiles.Count) static files need review:" -ForegroundColor Yellow
+  foreach ($file in $suspiciousFiles) {
+    $relative = $file.FullName.Substring($artifactRoot.Length).Replace('\', '/')
+    Write-Host "    - $relative" -ForegroundColor Yellow
+  }
+}
+
+Write-Host "`n--- Declared pages vs artifact ---" -ForegroundColor Cyan
+$declaredPages = @(Get-PagePaths $appConfig)
+$missingPages = @()
+foreach ($pagePath in $declaredPages) {
+  $normalized = ([string]$pagePath).TrimStart('/').Replace('/', '\')
+  $generated = @('.js', '.wxml', '.json') | Where-Object { Test-Path -LiteralPath (Join-Path $ArtifactPath ($normalized + $_)) -PathType Leaf }
+  if ($generated.Count -eq 0) { $missingPages += $pagePath }
+}
+if ($missingPages.Count -eq 0) {
+  Write-Host "  [PASS] all $($declaredPages.Count) declared pages were generated" -ForegroundColor Green
+} else {
+  $failures += 'app.json declares pages that are not generated'
+  Write-Host "  [FAIL] missing generated pages: $($missingPages -join ', ')" -ForegroundColor Red
+}
+
+Write-Host "`n=== Result ===" -ForegroundColor Cyan
+if ($failures.Count -eq 0) {
+  Write-Host '  PASS' -ForegroundColor Green
+  exit 0
+}
+
+Write-Host '  FAIL: see checks above.' -ForegroundColor Red
+exit 2

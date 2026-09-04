@@ -41,7 +41,7 @@
 						</view>
 					</view>
 				</view>
-				<view class="shortcut shortcut-lab" @click="openHint('情感实验室 · 完善 MBTI 线索')">
+				<view class="shortcut shortcut-lab" @click="openEmotionLab">
 					<view class="sc-copy">
 						<text class="sc-title">情感实验室</text>
 						<text class="sc-desc text-muted">完善匹配线索</text>
@@ -199,6 +199,10 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 	const hasDynamicNotice = computed(() => {
 		return readShortcutNotices.value.indexOf(DYNAMIC_NOTICE_KEY) < 0
 	})
+
+	const openEmotionLab = () => {
+		uni.navigateTo({ url: '/pages/emotion-lab/emotion-lab' })
+	}
 
 	onMounted(() => {
 		loadPinnedMessageIds()

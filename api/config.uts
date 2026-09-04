@@ -11,6 +11,11 @@ export const API_PREFIX = '/api/v1'
 
 export const ACCESS_TOKEN_KEY = 'xsa_access_token'
 export const REFRESH_TOKEN_KEY = 'xsa_refresh_token'
+export const CURRENT_USER_ID_KEY = 'xsa_user_id'
+export const ONBOARDING_MODE_KEY = 'xsa_onboarding_mode'
+export const ONBOARDING_COMPLETED_KEY = 'xsa_onboarding_completed'
+
+// 开发态仅可使用本地演示身份，禁止提交真实 token。
 export const FASTAPI_AUTO_ENTER_COMMUNITY = false
 export const FASTAPI_DEV_ACCESS_TOKEN = ''
 export const FASTAPI_DEV_USER_ID = 0
@@ -40,8 +45,17 @@ export function setAuthTokens(accessToken: string, refreshToken: string = '') {
 }
 
 export function clearAuthTokens() {
-  try { uni.removeStorageSync(ACCESS_TOKEN_KEY) } catch (e) {}
-  try { uni.removeStorageSync(REFRESH_TOKEN_KEY) } catch (e) {}
+  try {
+    uni.removeStorageSync(ACCESS_TOKEN_KEY)
+  } catch (e) {}
+  try {
+    uni.removeStorageSync(REFRESH_TOKEN_KEY)
+  } catch (e) {}
+  try {
+    uni.removeStorageSync(CURRENT_USER_ID_KEY)
+    uni.removeStorageSync(ONBOARDING_MODE_KEY)
+    uni.removeStorageSync(ONBOARDING_COMPLETED_KEY)
+  } catch (e) {}
 }
 
 export function buildApiUrl(path: string): string {

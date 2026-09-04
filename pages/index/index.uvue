@@ -57,23 +57,27 @@
 			</view>
 			<!-- 推荐 Tab -->
 			<scroll-view v-if="currentTab === 0" scroll-y class="content-scroll" enhanced show-scrollbar="false" @touchstart="onTouchStart" @touchend="onTouchEnd">
-				<view v-if="profileCompletionError != ''" class="completion-gate">
-					<text class="completion-gate-title">资料状态暂时无法读取</text>
-					<text class="completion-gate-copy">{{ profileCompletionError }}</text>
+				<view v-if="discoveryError != ''" class="completion-reminder completion-reminder-error">
+					<text class="completion-reminder-title">推荐暂时无法加载</text>
+					<text class="completion-reminder-copy">{{ discoveryError }}</text>
 					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
 				</view>
-				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
-					<view class="completion-gate-mark"><text>{{ profileCompletion }}%</text></view>
-					<text class="completion-gate-title">完善资料后，遇见更合适的人</text>
-					<text class="completion-gate-copy">请先将个人资料完善至 100%，完成后即可查看平台上的真实用户。</text>
+				<view v-else-if="profileCompletionError != ''" class="completion-reminder completion-reminder-error">
+					<text class="completion-reminder-title">资料状态暂时无法读取</text>
+					<text class="completion-reminder-copy">{{ profileCompletionError }}，仍可浏览公开推荐。</text>
+					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
+				</view>
+				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-reminder">
+					<text class="completion-reminder-title">资料完善度 {{ profileCompletion }}%</text>
+					<text class="completion-reminder-copy">完善资料后能获得更有参考价值的推荐；现在也可继续浏览。</text>
 					<view class="completion-gate-progress"><view class="completion-gate-fill" :style="{ width: profileCompletion + '%' }"></view></view>
 					<navigator class="completion-gate-button" url="/pagesSub/userExtra/user/edit" hover-class="none"><text>去完善资料</text></navigator>
 				</view>
-				<view v-else-if="profileCompletionLoaded && recommendUsers.length === 0" class="completion-gate">
+				<view v-if="recommendUsers.length === 0 && discoveryError == ''" class="completion-gate">
 					<text class="completion-gate-title">暂时没有新的推荐</text>
-					<text class="completion-gate-copy">你的资料已完整，我们正在为你寻找合适的真实用户，请稍后再来看看。</text>
+					<text class="completion-gate-copy">我们正在更新公开推荐资料，请稍后再来看看。</text>
 				</view>
-				<view v-else-if="profileCompletionLoaded" class="profile-card">
+				<view v-else-if="recommendUsers.length > 0" class="profile-card">
 					<view class="cover-wrap">
 						<image class="cover-img" :src="recommendBackground != '' ? recommendBackground : currentRecommendUser.avatar" mode="aspectFill"></image>
 					</view>
@@ -643,6 +647,9 @@
 		<!-- ====== Sheets & Modals ====== -->
 		<XsaSheet :visible="aiVisible" title="AI 合拍度解读" @close="aiVisible = false">
 			<view class="ai-sheet">
+				<view class="ai-profile-note">
+					<text>完成情感实验室测试后，平台会结合双方已确认的资料生成更贴合的解读。</text>
+				</view>
 				<view class="ai-mbti-row">
 					<view class="ai-mbti-card"><text class="ai-mbti-label">你的 MBTI</text><text class="ai-mbti-type">INFP</text></view>
 					<text class="ai-mbti-x">×</text>
@@ -753,6 +760,13 @@
 		uni.navigateTo({ url: '/pages/auth/login' })
 	}
 
+	const routeParentMode = (): boolean => {
+		const storedMode = uni.getStorageSync('xsa_onboarding_mode')
+		if (storedMode == null || String(storedMode) != 'parent') return false
+		uni.reLaunch({ url: '/pages/parent/parent' })
+		return true
+	}
+
 	// ========== 导航 ==========
 	const currentTab = ref(0)
 	const navTabs = ['推荐', '广场', '会员专区']
@@ -849,6 +863,7 @@
 	const profileCompletion = ref(0)
 	const profileCompletionLoaded = ref(false)
 	const profileCompletionError = ref('')
+	const discoveryError = ref('')
 	const squareUsers = ref<any[]>([])
 	const squareTotal = ref(0)
 	const membershipPlans = ref<any[]>([])
@@ -872,7 +887,7 @@
 	})
 	const vipCardTotal = computed(() => vipUsersForCategory.value.length)
 	const filteredRecommendUsers = computed(() => recommendUsers.value)
-	const canShowRecommendUsers = computed(() => profileCompletionLoaded.value && profileCompletion.value >= 100 && recommendUsers.value.length > 0)
+	const canShowRecommendUsers = computed(() => recommendUsers.value.length > 0)
 	const currentRecommendIndex = ref(0)
 	const recommendBackground = ref('')
 	const currentRecommendUser = computed(() => {
@@ -942,19 +957,19 @@
 		return false
 	}
 	const loadHomeDiscovery = async () => {
-		const completionReady = await loadProfileCompletion()
-		if (!completionReady) return
-		if (profileCompletion.value < 100) {
-			recommendUsers.value = []
-			recommendBackground.value = ''
-			return
-		}
+		await loadProfileCompletion()
+		discoveryError.value = ''
 		const recommendRes = await getDiscoveryRecommendations({ page: 1, page_size: 20 })
-		if (recommendRes.success && recommendRes.data != null) {
+		if (recommendRes != null && recommendRes.success && recommendRes.data != null) {
 			recommendUsers.value = recommendRes.data.items as any[]
 			currentRecommendIndex.value = 0
 			loadRecommendBackground()
 			loadFeedDynamics(Number(currentRecommendUser.value.id || 0))
+		} else {
+			recommendUsers.value = []
+			recommendBackground.value = ''
+			const message = recommendRes != null && recommendRes.message != null ? String(recommendRes.message).trim() : ''
+			discoveryError.value = message != '' ? message : '请检查登录状态和网络后重试'
 		}
 		const plazaRes = await getDiscoveryPlaza({ page: 1, page_size: 20 })
 		if (plazaRes.success && plazaRes.data != null) {
@@ -1215,6 +1230,7 @@
 
 	// ========== 生命周期 ==========
 	onMounted(() => {
+		if (routeParentMode()) return
 		const pages = getCurrentPages()
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
@@ -1577,12 +1593,7 @@
    AI Sheet
    ============================================================ */
 .ai-sheet { display: flex; flex-direction: column; gap: 16px; }
-.ai-mbti-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.ai-mbti-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 20px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
-.ai-mbti-card.you { background: var(--accent-bg); border-color: var(--accent); }
-.ai-mbti-label { font-size: 10px; color: var(--muted); }
-.ai-mbti-type { font-family: var(--serif); font-size: 22px; font-weight: 700; color: var(--accent2); }
-.ai-mbti-x { font-size: 18px; color: var(--ink2); }
+.ai-profile-note { padding: 14px; border-radius: 12px; background: var(--accent-bg); color: var(--ink2); font-size: 12px; line-height: 1.6; }
 .ai-score-big text { font-size: 48px; font-weight: 900; color: var(--accent2); font-family: var(--serif); }
 .ai-score-big { text-align: center; }
 .ai-bars { display: flex; flex-direction: column; gap: 10px; }
@@ -1604,6 +1615,11 @@
 /* 固定头部 */
 .sticky-header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; max-width: 750rpx; margin: 0 auto; background-color: var(--bg-primary); }
 .content-scroll { flex: 1; padding: 254rpx 32rpx 0 32rpx; }
+.completion-reminder { margin-top: 28rpx; padding: 28rpx; display: flex; flex-direction: column; border: 1rpx solid var(--line); border-radius: 24rpx; background-color: var(--bg-card-soft); }
+.completion-reminder-error { background-color: var(--warm); }
+.completion-reminder-title { color: var(--text-primary); font-size: 28rpx; font-weight: 700; }
+.completion-reminder-copy { margin-top: 10rpx; color: var(--text-secondary); font-size: 24rpx; line-height: 1.6; }
+.completion-reminder .completion-gate-button { margin-top: 22rpx; }
 .completion-gate { margin-top: 28rpx; padding: 64rpx 40rpx; display: flex; flex-direction: column; align-items: center; border-radius: 32rpx; background-color: var(--bg-card); box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); text-align: center; }
 .completion-gate-mark { width: 128rpx; height: 128rpx; display: flex; align-items: center; justify-content: center; border: 10rpx solid var(--accent); border-radius: 50%; color: var(--accent-dark); font-size: 30rpx; font-weight: 800; box-sizing: border-box; }
 .completion-gate-title { margin-top: 32rpx; color: var(--text-primary); font-size: 32rpx; font-weight: 700; }

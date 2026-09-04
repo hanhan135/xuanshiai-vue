@@ -180,7 +180,7 @@
 
 <script setup lang="uts">
 import { getOwnPreferences, updateOwnPreferences } from '@/api'
-import locationJson from '@/static/location.json'
+import locationJson from '@/data/location.json'
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20

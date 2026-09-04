@@ -225,6 +225,3 @@ console.log('   - 当前项目可能需要在 HBuilderX 中运行')
 console.log('   - uni-app 的命令行工具有时会有路径配置问题')
 console.log('   - Mock 数据系统的架构是正确的，只是运行环境的问题')
 console.log('')
-
-
-
