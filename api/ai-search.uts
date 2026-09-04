@@ -9,11 +9,18 @@ import { request } from './request.uts'
 
 const LOCAL_DRAFT = '希望彼此真诚沟通，也愿意一起分享喜欢的生活方式。'
 
+function idealPartnerIdempotencyKey(): string {
+  return 'ideal-partner-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 1000000))
+}
+
 export async function generateIdealPartner(_profile: any = null, _preferences: any = null): Promise<any> {
   const result = await request({
     url: '/ai/ideal-partner',
     method: 'POST',
     data: {},
+    headers: {
+      'Idempotency-Key': idealPartnerIdempotencyKey()
+    },
     mockData: { content: LOCAL_DRAFT }
   })
 

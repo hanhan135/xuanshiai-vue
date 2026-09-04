@@ -323,9 +323,6 @@ const submitApplication = async () => {
 	}
 }
 
-const openPromoterCenter = () => {
-	uni.navigateTo({ url: '/pagesSub/matchmaker/promoter-center' })
-}
 </script>
 
 <style scoped>

@@ -98,6 +98,20 @@ export type ParentCandidate = {
 	canViewClearPhoto: boolean
 }
 
+export type ParentMatchmaker = {
+	id: number
+	name: string
+	avatar: string
+	city: string
+	title: string
+	introduction: string
+	description: string
+	tags: string[]
+	badge: string
+	certification: boolean
+	status: string
+}
+
 export type ParentChildProfileInput = {
 	displayName: string
 	birthYear: number
@@ -396,7 +410,7 @@ function candidateLiked(raw: any): boolean {
 }
 
 /** Select only the fields allowed in the privacy-safe parent candidate view. */
-function toParentCandidate(raw: any): ParentCandidate | null {
+function toParentCandidate(raw: any, forceLiked: boolean = false): ParentCandidate | null {
 	if (raw == null) return null
 	const gender = genderText(raw)
 	const city = raw.city != null && String(raw.city).trim().length > 0
@@ -434,9 +448,18 @@ function toParentCandidate(raw: any): ParentCandidate | null {
 		introduction: introduction,
 		datingNotes: '平台仅协助呈现资料，是否继续由双方本人决定。',
 		expectations: expectationList(raw),
-		liked: candidateLiked(raw),
+		liked: forceLiked || candidateLiked(raw),
 		canViewClearPhoto: false
 	}
+}
+
+function toParentCandidateList(source: any[], forceLiked: boolean = false): ParentCandidate[] {
+	const candidates: ParentCandidate[] = []
+	for (let i = 0; i < source.length; i++) {
+		const candidate = toParentCandidate(source[i], forceLiked)
+		if (candidate != null && candidate.id > 0) candidates.push(candidate)
+	}
+	return candidates
 }
 
 function responseList(data: any): any[] {
@@ -444,6 +467,56 @@ function responseList(data: any): any[] {
 	if (data != null && Array.isArray(data.items)) return data.items as any[]
 	if (data != null && Array.isArray(data.list)) return data.list as any[]
 	return [] as any[]
+}
+
+/** Keep parent-facing service cards free of pricing, performance and contact fields. */
+function toParentMatchmaker(raw: any): ParentMatchmaker | null {
+	if (raw == null) return null
+	const id = raw.id != null ? Number(raw.id) : 0
+	if (isNaN(id) || id <= 0) return null
+	const introduction = raw.introduction != null && String(raw.introduction).trim().length > 0
+		? String(raw.introduction).trim()
+		: raw.description != null && String(raw.description).trim().length > 0
+			? String(raw.description).trim()
+			: '服务说明以平台后续沟通为准。'
+	const tags: string[] = []
+	const sourceTags = raw.tags != null && Array.isArray(raw.tags) ? raw.tags as any[] : [] as any[]
+	for (let i = 0; i < sourceTags.length && tags.length < 4; i++) {
+		const tag = String(sourceTags[i]).trim()
+		if (tag.length > 0) tags.push(tag)
+	}
+	return {
+		id: id,
+		name: raw.name != null && String(raw.name).trim().length > 0 ? String(raw.name).trim() : '服务顾问',
+		avatar: raw.avatar != null ? String(raw.avatar) : '',
+		city: raw.city != null ? String(raw.city) : '',
+		title: raw.title != null ? String(raw.title) : '平台服务顾问',
+		introduction: introduction,
+		description: introduction,
+		tags: tags,
+		badge: raw.badge != null ? String(raw.badge) : '',
+		certification: raw.certification == true,
+		status: raw.status != null ? String(raw.status) : ''
+	}
+}
+
+function toParentMatchmakerList(source: any[]): ParentMatchmaker[] {
+	const matchmakers: ParentMatchmaker[] = []
+	for (let i = 0; i < source.length; i++) {
+		const matchmaker = toParentMatchmaker(source[i])
+		if (matchmaker != null) matchmakers.push(matchmaker)
+	}
+	return matchmakers
+}
+
+function parentMatchmakerResponse(result: any): any {
+	if (result == null || result.success != true) return result
+	return {
+		success: true,
+		data: toParentMatchmakerList(responseList(result.data)),
+		code: result.code,
+		message: result.message
+	}
 }
 
 export async function getParentContext() {
@@ -513,7 +586,7 @@ export async function getParentCandidates(context: ParentContext | null) {
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
 	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
-		return okResponse(getMockParentCandidatesData())
+		return okResponse(toParentCandidateList(getMockParentCandidatesData()))
 	}
 	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
 	const result = await request({
@@ -521,14 +594,7 @@ export async function getParentCandidates(context: ParentContext | null) {
 		method: 'GET'
 	})
 	if (result == null || result.success != true) return result
-	const source = responseList(result.data)
-
-	const candidates: ParentCandidate[] = []
-	for (let i = 0; i < source.length; i++) {
-		const candidate = toParentCandidate(source[i])
-		if (candidate != null && candidate.id > 0) candidates.push(candidate)
-	}
-	return okResponse(candidates)
+	return okResponse(toParentCandidateList(responseList(result.data)))
 }
 
 export async function getParentLikedCandidates(context: ParentContext | null) {
@@ -537,7 +603,7 @@ export async function getParentLikedCandidates(context: ParentContext | null) {
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
 	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
-		return okResponse(getMockParentLikedCandidatesData())
+		return okResponse(toParentCandidateList(getMockParentLikedCandidatesData(), true))
 	}
 	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
 	const result = await request({
@@ -545,13 +611,7 @@ export async function getParentLikedCandidates(context: ParentContext | null) {
 		method: 'GET'
 	})
 	if (result == null || result.success != true) return result
-	const source = responseList(result.data)
-	const candidates: ParentCandidate[] = []
-	for (let i = 0; i < source.length; i++) {
-		const candidate = toParentCandidate({ ...source[i], liked: true })
-		if (candidate != null && candidate.id > 0) candidates.push(candidate)
-	}
-	return okResponse(candidates)
+	return okResponse(toParentCandidateList(responseList(result.data), true))
 }
 
 export async function getParentCandidateDetail(context: ParentContext | null, candidateId: number) {
@@ -611,18 +671,18 @@ export async function getParentMatchmakers(context: ParentContext | null) {
 	const blocked = gated(context)
 	if (blocked != null) return blocked
 	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
-		return okResponse(getMockParentMatchmakersData('service'))
+		return okResponse(toParentMatchmakerList(getMockParentMatchmakersData('service')))
 	}
-	return getServiceMatchmakers()
+	return parentMatchmakerResponse(await getServiceMatchmakers())
 }
 
 export async function getParentCustomMatchmakers(context: ParentContext | null) {
 	const blocked = gated(context)
 	if (blocked != null) return blocked
 	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
-		return okResponse(getMockParentMatchmakersData('custom'))
+		return okResponse(toParentMatchmakerList(getMockParentMatchmakersData('custom')))
 	}
-	return getCustomMatchmakers()
+	return parentMatchmakerResponse(await getCustomMatchmakers())
 }
 
 export async function toggleParentLike(context: ParentContext | null, candidateId: number) {

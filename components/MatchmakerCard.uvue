@@ -7,13 +7,13 @@
 		<view class="card-body">
 			<view class="card-name-row">
 				<text class="card-name">{{ data.name }}</text>
-				<view class="card-rate">
+				<view v-if="showRating" class="card-rate">
 					<text>★ {{ rateText }}</text>
 				</view>
 			</view>
 			<text class="card-copy">{{ cardCopy }}</text>
 
-			<view class="card-meta">
+			<view v-if="showMetrics" class="card-meta">
 				<view class="meta-item">
 					<text class="meta-value">{{ data.successCount }}</text>
 					<text class="meta-label">牵线成功</text>
@@ -56,6 +56,8 @@ interface Props {
 		actionText?: string;
 		unitText?: string;
 		showPrice?: boolean;
+		showMetrics?: boolean;
+		showRating?: boolean;
 		largeText?: boolean;
 }
 
@@ -63,6 +65,8 @@ const props = withDefaults(defineProps<Props>(), {
 		actionText: '联系她',
 		unitText: '/次',
 		showPrice: true,
+		showMetrics: true,
+		showRating: true,
 		largeText: false
 });
 
