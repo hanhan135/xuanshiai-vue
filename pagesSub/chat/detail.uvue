@@ -455,7 +455,7 @@ let contactExchangeRecords = ref([] as any[])
 		const delay = Math.max(350, dueAt - Date.now())
 		aiHandoffTimer = setTimeout(async () => {
 			aiHandoffTimer = null
-			const res = resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
+			const res = await resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
 			if (res.success && res.data != null) {
 				messages.value = mapAiAvatarMessages(res.data as any[])
 				scrollToBottom()
@@ -480,7 +480,7 @@ let contactExchangeRecords = ref([] as any[])
 			uni.setNavigationBarTitle({ title: 'AI 分身' })
 			const quickRes = getAiAvatarQuickQuestions()
 			if (quickRes.success && quickRes.data != null) aiQuickQuestions.value = quickRes.data as any[]
-			const historyRes = getAiAvatarConversation(userId.value, aiAvatarProfile.value)
+			const historyRes = await getAiAvatarConversation(userId.value, aiAvatarProfile.value)
 			if (historyRes.success && historyRes.data != null) {
 				messages.value = mapAiAvatarMessages(historyRes.data as any[])
 				scheduleAiHandoff(historyRes.data as any[])
@@ -500,9 +500,9 @@ let contactExchangeRecords = ref([] as any[])
 		loadAiAvatarMode()
 	}
 
-	const refreshAiAvatarHistory = () => {
+	const refreshAiAvatarHistory = async () => {
 		if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
-		const res = resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
+		const res = await resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
 		if (res.success && res.data != null) {
 			messages.value = mapAiAvatarMessages(res.data as any[])
 			scheduleAiHandoff(res.data as any[])
@@ -516,18 +516,18 @@ let contactExchangeRecords = ref([] as any[])
 			title: '清空 AI 分身记录',
 			content: '清空后将无法在当前设备查看这段对话，确定继续吗？',
 			confirmText: '清空',
-			success: (result: any) => {
+		success: async (result: any) => {
 				if (result.confirm !== true) return
 				if (aiHandoffTimer != null) {
 					clearTimeout(aiHandoffTimer)
 					aiHandoffTimer = null
 				}
-				const clearRes = clearAiAvatarConversation(userId.value)
+				const clearRes = await clearAiAvatarConversation(userId.value)
 				if (!clearRes.success) {
 					uni.showToast({ title: clearRes.message != null ? String(clearRes.message) : '清空失败', icon: 'none' })
 					return
 				}
-				const historyRes = getAiAvatarConversation(userId.value, aiAvatarProfile.value)
+				const historyRes = await getAiAvatarConversation(userId.value, aiAvatarProfile.value)
 				if (historyRes.success && historyRes.data != null) messages.value = mapAiAvatarMessages(historyRes.data as any[])
 				uni.showToast({ title: '记录已清空', icon: 'success' })
 			}
@@ -843,7 +843,7 @@ if (options && options.userId) {
 	}
 
 	// 发送消息（AI 分身：先上屏访客消息，打字中约 0.7s 后返回分身回复）
-	const sendAiAvatarText = (content: string) => {
+	const sendAiAvatarText = async (content: string) => {
 		if (aiAvatarSending.value || aiAvatarProfile.value == null) return
 		const question = content.trim()
 		if (question.length == 0) return
@@ -863,9 +863,9 @@ if (options && options.userId) {
 		})
 		aiTyping.value = true
 		scrollToBottom()
-		setTimeout(() => {
+		setTimeout(async () => {
 			try {
-				const res = sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
+				const res = await sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
 				if (!res.success || res.data == null) {
 					messages.value = (messages.value as any[]).filter((item: any) => item.id != localId)
 					uni.showToast({ title: res.message != null ? String(res.message) : '发送失败，请重试', icon: 'none' })
