@@ -141,6 +141,7 @@ components:
 | `--sage` | `#338D6B` | 在线、已认证、成功提示 |
 | `--sage-soft` | `#C2E0CF` | 安全提示、认证背景 |
 | `--security-hero` | `#E5F7E7` | 安全中心顶部渐变起始色，与 `--paper` 过渡 |
+| `--heart-red` | `#F08282` | 收藏爱心（已收藏实心态）；低饱和红，非婚庆红金，仅用于收藏语义 |
 | `--text-invert` | `#FCFCFC` | 深色表面上的反白文字 |
 | `--bg-hover` | `#E7ECEC` | 轻悬停 / 次级底 |
 | `--bg-subtle` | `#DCE3E2` | 更浅的分区底 |

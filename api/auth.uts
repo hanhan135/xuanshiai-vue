@@ -9,7 +9,8 @@ import { CURRENT_USER_ID_KEY, setAuthTokens, clearAuthTokens } from './config.ut
 export async function getProfileCompletion() {
   return request({
     url: '/users/me/completion',
-    method: 'GET'
+    method: 'GET',
+    mockData: { score: 100, completion_score: 100 }
   })
 }
 
