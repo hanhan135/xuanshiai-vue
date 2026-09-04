@@ -34,6 +34,7 @@
 ## 4. 视觉、兼容与状态
 
 - uni.scss 是全局 Token 代码来源，DESIGN.md 是视觉规则与解释来源。业务页面只能复用既有 Token，不散落新色值、#000、#fff 或未经评审的变量。
+- **新页面色调继承（强制）：** 新增页面、内嵌二级视图、详情页或 Sheet 前，必须先阅读其上级页面源码及 `DESIGN.md`、`uni.scss`。新界面须继承上级页面的底色、表面色、主强调色、浅强调色、状态色、圆角、阴影与按压反馈；参考图片仅用于复刻布局和信息层级，不能擅自覆盖所属业务域的既有色调。若确需改变色调，必须先获得用户明确确认，并同时更新 `DESIGN.md` 与 Token 文档。
 - 新增 UI 前先检查 Xsa* 组件；无法表达时再新增可复用组件或变体。
 - 覆盖 320px、375px、390px、428px 宽度；固定头部、底部 Tab 与操作栏必须给滚动内容预留空间。
 - 采用 UniApp 兼容标签与 API，使用 flex、rpx 或跨端安全的 px；图片优先 WebP，必要时 JPEG 降级。
@@ -52,12 +53,13 @@
 ## 6. 验证与文档同步
 
 1. 修改前检查 Git 工作区并保留用户已有改动。
-2. graphify-out/graph.json 存在时，先用 graphify query 缩小范围，再回到源文件核对。
-3. 运行 node tests/test-mock-system.js 与 git diff --check。
-4. 对 mp-weixin 产物运行质量检查：`npm run verify:mp`（CI 门禁）或 `npm run verify:mp:dev`（开发阶段容忍上限）。
-5. 通过 HBuilderX 编译 mp-weixin，并在微信开发者工具回归关键路径；H5 结果不能替代小程序验收。
-6. 修改代码或重要项目文档后，从工作区根目录运行 graphify update .。
-7. 产品范围、流程、安全与商业化更新 PRODUCT.md；Token、组件与视觉语言更新 DESIGN.md 和必要的 uni.scss；运行和架构说明更新 CLAUDE.md 或 docs/。
+2. 开发新页面或二级视图前，重新阅读本文件 §4、`DESIGN.md`、`uni.scss` 以及对应上级页面源码，并在实现前核对色调继承关系。
+3. graphify-out/graph.json 存在时，先用 graphify query 缩小范围，再回到源文件核对。
+4. 运行 node tests/test-mock-system.js 与 git diff --check。
+5. 对 mp-weixin 产物运行质量检查：`npm run verify:mp`（CI 门禁）或 `npm run verify:mp:dev`（开发阶段容忍上限）。
+6. 通过 HBuilderX 编译 mp-weixin，并在微信开发者工具回归关键路径；H5 结果不能替代小程序验收。
+7. 修改代码或重要项目文档后，从工作区根目录运行 graphify update .。
+8. 产品范围、流程、安全与商业化更新 PRODUCT.md；Token、组件与视觉语言更新 DESIGN.md 和必要的 uni.scss；运行和架构说明更新 CLAUDE.md 或 docs/。
 
 ### 6.1. verify:mp 门禁说明
 

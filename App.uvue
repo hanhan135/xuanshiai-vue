@@ -111,6 +111,9 @@
 		--accent2: #006052;
 		--soft: #669C92;
 
+		/* 收藏爱心（低饱和红，与 uni.scss / DESIGN.md 同源） */
+		--heart-red: #F08282;
+
 		/* 功能色 */
 		--brown: #2C807C;
 		--navy: #18415D;
@@ -124,6 +127,15 @@
 		--accent-bg: #C3DEDA;
 		--accent-glow: rgba(56, 152, 141, 0.15);
 		--text-invert: #FCFCFC;
+		--review-canvas: #F6F7FB;
+		--review-soft: #F4F3F8;
+		--review-purple: #9E43E8;
+		--review-deep: #74458E;
+		--review-lilac: #E9D6FB;
+		--review-pink: #F3B1EE;
+		--review-orange: #E97927;
+		--review-orange-soft: #FFF0E4;
+		--review-danger: #D45372;
 
 		/* 牵线域：纸张档案视觉 */
 		--match-paper: #FFFDF8;
@@ -159,8 +171,8 @@
 		--shadow-lg: 0 8px 24px rgba(17, 23, 24, 0.10);
 
 		/* 字体 */
-		--serif: ui-serif, "Songti SC", "STSong", "Noto Serif SC", serif;
-		--sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+		--serif: "Songti SC", "STSong", "Noto Serif SC", serif;
+		--sans: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
 
 		background-color: var(--canvas);
 		color: var(--ink);
@@ -176,6 +188,12 @@
 
 	.uni-column {
 		flex-direction: column;
+	}
+
+	/* 微信开发者工具与真机统一使用系统中文字体，避免缺字与字形错位。 */
+	view, text, button, input, textarea {
+		font-family: var(--sans);
+		font-variant-ligatures: none;
 	}
 
 	.text-serif {

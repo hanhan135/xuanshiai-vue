@@ -98,17 +98,15 @@
 		<!-- 互动栏 -->
 		<view class="card-footer" @click.stop>
 			<view class="action-item" @click="handleLike">
-				<view class="like-icon" :class="{ liked: liked }">
-					<text class="icon">{{ liked ? '👍' : '👍🏻' }}</text>
-				</view>
+				<text class="ic ic-social action-icon" :class="{ liked: liked }">{{ likeIcon }}</text>
 				<text class="text text-muted" :class="{ liked: liked }" v-if="likeCount > 0">{{ likeCount }}</text>
 			</view>
 			<view class="action-item" @click="handleComment">
-				<text class="icon">💬</text>
+				<text class="ic ic-social action-icon">{{ commentIcon }}</text>
 				<text class="text text-muted" v-if="commentCount > 0">{{ commentCount }}</text>
 			</view>
 			<view class="action-item" @click="handleCollect">
-				<text class="icon">{{ collected ? '⭐' : '☆' }}</text>
+				<text class="ic ic-home action-icon" :class="{ collected: collected }">{{ collectIcon }}</text>
 				<text class="text text-muted" v-if="collectCount > 0">{{ collectCount }}</text>
 			</view>
 			<view class="action-item" @click="handleShare">
@@ -204,6 +202,9 @@ const likeCount = ref(props.dynamic.likeCount != null ? props.dynamic.likeCount 
 const collected = ref(props.dynamic.collected === true)
 const collectCount = ref(props.dynamic.collectCount != null ? props.dynamic.collectCount : 0)
 const followed = ref(props.dynamic.followed === true)
+const likeIcon = String.fromCharCode(0xec8c)
+const commentIcon = String.fromCharCode(0xe679)
+const collectIcon = String.fromCharCode(0xe60e)
 const applyStatus = ref(props.dynamic.applyStatus != null ? props.dynamic.applyStatus : 'none')
 
 watch(
@@ -754,25 +755,21 @@ const handleOpen = () => {
 	gap: 4px;
 }
 
-.action-item .icon {
+.action-icon {
 	font-size: 18px;
+	color: var(--muted);
 }
 
-/* mp-weixin 下 emoji 是彩色字形，color 无法改变其颜色；已赞态用 👍 肤色变体（👍🏻→👍）+ 底色圆 + 计数变主题色表达 */
-.like-icon {
-	width: 26px;
-	height: 26px;
-	border-radius: 50%;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
-	justify-content: center;
-	transition: background-color 0.2s ease;
+.action-icon.liked {
+	color: var(--danger);
 }
 
-.like-icon.liked {
-	background: var(--accent-bg);
-	animation: thumbPulse 0.3s ease;
+.action-icon.collected {
+	color: var(--gold);
+}
+
+.action-icon.liked {
+	animation: heartBeat 0.3s ease;
 }
 
 .action-item .text.liked {
@@ -813,4 +810,27 @@ const handleOpen = () => {
 		transform: scale(1.3);
 	}
 }
+
+@font-face {
+	font-family: "iconfont-social";
+	src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff');
+}
+
+@font-face {
+	font-family: "iconfont-home";
+	src: url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff') format('woff');
+}
+
+.ic {
+	font-style: normal;
+}
+
+.ic-social {
+	font-family: "iconfont-social" !important;
+}
+
+.ic-home {
+	font-family: "iconfont-home" !important;
+}
+
 </style>

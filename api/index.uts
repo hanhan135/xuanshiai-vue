@@ -87,6 +87,8 @@ export {
   advisorErrorMessage
 } from './ai-advisor.uts'
 
+export { generateIdealPartner } from './ai-search.uts'
+
 // 社区相关
 export {
   getDynamicList,
@@ -139,6 +141,7 @@ export {
   likeComment,
   uploadMedia,
   uploadCommunityMedia,
+  getCommunityMediaStatus,
   deleteCommunityMedia,
   getPaperPlaneMessages,
   sendPaperPlaneMessage,
@@ -204,7 +207,25 @@ export {
 
 // 牵线/红娘相关
 export {
-  getMockMatchmakerContact,
+  getMatchmakerManagementCenterAccess,
+  getMatchmakerManagementCenterSnapshot,
+  getPartnerCenterSnapshot,
+  updatePartnerTeamName,
+  createPartnerTeamInvite,
+  updatePartnerAccountProfile,
+  createPartnerWithdrawal,
+  getPromoterCenterSnapshot,
+  updatePromoterCenterProfile,
+  createPromoterPromotionCode,
+  addPromoterLead,
+  createPromoterWithdrawal,
+  getMatchmakerReviewMembers,
+  updateMatchmakerReviewMember,
+  getMatchmakerMemberFollowUps,
+  createMatchmakerMemberFollowUp,
+  getMatchmakerMemberContact,
+  getMatchmakerMemberMatchCandidates,
+  getMatchmakerMemberMatchHistory,
   getMatchmakerDetail,
   getServiceMatchmakers,
   getCustomMatchmakers,

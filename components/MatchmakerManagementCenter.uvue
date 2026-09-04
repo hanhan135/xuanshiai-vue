@@ -1,0 +1,158 @@
+<template>
+	<scroll-view scroll-y class="management-center" :show-scrollbar="false">
+		<view class="center-content">
+			<view class="welcome-section">
+				<view class="account-avatar"><text>人</text></view>
+				<view class="welcome-copy">
+					<text class="welcome-title">{{ greeting }}，{{ displayName }}</text>
+					<text class="welcome-subtitle">牵线搭桥，成就美好姻缘！</text>
+				</view>
+				<view class="role-badge" @click="emit('identity')"><text>{{ roleName }}</text></view>
+			</view>
+
+			<view class="store-brief">
+				<view class="brief-heading">
+					<text class="brief-title">门店数据简报</text>
+					<text class="brief-copy">工作情况一眼概况</text>
+				</view>
+				<view class="metric-grid">
+					<view v-for="item in storeMetrics" :key="item.key" class="metric-item" @click="emit('action', item.action)">
+						<text class="metric-value">{{ item.value }}</text>
+						<text class="metric-label">{{ item.label }}</text>
+					</view>
+				</view>
+			</view>
+
+			<view class="quick-actions">
+				<view v-for="item in quickActions" :key="item.key" class="quick-action" @click="emit('action', item.action)">
+					<view class="quick-action-icon" :class="item.tone"><text>{{ item.icon }}</text></view>
+					<text class="quick-action-label">{{ item.label }}</text>
+				</view>
+			</view>
+
+			<view class="promotion-panel">
+				<text class="promotion-title">专属推广工具</text>
+				<text class="promotion-copy">推广链接与海报由服务端配置后开放。</text>
+				<view class="promotion-actions">
+					<view class="promotion-action" @click="emit('action', '复制我的专属推广链接')"><text>复制推广链接</text></view>
+					<view class="promotion-action" @click="emit('action', '下载我的专属推广海报')"><text>下载推广海报</text></view>
+				</view>
+			</view>
+
+			<view class="function-list">
+				<view v-for="item in navigationItems" :key="item.key" class="function-item" @click="emit('action', item.action)">
+					<view class="function-icon" :class="item.tone"><text>{{ item.icon }}</text></view>
+					<text class="function-label">{{ item.label }}</text>
+					<text v-if="item.trailing" class="function-trailing">{{ item.trailing }}</text>
+					<text class="function-link">{{ item.actionLabel }} ›</text>
+				</view>
+			</view>
+
+			<view class="logout-action" @click="emit('exit')"><text>退出登录</text></view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+interface Props {
+	snapshot: any;
+}
+
+const props = defineProps<Props>()
+
+const emit = defineEmits<{
+	exit: [];
+	refresh: [];
+	identity: [];
+	action: [name: string];
+}>()
+
+const identity = computed(() => {
+	if (props.snapshot != null && props.snapshot.identity != null) return props.snapshot.identity
+	return {}
+})
+
+const greeting = computed(() => identity.value.greeting || '你好')
+const displayName = computed(() => identity.value.name || '服务红娘')
+const roleName = computed(() => identity.value.roleName || '服务红娘')
+
+const defaultMetrics = [
+	{ key: 'pending_review', label: '资料待审', value: '--', action: '资料待审' },
+	{ key: 'served_members', label: '我服务的', value: '--', action: '我服务的' },
+	{ key: 'online_commission', label: '线上分成', value: '--', action: '分成明细' },
+	{ key: 'offline_performance', label: '线下业绩', value: '--', action: '财务明细' },
+	{ key: 'pending_introduction', label: '待我牵线', value: '--', action: '牵线记录' },
+	{ key: 'introduction_succeeded', label: '牵线成功', value: '--', action: '牵线记录' },
+	{ key: 'meeting_requests', label: '约见申请', value: '--', action: '约见申请' },
+	{ key: 'pending_meeting', label: '待见面', value: '--', action: '约会管理' }
+]
+
+const storeMetrics = computed(() => {
+	if (props.snapshot != null && Array.isArray(props.snapshot.storeMetrics) && props.snapshot.storeMetrics.length == 8) return props.snapshot.storeMetrics
+	return defaultMetrics
+})
+
+const quickActions = [
+	{ key: 'lead', label: '录入线索', icon: '线', tone: 'tone-one', action: '录入线索' },
+	{ key: 'member', label: '录入会员', icon: '会', tone: 'tone-two', action: '录入会员' },
+	{ key: 'introduction', label: '添加牵线', icon: '牵', tone: 'tone-three', action: '添加牵线' },
+	{ key: 'meeting', label: '安排约见', icon: '约', tone: 'tone-four', action: '安排约见' },
+	{ key: 'activity', label: '活动报名', icon: '报', tone: 'tone-five', action: '活动报名' }
+]
+
+const navigationItems = [
+	{ key: 'leads', label: '客源线索', icon: '线', tone: 'tone-one', action: '查看客源线索', actionLabel: '查看', trailing: '' },
+	{ key: 'members', label: '全部会员', icon: '会', tone: 'tone-two', action: '查看全部会员', actionLabel: '查看', trailing: '' },
+	{ key: 'served', label: '我服务的', icon: '我', tone: 'tone-three', action: '查看我服务的', actionLabel: '查看', trailing: '' },
+	{ key: 'introductions', label: '牵线记录', icon: '牵', tone: 'tone-four', action: '查看牵线记录', actionLabel: '查看', trailing: '' },
+	{ key: 'requests', label: '约见申请', icon: '约', tone: 'tone-five', action: '查看约见申请', actionLabel: '查看', trailing: '' },
+	{ key: 'meetings', label: '约会管理', icon: '会', tone: 'tone-one', action: '查看约会管理', actionLabel: '查看', trailing: '' },
+	{ key: 'video', label: '视频管理', icon: '视', tone: 'tone-two', action: '查看视频管理', actionLabel: '查看', trailing: '' },
+	{ key: 'commission', label: '分成明细', icon: '分', tone: 'tone-three', action: '查看分成明细', actionLabel: '查看', trailing: '' },
+	{ key: 'finance', label: '财务明细', icon: '财', tone: 'tone-five', action: '查看财务明细', actionLabel: '查看', trailing: '--' },
+	{ key: 'account', label: '我的账号', icon: '账', tone: 'tone-four', action: '查看我的账号', actionLabel: '设置', trailing: '' }
+]
+</script>
+
+<style scoped>
+.management-center { flex: 1; height: 0; background: var(--canvas); }
+.center-content { padding: 32rpx 28rpx calc(env(safe-area-inset-bottom) + 46rpx); display: flex; flex-direction: column; gap: 22rpx; }
+.welcome-section { min-height: 126rpx; padding: 8rpx 4rpx; display: flex; flex-direction: row; align-items: center; gap: 18rpx; }
+.account-avatar { width: 88rpx; height: 88rpx; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 31rpx; font-weight: 800; flex-shrink: 0; }
+.welcome-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7rpx; }
+.welcome-title { color: var(--ink); font-size: 34rpx; line-height: 1.25; font-weight: 800; }
+.welcome-subtitle { color: var(--muted); font-size: 21rpx; line-height: 1.45; }
+.role-badge { padding: 12rpx 16rpx; border-radius: 999rpx; background: var(--accent2); color: var(--paper); font-size: 19rpx; font-weight: 800; white-space: nowrap; }
+.store-brief { overflow: hidden; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.brief-heading { padding: 22rpx 26rpx; background: var(--accent2); display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
+.brief-title { color: var(--paper); font-size: 27rpx; font-weight: 800; }
+.brief-copy { color: var(--accent-bg); font-size: 20rpx; }
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metric-item { min-height: 128rpx; padding: 18rpx 8rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7rpx; }
+.metric-value { color: var(--ink); font-family: var(--serif); font-size: 35rpx; line-height: 1; font-weight: 700; }
+.metric-label { color: var(--muted); font-size: 19rpx; line-height: 1.3; text-align: center; }
+.quick-actions { padding: 25rpx 16rpx; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; flex-direction: row; justify-content: space-between; gap: 8rpx; }
+.quick-action { width: 20%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 10rpx; }
+.quick-action-icon, .function-icon { display: flex; align-items: center; justify-content: center; color: var(--paper); font-weight: 800; }
+.quick-action-icon { width: 48rpx; height: 48rpx; border-radius: 13rpx; font-size: 22rpx; }
+.quick-action-label { color: var(--ink2); font-size: 19rpx; white-space: nowrap; }
+.promotion-panel { padding: 26rpx; border-radius: 20rpx; background: var(--sage-soft); display: flex; flex-direction: column; gap: 10rpx; }
+.promotion-title { color: var(--accent2); font-size: 24rpx; font-weight: 800; }
+.promotion-copy { color: var(--ink2); font-size: 20rpx; line-height: 1.5; }
+.promotion-actions { display: flex; flex-direction: row; gap: 12rpx; margin-top: 4rpx; }
+.promotion-action { flex: 1; min-width: 0; min-height: 54rpx; border-radius: 999rpx; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--accent2); font-size: 19rpx; font-weight: 800; white-space: nowrap; }
+.function-list { overflow: hidden; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.function-item { min-height: 90rpx; padding: 0 24rpx; border-top: 1px solid var(--line); display: flex; flex-direction: row; align-items: center; gap: 14rpx; }
+.function-item:first-child { border-top: none; }
+.function-icon { width: 32rpx; height: 32rpx; border-radius: 9rpx; font-size: 17rpx; flex-shrink: 0; }
+.function-label { flex: 1; min-width: 0; color: var(--ink); font-size: 25rpx; font-weight: 700; }
+.function-trailing { color: var(--muted); font-size: 19rpx; }
+.function-link { color: var(--muted); font-size: 20rpx; white-space: nowrap; }
+.logout-action { min-height: 72rpx; border-radius: 999rpx; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 23rpx; font-weight: 800; }
+.tone-one { background: var(--accent); }
+.tone-two { background: var(--accent2); }
+.tone-three { background: var(--match-deep); }
+.tone-four { background: var(--match-paper); color: var(--accent2); }
+.tone-five { background: var(--sage); color: var(--ink); }
+.metric-item:active, .quick-action:active, .promotion-action:active, .function-item:active, .logout-action:active { opacity: 0.78; transform: scale(0.98); }
+</style>

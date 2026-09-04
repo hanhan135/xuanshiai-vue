@@ -22,6 +22,15 @@
 					</view>
 				</view>
 
+				<!-- 推广红娘管理中心入口：紧随招募 Banner，首屏可见。 -->
+				<view class="management-entry ready management-entry-priority" @click="openPromoterCenter">
+					<view class="management-entry-copy">
+						<view class="management-entry-title-row"><text class="management-entry-title">推广红娘管理中心</text></view>
+						<text class="management-entry-desc">进入工作台管理客源、奖励、分成与提现。</text>
+					</view>
+					<view class="management-entry-action"><text>进入中心</text></view>
+				</view>
+
 				<!-- 基本信息 -->
 				<view class="form-card">
 					<text class="section-title">基本信息</text>
@@ -224,6 +233,10 @@ const goBack = () => {
 	uni.navigateBack()
 }
 
+const openPromoterCenter = () => {
+	uni.navigateTo({ url: '/pagesSub/matchmaker/promoter-center' })
+}
+
 const showHelp = () => {
 	uni.showModal({
 		title: '申请说明',
@@ -290,9 +303,8 @@ const submitApplication = async () => {
 
 		if (result.success) {
 			const applicationId = result.data != null && result.data.id != null ? String(result.data.id) : ''
-			const isMock = result.data != null && result.data.source == 'mock'
 			uni.redirectTo({
-				url: '/pagesSub/matchmaker/application-success?type=promoter&id=' + applicationId + '&mock=' + (isMock ? '1' : '0')
+				url: '/pagesSub/matchmaker/application-success?type=promoter&id=' + applicationId
 			})
 		} else {
 			const message = result.message != null ? String(result.message) : '提交失败，请稍后重试'
@@ -394,6 +406,17 @@ const submitApplication = async () => {
 .bottom-spacer {
 	height: 148rpx;
 }
+
+/* 推广红娘管理中心入口：与「我要做红娘」的红娘管理中心入口使用同款层级和尺寸。 */
+.management-entry { padding: 26rpx; border: 1px solid var(--line); border-radius: 20rpx; background: var(--warm); display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 18rpx; }
+.management-entry-priority { margin-bottom: 2rpx; }
+.management-entry.ready { background: var(--match-mist); border-color: var(--accent); }
+.management-entry-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8rpx; }
+.management-entry-title-row { display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.management-entry-title { font-size: 28rpx; font-weight: 800; color: var(--ink); }
+.management-entry-desc { font-size: 21rpx; line-height: 1.5; color: var(--ink2); }
+.management-entry-action { min-width: 136rpx; height: 64rpx; padding: 0 16rpx; border-radius: 14rpx; background: var(--accent); display: flex; flex-direction: row; align-items: center; justify-content: center; color: var(--paper); font-size: 21rpx; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.management-entry-action:active { opacity: .78; transform: scale(.98); }
 
 /* ===== Banner ===== */
 .banner-card {

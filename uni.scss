@@ -33,12 +33,26 @@ page,
 	--sage-soft: #C2E0CF;
 	--security-hero: #E5F7E7;
 
+	/* 收藏爱心（低饱和红，非婚庆红金；首页与详情页共用） */
+	--heart-red: #F08282;
+
 	/* 辅助色 */
 	--bg-hover: #E7ECEC;
 	--bg-subtle: #DCE3E2;
 	--accent-bg: #C3DEDA;
 	--accent-glow: rgba(56, 152, 141, 0.15);
 	--text-invert: #FCFCFC;
+
+	/* 服务红娘资料待审工作台：导图原型的审核、弃海与录入操作色。 */
+	--review-canvas: #F6F7FB;
+	--review-soft: #F4F3F8;
+	--review-purple: #9E43E8;
+	--review-deep: #74458E;
+	--review-lilac: #E9D6FB;
+	--review-pink: #F3B1EE;
+	--review-orange: #E97927;
+	--review-orange-soft: #FFF0E4;
+	--review-danger: #D45372;
 
 	/* 牵线域：纸张档案视觉 */
 	--match-paper: #FFFDF8;
@@ -74,9 +88,35 @@ page,
 	--shadow-lg: 0 8px 24px rgba(17, 23, 24, 0.10);
 
 	/* 字体 */
-	--serif: ui-serif, "Songti SC", "STSong", "Noto Serif SC", serif;
-	--sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+	--serif: "Songti SC", "STSong", "Noto Serif SC", serif;
+	--sans: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
 }
+
+@font-face {
+	font-family: "iconfont-social";
+	src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff');
+}
+
+@font-face {
+	font-family: "iconfont-home";
+	src: url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff') format('woff');
+}
+
+.ic {
+	font-style: normal;
+}
+
+.ic-social {
+	font-family: "iconfont-social" !important;
+}
+
+.ic-home {
+	font-family: "iconfont-home" !important;
+}
+
+.ic-pinglun:before { content: "\e679"; }
+.ic-dianzan:before { content: "\ec8c"; }
+.ic-star:before { content: "\e60e"; }
 
 /* ========== 全局重置 ========== */
 page {
@@ -87,8 +127,9 @@ page {
 	line-height: 1.6;
 }
 
-view, text, button, input {
+view, text, button, input, textarea {
 	box-sizing: border-box;
+	font-family: var(--sans);
 }
 
 button {

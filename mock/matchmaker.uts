@@ -27,6 +27,58 @@ export const mockMatchmakerContact = {
 /** 角色申请 Mock 记录。提交后会同步写入本地存储，仅用于开发和联调。 */
 export const mockRoleApplications: any[] = []
 
+/**
+ * 服务红娘管理中心演示快照。
+ * 仅用于前端结构开发；不对应真实付款、用户资料、联系方式或财务结算。
+ */
+export const mockMatchmakerManagementCenterAccess = {
+  roleStatus: 'active',
+  paymentStatus: 'paid',
+  canAccess: true,
+  paidAt: '2026-08-27 10:00',
+  scope: 'store',
+  source: 'mock',
+  message: ''
+}
+
+/**
+ * 红娘管理中心框架 Mock。
+ * 只提供字段结构，不提供姓名、会员、金额或业务数量等演示数据。
+ */
+export const mockMatchmakerManagementCenterSnapshot = {
+  source: 'mock',
+  identity: {
+    greeting: '上午好',
+    name: '依依',
+    roleName: '超级红娘'
+  },
+  storeMetrics: [
+    { key: 'pending_review', label: '资料待审', value: '90', action: '资料待审' },
+    { key: 'served_members', label: '我服务的', value: '0', action: '我服务的' },
+    { key: 'online_commission', label: '线上分成', value: '¥0', action: '分成明细' },
+    { key: 'offline_performance', label: '线下业绩', value: '¥0', action: '财务明细' },
+    { key: 'pending_introduction', label: '待我牵线', value: '3', action: '牵线记录' },
+    { key: 'introduction_succeeded', label: '牵线成功', value: '29', action: '牵线记录' },
+    { key: 'meeting_requests', label: '约见申请', value: '2', action: '约见申请' },
+    { key: 'pending_meeting', label: '待见面', value: '0', action: '约会管理' }
+  ]
+}
+
+/**
+ * 服务红娘「资料待审」本地工作台数据。
+ * 这是前端暂存的数据源：用于完整走通审核、跟进、弃海和捞取流程；
+ * 后端接入时以同名字段替换读写实现即可。
+ */
+export const mockMatchmakerReviewMembers: any[] = [
+  { id: 'G396140', name: '川川', avatar: PORTRAIT.main, gender: '女', age: 36, birthday: '1990-03-12', zodiac: '马', marital: '未婚', education: '大专', height: 175, weight: 54, job: '产品运营', income: '年收入20万', hometown: '江苏省苏州市', residence: '江苏省南京市', phone: '18777866068', wechat: '18777866068', category: '公开相亲', certification: '未实名', reviewStatus: '待审核', reviewFee: '免审核费', assignedMatchmaker: '芸希老师', registeredAt: '2026-08-21 10:48:23', vipType: '', preference: ['年龄25-35', '身高170-185', '收入不限', '学历不限'], followUps: [], introductions: [], matchmakerComment: '', reviewReason: '', isMine: false },
+  { id: 'G522362', name: '依依', avatar: PORTRAIT.alt, gender: '女', age: 24, birthday: '2002-01-01', zodiac: '马', marital: '未婚', education: '博士', height: 169, weight: 46, job: '私企员工', income: '年入百万', hometown: '江苏省南京市', residence: '江苏省南京市', phone: '18777866068', wechat: '18777866068', category: '公开相亲', certification: '未实名', reviewStatus: '待审核', reviewFee: '免审核费', assignedMatchmaker: '依依', registeredAt: '2026-08-21 10:44:49', vipType: '', preference: ['年龄25-35', '身高170-185', '收入不限', '学历不限'], followUps: [{ id: 'follow-1', content: '已完成首次资料核实，等待进一步沟通。', type: '核实资料', author: '芸希老师', createdAt: '2026-08-21', nextFollowAt: '' }], introductions: [], matchmakerComment: '', reviewReason: '', isMine: true },
+  { id: 'G424118', name: '小可爱', avatar: PORTRAIT.community, gender: '女', age: 31, birthday: '1995-05-16', zodiac: '猪', marital: '丧偶', education: '博士', height: 168, weight: 50, job: '军人', income: '年收入30万', hometown: '浙江省杭州市', residence: '浙江省杭州市', phone: '18612009120', wechat: 'xsa-xiaoai', category: '公开相亲', certification: '未实名', reviewStatus: '待审核', reviewFee: '免审核费', assignedMatchmaker: '芸希老师', registeredAt: '2026-07-20 14:42:24', vipType: '线上VIP', preference: ['年龄28-38', '身高172-188', '学历本科及以上'], followUps: [], introductions: [], matchmakerComment: '', reviewReason: '', isMine: false },
+  { id: 'B053440', name: '胡毓恒｜胡永恒', avatar: PORTRAIT.man, gender: '男', age: 55, birthday: '1971-07-02', zodiac: '猪', marital: '离异未育', education: '大专', height: 171, weight: 72, job: '事业单位', income: '年收入18万', hometown: '安徽省合肥市', residence: '江苏省南京市', phone: '18611112222', wechat: 'huyuheng', category: '公开相亲', certification: '已实名', reviewStatus: '审核通过', reviewFee: '免审核费', assignedMatchmaker: '未分派', registeredAt: '2026-06-13 15:50:27', vipType: '', preference: ['年龄35-48', '身高155-170'], followUps: [{ id: 'follow-2', content: '资料已通过审核，等待分派跟进红娘。', type: '服务交接', author: '芸希老师', createdAt: '2026-06-13', nextFollowAt: '' }], introductions: [], matchmakerComment: '', reviewReason: '', isMine: false },
+  { id: 'B269899', name: '梦里啥都有｜孟方', avatar: PORTRAIT.manAlt, gender: '男', age: 51, birthday: '1975-09-20', zodiac: '兔', marital: '离异带女孩', education: '大专', height: 180, weight: 78, job: '个体经营', income: '年收入25万', hometown: '山东省青岛市', residence: '江苏省南京市', phone: '18633334444', wechat: 'mengfang', category: '公开相亲', certification: '已实名', reviewStatus: '审核不通过', reviewFee: '免审核费', assignedMatchmaker: '未分派', registeredAt: '2026-06-12 16:36:28', vipType: '', preference: ['年龄35-45'], followUps: [{ id: 'follow-3', content: '放入弃海，原因: 年龄不合适', type: '核实资料', author: '芸希老师', createdAt: '2026-06-12', nextFollowAt: '' }], introductions: [], matchmakerComment: '', reviewReason: '年龄不合适', isMine: false },
+  { id: 'G021134', name: '美云', avatar: PORTRAIT.community, gender: '女', age: 57, birthday: '1969-11-18', zodiac: '鸡', marital: '离异未育', education: '大专', height: 159, weight: 56, job: '自由职业', income: '年收入12万', hometown: '江苏省扬州市', residence: '江苏省南京市', phone: '18655556666', wechat: 'meiyun', category: '公开相亲', certification: '未实名', reviewStatus: '审核不通过', reviewFee: '免审核费', assignedMatchmaker: '未分派', registeredAt: '2026-06-12 16:31:25', vipType: '线下VIP', preference: ['年龄50-62'], followUps: [], introductions: [], matchmakerComment: '', reviewReason: '年龄不合适', isMine: false },
+  { id: 'B470445', name: 'hunyun', avatar: PORTRAIT.man, gender: '男', age: 29, birthday: '1997-02-08', zodiac: '鼠', marital: '未婚', education: '本科', height: 178, weight: 68, job: '软件工程师', income: '年收入28万', hometown: '浙江省宁波市', residence: '江苏省南京市', phone: '18677778888', wechat: 'hunyun', category: '公开相亲', certification: '已实名', reviewStatus: '已到店核验', reviewFee: '免审核费', assignedMatchmaker: '芸希老师', registeredAt: '2026-08-19 09:22:10', vipType: '线上VIP', preference: ['年龄24-32', '学历本科及以上'], followUps: [], introductions: [], matchmakerComment: '', reviewReason: '', isMine: true }
+]
+
 /** 服务红娘 */
 export const mockServiceMatchmakers = [
   {
@@ -258,3 +310,42 @@ export const mockAiChatSeed = [
     text: '可以进一步拆成：冲突时不冷处理、能表达需求、对长期关系有共同规划。哪一项对你最重要？'
   }
 ]
+
+/**
+ * 合伙人中心本地数据源。
+ * 默认只提供当前账号可确认的空业务状态，不预置人员、订单、交易或收益记录。
+ */
+export const mockPartnerCenterSnapshot = {
+  source: 'mock',
+  profile: {
+    teamName: '我的团队',
+    nickname: '',
+    phone: '',
+    wechatBound: false,
+    registerAt: '',
+    balance: 0,
+    points: 0,
+    level: '初级合伙'
+  },
+  inviteCode: 'PARTNER-LOCAL',
+  teamMembers: [] as any[],
+  effectiveMembers: [] as any[],
+  registrationRewards: [] as any[],
+  commissionRecords: [] as any[],
+  withdrawalRecords: [] as any[]
+}
+
+/** 推广红娘中心本地数据源：默认不预置客源、会员、收益、订单或商家数据。 */
+export const mockPromoterCenterSnapshot = {
+  source: 'mock',
+  profile: { nickname: '', phone: '', wechatBound: false, balance: 0, points: 0, level: '初级', teamName: '', registerAt: '' },
+  teamOptions: [] as any[],
+  leads: [] as any[],
+  effectiveMembers: [] as any[],
+  incompleteMembers: [] as any[],
+  rewards: [] as any[],
+  commissions: [] as any[],
+  withdrawals: [] as any[],
+  offlineOrders: [] as any[],
+  finance: { expenses: [] as any[], balance: [] as any[], points: [] as any[] }
+}

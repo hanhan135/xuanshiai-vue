@@ -65,7 +65,11 @@ assert.match(
 )
 
 const promptStart = page.indexOf('function maybePromptBuild')
-const promptEnd = page.indexOf('\n}\n', promptStart) + 3
+const promptRemainder = page.slice(promptStart)
+const promptClose = promptRemainder.match(/\r?\n}\r?\n/)
+const promptEnd = promptClose == null
+  ? -1
+  : promptStart + promptClose.index + promptClose[0].length
 assert.ok(promptStart >= 0 && promptEnd > promptStart, 'build prompt helper not found')
 const prompt = page.slice(promptStart, promptEnd)
 assert.match(prompt, /res\.confirm[\s\S]{0,400}ws\.acceptBuildInvite\(subject, inviteId\)/)

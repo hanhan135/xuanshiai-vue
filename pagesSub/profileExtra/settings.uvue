@@ -25,7 +25,7 @@
 				</view>
 				<view class="right-wrap">
 					<view class="badge">
-						<text class="badge-text">已认证</text>
+					<text class="badge-text">{{ certificationLabel }}</text>
 					</view>
 					<text class="arrow">‹</text>
 				</view>
@@ -39,7 +39,7 @@
 					<text class="label">手机号</text>
 				</view>
 				<view class="right-wrap">
-					<text class="value">138****8888</text>
+					<text class="value">{{ phoneMasked != '' ? phoneMasked : '未绑定' }}</text>
 					<text class="arrow">‹</text>
 				</view>
 			</view>
@@ -218,7 +218,7 @@
 					<text class="label">清除缓存</text>
 				</view>
 				<view class="right-wrap">
-					<text class="value">128.5MB</text>
+					<text class="value">{{ cacheSize }}</text>
 					<text class="arrow">‹</text>
 				</view>
 			</view>
@@ -274,15 +274,6 @@
 			</view>
 		</view>
 
-<view class="preview-entry" @tap="openHelpPreview">
-				<text class="preview-entry-title">客服与帮助页面预览</text>
-				<text class="preview-entry-desc">打开可交互的前端页面</text>
-			</view>
-			<view class="preview-entry" @tap="openSecurityPreview">
-				<text class="preview-entry-title">安全中心页面预览</text>
-				<text class="preview-entry-desc">打开黑名单与安全指南</text>
-			</view>
-
 		<!-- 退出登录 -->
 		<view class="section-card">
 			<view class="logout-btn" @click="handleLogout">
@@ -295,7 +286,8 @@
 </template>
 
 <script setup lang="uts">
-import { logout, getCommunityPrivacy, updateCommunityPrivacy, getBlockedUsers, unblockUser, getMyReports, getMyReportAppeals, createReportAppeal } from '@/api'
+import { logout, getMeProfile, getCommunityPrivacy, updateCommunityPrivacy, getBlockedUsers, unblockUser, getMyReports, getMyReportAppeals, createReportAppeal } from '@/api'
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/api/config.uts'
 
 // 设置项状态
 let showOnlineStatus = ref(true)
@@ -305,6 +297,9 @@ let receiveActivity = ref(false)
 let receiveLike = ref(true)
 let receiveComment = ref(true)
 let receiveFollow = ref(true)
+let phoneMasked = ref('')
+let realnameStatus = ref(0)
+let cacheSize = ref('计算中')
 
 // 隐私设置选项
 let profilePrivacy = ref('all')   // all | friends | only_me
@@ -337,6 +332,31 @@ const messagePrivacyLabel = computed(() => {
 })
 
 const appVersion = computed(() => 'v1.0.0')
+const certificationLabel = computed(() => {
+	if (realnameStatus.value == 2) return '已认证'
+	if (realnameStatus.value == 1 || realnameStatus.value == 4) return '审核中'
+	if (realnameStatus.value == 3) return '未通过'
+	if (realnameStatus.value == 5) return '已撤销'
+	return '未认证'
+})
+
+const refreshAccountStatus = async () => {
+	const res = await getMeProfile()
+	if (!res.success || res.data == null) return
+	const data = res.data as any
+	phoneMasked.value = data.phone_masked != null ? String(data.phone_masked) : ''
+	realnameStatus.value = data.realname_status != null ? Number(data.realname_status) : 0
+}
+
+const refreshCacheSize = () => {
+	try {
+		const info = uni.getStorageInfoSync()
+		const size = info.currentSize != null ? Number(info.currentSize) : 0
+		cacheSize.value = size >= 1024 ? (size / 1024).toFixed(1) + 'MB' : size.toFixed(0) + 'KB'
+	} catch (e) {
+		cacheSize.value = '未知'
+	}
+}
 
 const loadPrivacy = async () => {
 	try {
@@ -354,7 +374,7 @@ const loadPrivacy = async () => {
 		uni.showToast({ title: '设置加载失败，请重试', icon: 'none' })
 	}
 }
-onMounted(() => { loadPrivacy() })
+onMounted(() => { loadPrivacy(); refreshAccountStatus(); refreshCacheSize() })
 
 const savePrivacy = async (key: string, value: boolean, rollback: () => void) => {
 	const payload: any = {}
@@ -553,14 +573,12 @@ const navigateTo = (url: string) => {
 // 隐私设置选择
 const handlePrivacy = (type: 'profile' | 'message') => {
 	const field = type === 'profile' ? '资料可见性' : '消息权限'
-	// TODO: 调用接口弹出选择器（如 Picker / ActionSheet）
-	uni.showToast({ title: field + '设置开发中', icon: 'none' })
+	uni.showToast({ title: field + '接口暂未提供', icon: 'none' })
 }
 
 // 修改手机号
 const handleChangePhone = () => {
-	// TODO: 实现手机号修改流程
-	uni.showToast({ title: '功能开发中', icon: 'none' })
+	uni.showToast({ title: '修改手机号接口暂未提供', icon: 'none' })
 }
 
 // 清除缓存
@@ -570,7 +588,18 @@ const clearCache = () => {
 		content: '确定要清除缓存吗？',
 		success: (res) => {
 			if (res.confirm) {
-				uni.showToast({ title: '清除成功', icon: 'success' })
+				try {
+					const info = uni.getStorageInfoSync()
+					const keys = info.keys != null ? info.keys as string[] : []
+					for (let i = 0; i < keys.length; i++) {
+						const keepKeys = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, 'xsa_login_agreed', 'xsa_welcome_agreed', 'xsa_user_id']
+						if (keepKeys.indexOf(keys[i]) < 0) uni.removeStorageSync(keys[i])
+					}
+					cacheSize.value = '0KB'
+					uni.showToast({ title: '清除成功', icon: 'success' })
+				} catch (e) {
+					uni.showToast({ title: '清除失败，请重试', icon: 'none' })
+				}
 			}
 		}
 	})
@@ -578,11 +607,7 @@ const clearCache = () => {
 
 // 检查更新
 const checkUpdate = () => {
-	uni.showLoading({ title: '检查中...' })
-	setTimeout(() => {
-		uni.hideLoading()
-		uni.showToast({ title: '已是最新版本', icon: 'none' })
-	}, 1500)
+	uni.showToast({ title: '版本检查接口暂未提供', icon: 'none' })
 }
 
 // 关于我们
@@ -598,14 +623,6 @@ const showHelp = () => {
 // 意见反馈
 const showFeedback = () => {
 	uni.navigateTo({ url: '/pagesSub/profileExtra/help?open=feedback', fail: () => { uni.showToast({ title: '意见反馈打开失败，请重试', icon: 'none' }) } })
-}
-
-const openHelpPreview = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/help', fail: () => { uni.showToast({ title: '客服与帮助打开失败，请重试', icon: 'none' }) } })
-}
-
-const openSecurityPreview = () => {
-	uni.navigateTo({ url: '/pagesSub/profileExtra/security', fail: () => { uni.showToast({ title: '安全中心打开失败，请重试', icon: 'none' }) } })
 }
 
 // 退出登录
@@ -821,10 +838,6 @@ switch {
 	justify-content: flex-end;
 	gap: 32rpx;
 }
-
-.preview-entry { display: flex; flex-direction: column; gap: 4px; padding: 14px 0; border-top: 1px solid var(--line); }
-.preview-entry-title { color: var(--accent2); font-size: 14px; font-weight: 700; }
-.preview-entry-desc { color: var(--muted); font-size: 12px; }
 
 /* ---- 退出登录 ---- */
 .logout-btn {

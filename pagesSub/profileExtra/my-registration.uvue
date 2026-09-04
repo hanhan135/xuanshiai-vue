@@ -2,54 +2,49 @@
 	<view class="page">
 		<view class="top-bar" :style="{ paddingTop: statusBarHeight + 'px', height: (statusBarHeight + 52) + 'px' }">
 			<view class="top-back" @tap="goBack"><text>‹</text></view>
-			<text class="top-title">我的报名</text>
-			<view class="top-more"><text>···</text></view>
+			<view class="top-placeholder"></view>
 		</view>
 
 		<scroll-view scroll-y class="content-scroll" show-scrollbar="false">
 			<view class="content-inner">
+				<view class="page-head">
+					<text class="page-title">我的报名</text>
+					<text class="page-sub">共 {{ totalCount }} 条记录 · {{ pendingCount }} 场待审核</text>
+				</view>
+
 				<view class="filter-tabs">
 					<view v-for="tab in statusTabs" :key="tab.key" class="filter-tab" :class="activeFilter === tab.key ? 'filter-tab-active' : ''" @tap="selectFilter(tab.key)">
 						<text>{{ tab.label }}</text>
 					</view>
 				</view>
 
-				<view v-if="visibleSections.length > 0" class="section-list">
-					<view v-for="section in visibleSections" :key="section.key" class="activity-section">
-						<view class="section-heading">
-							<view class="section-heading-main">
-								<text class="section-title">{{ section.title }}</text>
-								<view class="section-count" :class="section.countClass"><text>{{ section.items.length }}</text></view>
+				<view v-if="visibleItems.length > 0" class="ticket-list">
+					<view v-for="item in visibleItems" :key="item.id" class="ticket-card">
+						<view class="notch notch-left"></view>
+						<view class="notch notch-right"></view>
+						<view class="ticket-main">
+							<view class="date-block">
+								<text class="date-num">{{ item.dateText }}</text>
+								<text class="date-week">{{ item.weekText }}</text>
 							</view>
-							<view class="section-toggle" :class="isSectionCollapsed(section.key) ? 'section-toggle-collapsed' : ''" @tap="toggleSection(section.key)">
-								<text class="section-toggle-symbol">{{ isSectionCollapsed(section.key) ? '>' : '⌄' }}</text>
-							</view>
-						</view>
-
-						<view v-if="!isSectionCollapsed(section.key)" class="section-items">
-							<view v-for="item in section.items" :key="item.id" class="activity-card">
-							<view class="card-main">
-								<view class="poster-preview" :class="item.posterClass">
-									<text class="poster-line poster-line-primary">{{ item.posterTitle }}</text>
-									<text class="poster-line poster-line-secondary">{{ item.posterSubtitle }}</text>
-									<text class="poster-line poster-line-foot">{{ item.posterFoot }}</text>
-								</view>
-								<view class="card-copy">
-									<text class="activity-title">{{ item.title }}</text>
-									<text class="activity-meta">◷  时间    {{ item.time }}</text>
-									<text class="activity-meta">⌾  地点    {{ item.location }}</text>
-									<text class="activity-meta">￥  费用    <text :class="item.feeClass">{{ item.fee }}</text></text>
-								</view>
-							</view>
-							<view class="card-footer">
-								<view class="detail-button" @tap="viewDetail(item)"><text>活动详情</text></view>
+							<view class="ticket-copy">
+								<text class="ticket-title">{{ item.title }}</text>
+								<text class="ticket-loc">{{ item.location }}</text>
 							</view>
 						</view>
+						<view class="status-stamp" :class="item.stampClass"><text>{{ item.statusLabel }}</text></view>
+						<view class="ticket-stub">
+							<view class="fee-wrap">
+								<text class="fee-label">费用</text>
+								<text class="fee-value" :class="item.feeClass">{{ item.fee }}</text>
+							</view>
+							<view class="detail-link" @tap="viewDetail(item)"><text>活动详情</text><text class="detail-arrow">→</text></view>
 						</view>
 					</view>
 				</view>
 
 				<view v-else class="empty-state">
+					<view class="empty-ring"></view>
 					<text class="empty-title">暂无相关报名</text>
 					<text class="empty-copy">新的活动报名记录会显示在这里</text>
 				</view>
@@ -66,23 +61,18 @@ type ActivityItem = {
 	id: number
 	status: StatusKey
 	statusLabel: string
-	ribbonClass: string
-	posterClass: string
-	posterTitle: string
-	posterSubtitle: string
-	posterFoot: string
+	stampClass: string
+	dateText: string
+	weekText: string
 	title: string
-	time: string
 	location: string
 	fee: string
 	feeClass: string
 }
-type ActivitySection = { key: StatusKey; title: string; countClass: string; items: ActivityItem[] }
 
 const systemInfo = uni.getSystemInfoSync()
 const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
 const activeFilter = ref<StatusKey>('all')
-const collapsedSections = ref<StatusKey[]>([])
 
 const statusTabs: StatusTab[] = [
 	{ key: 'all', label: '全部' },
@@ -97,14 +87,11 @@ const activities: ActivityItem[] = [
 		id: 1,
 		status: 'pending',
 		statusLabel: '等待审核',
-		ribbonClass: 'ribbon-pending',
-		posterClass: 'poster-pink',
-		posterTitle: '单身青年',
-		posterSubtitle: '专业择偶评分',
-		posterFoot: '免费活动',
+		stampClass: 'stamp-pending',
+		dateText: '进行',
+		weekText: '长期',
 		title: '单身青年 免费择偶竞争力评分',
-		time: '持续进行中',
-		location: '宣誓爱',
+		location: '宣誓爱 · 线上',
 		fee: '免费',
 		feeClass: 'fee-free'
 	},
@@ -112,76 +99,59 @@ const activities: ActivityItem[] = [
 		id: 2,
 		status: 'success',
 		statusLabel: '报名成功',
-		ribbonClass: 'ribbon-success',
-		posterClass: 'poster-sage',
-		posterTitle: '95后专场',
-		posterSubtitle: '轮桌下午茶',
-		posterFoot: '已报名',
+		stampClass: 'stamp-success',
+		dateText: '06.13',
+		weekText: '周六 14:00',
 		title: '95后专场 8 分钟轮桌下午茶',
-		time: '06.13 周六 14:00',
 		location: '滨江区泰安路附近',
-		fee: '报名费 ¥29',
-		feeClass: 'fee-normal'
+		fee: '¥29',
+		feeClass: 'fee-paid'
 	},
 	{
 		id: 3,
 		status: 'rejected',
-		statusLabel: '被拒',
-		ribbonClass: 'ribbon-rejected',
-		posterClass: 'poster-rose',
-		posterTitle: '城市漫步',
-		posterSubtitle: '周末轻松认识',
-		posterFoot: '报名未通过',
+		statusLabel: '未通过',
+		stampClass: 'stamp-rejected',
+		dateText: '07.12',
+		weekText: '周六 14:00',
 		title: '周末城市漫步',
-		time: '07.12 周六 14:00',
 		location: '静安区附近',
-		fee: '报名费 ¥9',
-		feeClass: 'fee-normal'
+		fee: '¥9',
+		feeClass: 'fee-paid'
 	},
 	{
 		id: 4,
 		status: 'checked',
 		statusLabel: '已签到',
-		ribbonClass: 'ribbon-checked',
-		posterClass: 'poster-gold',
-		posterTitle: '单身评分',
-		posterSubtitle: '免费活动',
-		posterFoot: '已完成',
+		stampClass: 'stamp-checked',
+		dateText: '07.19',
+		weekText: '周六 14:00',
 		title: '单身评分',
-		time: '07.19 周六 14:00',
 		location: '活动地点已记录',
 		fee: '免费',
 		feeClass: 'fee-free'
 	}
 ]
 
-const visibleSections = computed<ActivitySection[]>(() => {
-	const sectionDefinitions: ActivitySection[] = [
-		{ key: 'pending', title: '待审核', countClass: 'count-pending', items: [] },
-		{ key: 'success', title: '报名成功', countClass: 'count-success', items: [] },
-		{ key: 'rejected', title: '被拒', countClass: 'count-rejected', items: [] },
-		{ key: 'checked', title: '已签到', countClass: 'count-checked', items: [] }
-	]
+const totalCount = activities.length
+let pendingTotal = 0
+for (const item of activities) {
+	if (item.status === 'pending') pendingTotal++
+}
+const pendingCount = pendingTotal
+
+const visibleItems = computed<ActivityItem[]>(() => {
+	const result: ActivityItem[] = []
 	for (const item of activities) {
-		if (activeFilter.value !== 'all' && item.status !== activeFilter.value) continue
-		for (const section of sectionDefinitions) {
-			if (section.key === item.status) section.items.push(item)
+		if (activeFilter.value === 'all' || item.status === activeFilter.value) {
+			result.push(item)
 		}
 	}
-	return sectionDefinitions.filter((section) => section.items.length > 0)
+	return result
 })
 
 const goBack = () => { uni.navigateBack() }
 const selectFilter = (key: StatusKey) => { activeFilter.value = key }
-const isSectionCollapsed = (key: StatusKey): boolean => collapsedSections.value.indexOf(key) >= 0
-const toggleSection = (key: StatusKey) => {
-	const index = collapsedSections.value.indexOf(key)
-	if (index >= 0) {
-		collapsedSections.value.splice(index, 1)
-	} else {
-		collapsedSections.value.push(key)
-	}
-}
 const viewDetail = (item: ActivityItem) => {
 	uni.showToast({ title: `${item.title}详情 Demo`, icon: 'none' })
 }
@@ -192,68 +162,314 @@ const viewDetail = (item: ActivityItem) => {
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
-	background-color: var(--registration-bg);
-	color: var(--registration-text);
-	--registration-bg: #F3F5FA;
-	--registration-card: #FFFFFF;
-	--registration-text: #202332;
-	--registration-muted: #606575;
-	--registration-soft-muted: #747A8B;
-	--registration-line: #E6E8EE;
-	--registration-cyan: #A9D6D0;
-	--registration-cyan-deep: #2C807C;
-	--registration-cyan-soft: #E2F1EF;
-	--registration-pending: #FFCBAF;
-	--registration-pending-text: #BE7652;
-	--registration-success: #DCE8FF;
-	--registration-success-text: #334A83;
-	--registration-rejected: #EEDCDC;
-	--registration-rejected-text: #A76F6F;
-	--registration-checked: #FBEFD3;
-	--registration-checked-text: #8F6B2F;
+	background-color: var(--canvas);
+	color: var(--ink);
 }
-.top-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding-left: 32rpx; padding-right: 32rpx; box-sizing: border-box; background-color: var(--registration-card); border-bottom: 1px solid var(--registration-line); }
-.top-back,.top-more { width: 64rpx; height: 52rpx; display: flex; align-items: center; color: var(--registration-muted); }
-.top-back { justify-content: flex-start; font-size: 52rpx; line-height: 1; }
-.top-more { justify-content: flex-end; font-size: 34rpx; letter-spacing: 4rpx; }
-.top-title { color: var(--registration-text); font-size: 34rpx; font-weight: 600; }
-.content-scroll { flex: 1; min-height: 0; background-color: var(--registration-bg); }
-.content-inner { padding-top: 24rpx; }
-.filter-tabs { height: 88rpx; margin: 0 32rpx 28rpx; padding: 8rpx; display: flex; flex-direction: row; align-items: center; background-color: var(--registration-card); border: 1px solid var(--registration-line); border-radius: 44rpx; box-sizing: border-box; }
-.filter-tab { flex: 1; height: 72rpx; display: flex; align-items: center; justify-content: center; border-radius: 36rpx; color: var(--registration-muted); font-size: 22rpx; white-space: nowrap; }
-.filter-tab-active { color: var(--registration-cyan-deep); background-color: var(--registration-cyan); font-weight: 600; }
-.section-list { display: flex; flex-direction: column; gap: 28rpx; }
-.activity-section { display: flex; flex-direction: column; }
-.section-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin: 0 40rpx 16rpx; }
-.section-heading-main { display: flex; flex-direction: row; align-items: center; gap: 12rpx; }
-.section-title { color: var(--registration-text); font-size: 30rpx; font-weight: 600; }
-.section-count { width: 44rpx; height: 38rpx; display: flex; align-items: center; justify-content: center; border-radius: 19rpx; font-size: 22rpx; font-weight: 600; }
-.count-pending,.count-success,.count-rejected,.count-checked { color: var(--registration-cyan-deep); background-color: var(--registration-cyan-soft); }
-.section-toggle { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; border-radius: 28rpx; color: var(--registration-muted); background-color: #FFFFFF; border: 1px solid var(--registration-line); box-shadow: 0 2rpx 8rpx rgba(32, 35, 50, 0.06); }
-.section-toggle-collapsed { color: var(--registration-text); background-color: #F7F7FA; }
-.section-toggle-symbol { color: currentColor; font-family: Arial, sans-serif; font-size: 30rpx; font-weight: 600; line-height: 1; }
-.section-items { display: flex; flex-direction: column; }
-.activity-card { position: relative; margin-bottom: 16rpx; padding: 28rpx 32rpx; background-color: var(--registration-card); border: 1px solid var(--registration-line); border-radius: 32rpx; box-sizing: border-box; }
-.card-main { display: flex; flex-direction: row; align-items: flex-start; gap: 24rpx; }
-.poster-preview { flex-shrink: 0; width: 176rpx; height: 224rpx; padding: 24rpx 16rpx; display: flex; flex-direction: column; justify-content: space-between; border-radius: 24rpx; box-sizing: border-box; }
-.poster-pink { background-color: #1D1420; }
-.poster-sage { background-color: #AEB99A; }
-.poster-rose { background-color: #CDB1A9; }
-.poster-gold { background-color: #C9B8AC; }
-.poster-line { display: block; }
-.poster-line-primary { color: #FFFFFF; font-size: 27rpx; font-weight: 700; }
-.poster-line-secondary { color: #FF75C8; font-size: 22rpx; font-weight: 600; }
-.poster-sage .poster-line-secondary,.poster-rose .poster-line-secondary,.poster-gold .poster-line-secondary { color: #FFFFFF; }
-.poster-line-foot { color: #FFFFFF; font-size: 24rpx; font-weight: 600; }
-.card-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 22rpx; padding-top: 4rpx; }
-.activity-title { color: var(--registration-text); font-size: 31rpx; line-height: 1.3; font-weight: 700; }
-.activity-meta { color: var(--registration-muted); font-size: 24rpx; line-height: 1.35; }
-.fee-free { color: #D65C8B; font-weight: 600; }
-.fee-normal { color: var(--registration-muted); font-weight: 500; }
-.card-footer { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; margin-top: 28rpx; }
-.detail-button { flex-shrink: 0; width: 220rpx; height: 76rpx; display: flex; align-items: center; justify-content: center; border-radius: 38rpx; color: var(--registration-text); background-color: #F7F7FA; font-size: 27rpx; font-weight: 600; }
-.empty-state { margin: 96rpx 32rpx; padding: 72rpx 32rpx; display: flex; flex-direction: column; align-items: center; border-radius: 28rpx; background-color: var(--registration-card); }
-.empty-title { color: var(--registration-text); font-size: 30rpx; font-weight: 600; }
-.empty-copy { margin-top: 16rpx; color: var(--registration-muted); font-size: 24rpx; }
-.bottom-space { height: 48rpx; }
+
+/* ==================== 顶栏 ==================== */
+.top-bar {
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding-left: 40rpx;
+	padding-right: 40rpx;
+	box-sizing: border-box;
+}
+
+.top-back {
+	width: 68rpx;
+	height: 68rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 34rpx;
+	background-color: var(--surface);
+	border: 1px solid var(--line);
+	box-shadow: var(--shadow-sm);
+}
+
+.top-back text {
+	color: var(--ink);
+	font-size: 44rpx;
+	font-weight: 600;
+	line-height: 1;
+	margin-top: -4rpx;
+}
+
+.top-placeholder {
+	width: 68rpx;
+	height: 68rpx;
+}
+
+/* ==================== 滚动内容 ==================== */
+.content-scroll {
+	flex: 1;
+	min-height: 0;
+}
+
+.content-inner {
+	padding: 8rpx 40rpx 0;
+}
+
+/* ==================== 页头 ==================== */
+.page-head {
+	display: flex;
+	flex-direction: column;
+	padding: 20rpx 0 24rpx;
+}
+
+.page-title {
+	color: var(--ink);
+	font-family: var(--serif);
+	font-size: 56rpx;
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: 6rpx;
+}
+
+.page-sub {
+	margin-top: 14rpx;
+	color: var(--muted);
+	font-size: 24rpx;
+	letter-spacing: 2rpx;
+}
+
+/* ==================== 文字 Tab 筛选 ==================== */
+.filter-tabs {
+	display: flex;
+	flex-direction: row;
+	gap: 40rpx;
+	padding: 0 4rpx;
+	border-bottom: 1px solid var(--line);
+}
+
+.filter-tab {
+	padding: 18rpx 4rpx 22rpx;
+	position: relative;
+	color: var(--muted);
+	font-size: 26rpx;
+	white-space: nowrap;
+}
+
+.filter-tab-active {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.filter-tab-active::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: -1px;
+	height: 4rpx;
+	background-color: var(--accent);
+}
+
+/* ==================== 票根卡列表 ==================== */
+.ticket-list {
+	display: flex;
+	flex-direction: column;
+	gap: 32rpx;
+	padding: 36rpx 0 0;
+}
+
+.ticket-card {
+	position: relative;
+	background-color: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 20rpx;
+	box-shadow: var(--shadow-sm);
+}
+
+.notch {
+	position: absolute;
+	width: 36rpx;
+	height: 36rpx;
+	border-radius: 18rpx;
+	background-color: var(--canvas);
+	border: 1px solid var(--line);
+	bottom: 92rpx;
+	transform: translateY(50%);
+}
+
+.notch-left {
+	left: -20rpx;
+	border-left-color: transparent;
+}
+
+.notch-right {
+	right: -20rpx;
+	border-right-color: transparent;
+}
+
+.ticket-main {
+	display: flex;
+	flex-direction: row;
+	gap: 32rpx;
+	padding: 32rpx 36rpx 28rpx;
+}
+
+.date-block {
+	width: 140rpx;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.date-num {
+	color: var(--ink);
+	font-family: var(--serif);
+	font-size: 46rpx;
+	font-weight: 700;
+	line-height: 1.15;
+	letter-spacing: 1rpx;
+	font-variant-numeric: tabular-nums;
+}
+
+.date-week {
+	margin-top: 6rpx;
+	color: var(--muted);
+	font-size: 22rpx;
+	letter-spacing: 2rpx;
+}
+
+.ticket-copy {
+	flex: 1;
+	min-width: 0;
+	padding-right: 152rpx;
+}
+
+.ticket-title {
+	color: var(--ink);
+	font-size: 30rpx;
+	font-weight: 600;
+	line-height: 1.45;
+}
+
+.ticket-loc {
+	margin-top: 12rpx;
+	color: var(--muted);
+	font-size: 24rpx;
+	line-height: 1.5;
+}
+
+/* ==================== 状态图章 ==================== */
+.status-stamp {
+	position: absolute;
+	top: 28rpx;
+	right: 28rpx;
+	padding: 8rpx 16rpx;
+	border-radius: 8rpx;
+	border: 1px solid currentColor;
+}
+
+.status-stamp text {
+	font-size: 20rpx;
+	font-weight: 600;
+	letter-spacing: 4rpx;
+	color: currentColor;
+}
+
+.stamp-pending { color: var(--accent); background-color: rgba(45, 124, 114, 0.06); }
+.stamp-success { color: var(--sage); background-color: rgba(40, 119, 91, 0.07); }
+.stamp-rejected { color: var(--coral); background-color: rgba(201, 92, 88, 0.07); }
+.stamp-checked { color: var(--navy); background-color: rgba(24, 65, 93, 0.07); }
+
+/* ==================== 票根行 ==================== */
+.ticket-stub {
+	height: 92rpx;
+	border-top: 1px dashed var(--line);
+	padding: 0 36rpx;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	box-sizing: border-box;
+}
+
+.fee-wrap {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+}
+
+.fee-label {
+	color: var(--muted);
+	font-size: 20rpx;
+	letter-spacing: 2rpx;
+	margin-right: 12rpx;
+}
+
+.fee-value {
+	font-family: var(--serif);
+	font-size: 32rpx;
+	font-weight: 700;
+}
+
+.fee-free {
+	color: var(--sage);
+}
+
+.fee-paid {
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
+}
+
+.detail-link {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+.detail-link text {
+	color: var(--ink2);
+	font-size: 24rpx;
+	letter-spacing: 4rpx;
+}
+
+.detail-arrow {
+	color: var(--accent);
+	font-size: 26rpx;
+	margin-left: 8rpx;
+	letter-spacing: 0;
+}
+
+/* ==================== 空状态 ==================== */
+.empty-state {
+	margin: 96rpx 0;
+	padding: 72rpx 32rpx;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.empty-ring {
+	width: 96rpx;
+	height: 96rpx;
+	border: 1px solid var(--line);
+	border-radius: 48rpx;
+	margin-bottom: 28rpx;
+	background-color: var(--surface);
+}
+
+.empty-title {
+	color: var(--ink);
+	font-family: var(--serif);
+	font-size: 30rpx;
+	font-weight: 600;
+	letter-spacing: 2rpx;
+}
+
+.empty-copy {
+	margin-top: 14rpx;
+	color: var(--muted);
+	font-size: 24rpx;
+}
+
+.bottom-space {
+	height: 48rpx;
+}
 </style>

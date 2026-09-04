@@ -202,7 +202,7 @@ export function startIdealPartnerJourney(): Promise<IdealPartnerStartResponse> {
 	return request({
 		url: buildApiUrl('/ai/moxiang/journey/start?subject=ideal_partner'),
 		method: 'POST',
-		header: {
+		headers: {
 			'Idempotency-Key': 'mo-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36)
 		}
 	}).then((raw: any) => {

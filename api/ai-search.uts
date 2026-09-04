@@ -1,0 +1,250 @@
+const AI_API_URL = 'https://api.deepseek.com/chat/completions'
+const AI_API_KEY = 'sk-3924286d6f294858b6e11e82617e96a0'
+const AI_MODEL = 'deepseek-chat'
+let lastVariationIndex = -1
+
+function textValue(value: any): string {
+  return value == null ? '' : ('' + value).trim()
+}
+
+function responseText(payload: any): string {
+  if (payload == null) return ''
+  if (typeof payload == 'string') return payload.trim()
+  if (payload.output_text != null) return textValue(payload.output_text)
+  if (payload.text != null) return textValue(payload.text)
+  if (payload.content != null && typeof payload.content == 'string') return textValue(payload.content)
+  if (payload.message != null && typeof payload.message == 'object') {
+    const messageText = responseText(payload.message)
+    if (messageText != '') return messageText
+  }
+  if (payload.choices != null && Array.isArray(payload.choices) && payload.choices.length > 0) {
+    const choiceText = responseText(payload.choices[0])
+    if (choiceText != '') return choiceText
+  }
+  if (payload.output != null && Array.isArray(payload.output)) {
+    for (let index = 0; index < payload.output.length; index++) {
+      const item = payload.output[index]
+      const itemText = responseText(item)
+      if (itemText != '') return itemText
+    }
+  }
+  if (payload.delta != null) return responseText(payload.delta)
+  return ''
+}
+
+function errorText(data: any): string {
+  if (data == null) return 'AI 暂时不可用，请稍后重试'
+  if (data.detail != null) {
+    const detail = textValue(data.detail)
+    if (detail.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+    return detail
+  }
+  if (data.error != null) {
+    if (typeof data.error == 'string') {
+      const error = textValue(data.error)
+      if (error.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+      return error
+    }
+    if (data.error.message != null) {
+      const errorMessage = textValue(data.error.message)
+      if (errorMessage.toLowerCase().indexOf('invalid api key') >= 0) return 'AI 服务密钥无效，请检查配置'
+      return errorMessage
+    }
+  }
+  if (data.message != null) return textValue(data.message)
+  return 'AI 暂时不可用，请稍后重试'
+}
+
+function preferenceSource(preferences: any): any {
+  if (preferences == null || typeof preferences != 'object') return {}
+  if (preferences.preferences != null && typeof preferences.preferences == 'object') return preferences.preferences
+  if (preferences.data != null && typeof preferences.data == 'object') return preferences.data
+  return preferences
+}
+
+function validAge(value: any): number | null {
+  if (value == null || textValue(value) == '') return null
+  const age = Number(value)
+  return age >= 18 && age <= 100 ? Math.round(age) : null
+}
+
+function ageRangeText(preferences: any): string {
+  const source = preferenceSource(preferences)
+  const minimum = validAge(source.age_min)
+  const maximum = validAge(source.age_max)
+  if (minimum == null && maximum == null) return ''
+  return (minimum != null ? '' + minimum : '18') + '到' + (maximum != null ? '' + maximum : '60') + '岁'
+}
+
+function normalizeAgeOpening(value: string, preferences: any): string {
+  const range = ageRangeText(preferences)
+  if (range == '') return value
+  const firstEnd = value.indexOf('。')
+  const firstSentence = firstEnd >= 0 ? value.substring(0, firstEnd) : value
+  const remainder = firstEnd >= 0 ? value.substring(firstEnd) : ''
+  const agePattern = /(?:年龄s*)?(?:\d{1,3}\s*岁?\s*(?:到|至|-|~)\s*\d{1,3}\s*岁?|\d{1,3}\s*岁?\s*(?:以上|以下|起|及以内)|到\s*\d{1,3}\s*岁)/g
+  const cleanedSentence = firstSentence.replace(agePattern, '').replace(/^[\s，,、:：-]+/, '').trim()
+  return cleanedSentence == '' ? range + remainder : range + '，' + cleanedSentence + remainder
+}
+
+function singleSuggestion(value: string, preferences: any): string {
+  const paragraphs = value.split(/\r?\n\s*\r?\n/)
+  let suggestion = ''
+  for (let index = 0; index < paragraphs.length; index++) {
+    const paragraph = textValue(paragraphs[index])
+    if (paragraph != '') {
+      suggestion = paragraph
+      break
+    }
+  }
+  const cleaned = suggestion.replace(/\s+/g, ' ').replace(/^[-*•\d.、\s]+/, '').replace(/^(希望遇见|希望找一位|想找一位|想找一个|期待遇见|期待找一位)/, '').trim()
+  return normalizeAgeOpening(cleaned, preferences)
+}
+
+function hasNumber(value: any): boolean {
+  return value != null && textValue(value) != ''
+}
+
+function tagValues(value: any): string[] {
+  const values: string[] = []
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      const tag = textValue(value[index])
+      if (tag != '') values.push(tag)
+    }
+  }
+  return values
+}
+
+function joinedTags(value: any): string {
+  const values = tagValues(value)
+  return values.length > 0 ? values.join('、') : ''
+}
+
+function selectionTagText(profile: any): string {
+  if (profile.tag_selections == null || typeof profile.tag_selections != 'object') return ''
+  const values: string[] = []
+  const keys = Object.keys(profile.tag_selections)
+  for (let keyIndex = 0; keyIndex < keys.length; keyIndex++) {
+    const group = tagValues(profile.tag_selections[keys[keyIndex]])
+    for (let index = 0; index < group.length; index++) values.push(group[index])
+  }
+  return values.join('、')
+}
+
+function genderText(profile: any): string {
+  const gender = textValue(profile.gender)
+  if (gender == '1') return '男'
+  if (gender == '2') return '女'
+  return ''
+}
+
+function educationLabel(value: any): string {
+  if (!hasNumber(value)) return ''
+  const labels = ['', '博士', '硕士', '本科', '大专', '高中', '中专', '初中', '小学']
+  const index = Number(value)
+  return index >= 1 && index < labels.length ? labels[index] : ''
+}
+
+function heightRangeText(source: any): string {
+  if (!hasNumber(source.height_min) && !hasNumber(source.height_max)) return ''
+  const minText = hasNumber(source.height_min) ? Math.round(Number(source.height_min)) + 'cm' : ''
+  const maxText = hasNumber(source.height_max) ? Math.round(Number(source.height_max)) + 'cm' : ''
+  if (minText != '' && maxText != '') return minText + '到' + maxText
+  if (minText != '') return minText + '以上'
+  return maxText + '以下'
+}
+
+function profileContext(profile: any): string {
+  if (profile == null || typeof profile != 'object') return '（暂无资料）'
+  const lines: string[] = []
+  const gender = genderText(profile)
+  if (gender != '') lines.push('性别：' + gender)
+  const age = validAge(profile.age)
+  if (age != null) lines.push('年龄：' + age + '岁')
+  if (hasNumber(profile.height)) lines.push('身高：' + Math.round(Number(profile.height)) + 'cm')
+  const city = textValue(profile.city)
+  if (city != '') lines.push('所在城市：' + city)
+  const hometown = textValue(profile.hometown)
+  if (hometown != '') lines.push('家乡：' + hometown)
+  const job = textValue(profile.job)
+  if (job != '') lines.push('职业：' + job)
+  const school = textValue(profile.school)
+  if (school != '') lines.push('学校：' + school)
+  const mbti = textValue(profile.mbti)
+  if (mbti != '') lines.push('MBTI：' + mbti)
+  const intro = textValue(profile.self_intro) != '' ? textValue(profile.self_intro) : textValue(profile.introduction)
+  if (intro != '') lines.push('自我介绍：' + intro)
+  const interestTags = joinedTags(profile.interest_tags)
+  const personalityTags = joinedTags(profile.personality_tags)
+  lines.push('兴趣标签：' + (interestTags != '' ? interestTags : '未填写'))
+  lines.push('性格标签：' + (personalityTags != '' ? personalityTags : '未填写'))
+  if (interestTags == '' && personalityTags == '') {
+    const selections = selectionTagText(profile)
+    if (selections != '') lines.push('标签线索：' + selections)
+  }
+  return lines.join('\n')
+}
+
+function preferenceContext(preferences: any): string {
+  const source = preferenceSource(preferences)
+  const lines: string[] = []
+  const ageRange = ageRangeText(preferences)
+  lines.push('年龄：' + (ageRange != '' ? ageRange : '不限'))
+  const heightRange = heightRangeText(source)
+  lines.push('身高：' + (heightRange != '' ? heightRange : '不限'))
+  const education = educationLabel(source.education_min)
+  lines.push('最低学历：' + (education != '' ? education : '不限'))
+  lines.push('接受异地：' + (source.accept_long_distance == true ? '是' : '否'))
+  lines.push('接受跨省：' + (source.accept_cross_province == true ? '是' : '否'))
+  const extra = textValue(source.extra_requirement)
+  lines.push('其他要求：' + (extra != '' ? extra : '无'))
+  return lines.join('\n')
+}
+
+export async function generateIdealPartner(profile: any, preferences: any): Promise<any> {
+  const variationModes = ['先写性格与相处感受，再补基础条件', '先写兴趣与共同活动，再补性格和条件', '先写年龄身高等基础条件，再写相处期待', '先写生活节奏与边界感，再补兴趣和条件']
+  let variationIndex = Math.floor(Math.random() * variationModes.length)
+  if (variationModes.length > 1 && variationIndex == lastVariationIndex) variationIndex = (variationIndex + 1) % variationModes.length
+  lastVariationIndex = variationIndex
+  const variationMode = variationModes[variationIndex]
+  const prompt = '请为下面这位用户生成一段填写在婚恋搜索框中的理想对象条件，必须个性化：内容要能看出是这位用户在找什么样的人，而不是通用模板。第一句必须直接从完整的年龄范围开始，例如“18到23岁”或“18岁到60岁”，不能只写“到60岁”“23岁以下”或省略另一端；年龄范围以“择偶标准”为准，标准里只给上限就把下限补为18岁，只给下限就把上限补为60岁，完全没提就写18到60岁。身高、学历、异地跨省和其他要求同样只能取自“择偶标准”，标准里没有的项一律不要出现，禁止编造或补写任何数字和条件。第二、三句必须从该用户的“兴趣标签”“性格标签”中挑真实存在的标签，转写成希望与对方一起做的具体活动或相处方式，例如兴趣有音乐就写一起听歌、看演出或分享歌单，性格有耐心就写相处节奏平和、遇事好商量；资料里有自我介绍时可提炼一两个关键词作补充；两类标签都未填写时，只写不依赖具体爱好的相处期待，仍然禁止编造爱好。地域期待可参考“接受异地”“接受跨省”：都不接受就倾向同城或同省。禁止用“希望遇见”“想找”“期待”“理想伴侣”等主观开头，不要写“年龄：”“身高：”这类冒号标签，也不要写“我来自”“我的资料是”等自我介绍。整体必须是类似“18到23岁，身高160cm以上，本科以上学历。性格活泼开朗，喜欢音乐，能一起玩乐器或分享歌单。为人务实靠谱，独立且有边界感，尊重彼此空间。”的条件式、分句列举写法。本次结构：' + variationMode + '。尤其是前两句必须每次换一种说法和排列方式，同一含义不要反复使用相同句子或固定开头，每次都要重新组织语言、重点和句式，不要照搬模板。长度在50到75字之间自然变化。只能生成一个候选，不得提供第二个版本、备选、换行或分段，不承诺关系结果，语气真诚具体。只输出内容本身，不要标题、引号、Markdown、解释或免责声明。\n\n【用户资料】\n' + profileContext(profile) + '\n\n【择偶标准】\n' + preferenceContext(preferences)
+  return new Promise<any>((resolve) => {
+    uni.request({
+      url: AI_API_URL,
+      method: 'POST',
+      data: {
+        model: AI_MODEL,
+        messages: [
+          { role: 'system', content: '你是婚恋搜索助手，根据用户的资料、兴趣性格标签和择偶标准，为其生成个性化的理想对象搜索条件，只使用提供的真实数据，不编造。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 1.0,
+        max_tokens: 220
+      },
+      header: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + AI_API_KEY
+      },
+      timeout: 30000,
+      success: (res: any) => {
+        const status = res.statusCode != null ? Number(res.statusCode) : 0
+        const raw = res.data
+        if (status < 200 || status >= 300) {
+          resolve({ success: false, data: null, code: status, message: errorText(raw) })
+          return
+        }
+        const generated = singleSuggestion(responseText(raw).replace(/^['"“”]+|['"“”]+$/g, '').trim(), preferences)
+        if (generated == '') {
+          resolve({ success: false, data: null, code: -1, message: 'AI 返回内容为空，请稍后重试' })
+          return
+        }
+        resolve({ success: true, data: generated, code: 0, message: 'success' })
+      },
+      fail: (error: any) => {
+        console.error('[AI Search] request failed', error)
+        resolve({ success: false, data: null, code: -1, message: 'AI 暂时不可用，请稍后重试' })
+      }
+    })
+  })
+}

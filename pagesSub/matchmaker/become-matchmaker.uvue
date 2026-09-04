@@ -2,16 +2,95 @@
 	<view class="become-page">
 		<!-- 顶部导航栏 -->
 		<view class="nav-bar">
-			<view class="nav-back" @click="goBack">
+			<view class="nav-back" @click="handlePageBack">
 				<view class="nav-back-chevron"></view>
 			</view>
-			<text class="nav-title">我要做红娘</text>
-			<view class="nav-help" @click="showHelp">
+			<text class="nav-title">{{ pendingReviewVisible ? '资料待审' : (workspaceVisible ? workspaceTitle : (managementCenterVisible || managementCenterLoading ? '红娘管理中心' : '我要做红娘')) }}</text>
+			<view v-if="pendingReviewVisible || workspaceVisible" class="nav-help" @click="closeWorkspace">
+				<text class="nav-help-text">返回</text>
+			</view>
+			<view v-else-if="managementCenterVisible" class="nav-help" @click="exitManagementCenter">
+				<text class="nav-help-text">退出</text>
+			</view>
+			<view v-else-if="!managementCenterLoading" class="nav-help" @click="showHelp">
 				<text class="nav-help-text">帮助</text>
 			</view>
 		</view>
 
-		<scroll-view scroll-y class="page-scroller" :show-scrollbar="false">
+		<MatchmakerPendingReview
+			v-if="pendingReviewVisible"
+			@action="handleManagementCenterAction"
+		/>
+		<scroll-view v-else-if="workspaceVisible" scroll-y class="workspace-scroller" :show-scrollbar="false">
+			<view class="workspace-content">
+				<view class="workspace-heading">
+					<text class="workspace-title">{{ workspaceTitle }}</text>
+					<text class="workspace-copy">仅展示服务端已提供的数据，未开放能力不会创建本地记录。</text>
+				</view>
+				<view class="workspace-tabs">
+					<view v-for="item in workspaceTabs" :key="item" class="workspace-tab" :class="{ active: workspaceActiveTab == item }" @click="selectWorkspaceTab(item)"><text>{{ item }}</text></view>
+				</view>
+				<view class="workspace-search"><text>搜</text><input :placeholder="workspaceSearchPlaceholder" :value="workspaceKeyword" @input="onWorkspaceKeywordInput"/><view @click="runWorkspaceSearch"><text>搜索</text></view></view>
+
+				<view v-if="workspaceKind == 'commission'">
+					<view class="workspace-cash"><text>资金结算</text><text class="workspace-cash-value">--</text><text>分成、账本和提现不在本期范围内。</text></view>
+					<view class="workspace-notice"><text class="workspace-notice-title">温馨提示</text><text>专属推广链接与海报将在后端配置后开放。</text></view>
+					<view v-for="row in workspaceCommissionRows" :key="row.time" class="workspace-commission-row"><text>{{ row.time }}</text><view><image :src="row.avatar" mode="aspectFill"/><view><text>{{ row.name }}</text><text>{{ row.item }}</text></view><text>{{ row.amount }}</text></view></view>
+				</view>
+
+				<view v-else-if="workspaceKind == 'lead'">
+					<view class="workspace-notice"><text>超级红娘可查看全部客源线索，普通红娘仅查看已分派的客源。</text></view>
+					<view v-for="row in workspaceLeads" :key="row.id" class="workspace-info-card"><text>{{ row.name }} · {{ row.gender }}</text><text class="workspace-muted">录入时间：{{ row.time }}</text><view><text>电话</text><text>{{ row.phone }}</text></view><view><text>微信</text><text>{{ row.wechat }}</text></view><view><text>来源</text><text>{{ row.source }}</text></view><view><text>分派跟进</text><text>{{ row.owner }}</text></view><view class="workspace-actions"><text @click="showToast('已打开编辑资料')">编辑</text><text @click="copyWorkspaceText(row.phone)">复制资料</text><text @click="showToast('已放入弃海')">放入弃海</text><text @click="showToast('已一键入库，进入资料待审')">一键入库</text></view></view>
+				</view>
+
+				<view v-else-if="workspaceKind == 'match'">
+					<view class="workspace-filter-note"><text>已选：优先显示我服务的</text></view>
+					<view v-for="row in workspaceMatches" :key="row.id" class="workspace-match-card"><view><text>申请时间：{{ row.time }}</text><text>{{ row.status }}</text></view><view class="workspace-match-person"><image :src="row.a.avatar" mode="aspectFill"/><view><text>{{ row.a.name }} · {{ row.a.gender }}</text><text>编号：{{ row.a.id }}</text></view><text @click="showToast('联系信息已打开')">联系 Ta</text></view><view class="workspace-match-person"><image :src="row.b.avatar" mode="aspectFill"/><view><text>{{ row.b.name }} · {{ row.b.gender }}</text><text>编号：{{ row.b.id }}</text></view><text @click="showToast('联系信息已打开')">联系 Ta</text></view><text>服务红娘：芷希老师</text></view>
+				</view>
+
+				<view v-else-if="workspaceKind == 'entry'" class="workspace-entry-card"><text>{{ workspaceTitle }}</text><text class="workspace-muted">录入会员、牵线和约见需等待对应服务端流程开放；当前不会保存本地模拟记录。</text></view>
+
+				<view v-else-if="workspaceKind == 'member'">
+					<view v-for="member in workspaceMembers" :key="member.id" class="workspace-info-card"><view class="workspace-member-header"><image :src="member.avatar" mode="aspectFill"/><view><text>{{ member.name }} · {{ member.gender }}</text><text>编号：{{ member.id }} · {{ member.type }}</text></view></view><view><text>服务红娘</text><text>{{ member.owner }}</text></view><view><text>资料状态</text><text>{{ member.status }}</text></view><view class="workspace-actions"><text @click="showToast('已打开会员资料')">详细资料</text><text @click="showToast('已打开服务跟进')">服务跟进</text><text @click="showToast('已打开牵线记录')">牵线记录</text></view></view>
+				</view>
+
+				<view v-else-if="workspaceKind == 'activity'">
+					<view v-for="activity in workspaceActivities" :key="activity.title" class="workspace-info-card"><text>{{ activity.title }}</text><text class="workspace-muted">{{ activity.time }} · {{ activity.city }}</text><view><text>报名人数</text><text>{{ activity.count }} 人</text></view><view><text>审核状态</text><text>{{ activity.status }}</text></view><view class="workspace-actions"><text @click="showToast('已打开报名名单')">报名名单</text><text @click="showToast('已打开活动编辑')">编辑</text><text @click="showToast('报名审核已保存')">报名审核</text></view></view>
+				</view>
+
+				<view v-else-if="workspaceKind == 'video'" class="workspace-info-card"><text>视频管理</text><text class="workspace-muted">该能力尚未在移动工作台开放。</text></view>
+
+				<view v-else-if="workspaceKind == 'account'" class="workspace-info-card"><text>我的账号</text><text class="workspace-muted">账号昵称、身份范围与安全设置由服务端账号资料管理。</text></view>
+
+				<view v-else><view v-for="row in workspaceGenericRows" :key="row.title" class="workspace-generic-card"><view><text>{{ row.icon }}</text></view><view><text>{{ row.title }}</text><text>{{ row.desc }}</text></view><text @click="showToast(row.action)">{{ row.action }} ></text></view></view>
+			</view>
+			<view class="workspace-add" @click="showToast('新增记录表单已打开')"><text>+</text><text>添加</text></view>
+		</scroll-view>
+		<MatchmakerManagementCenter
+			v-else-if="managementCenterVisible && managementCenterSnapshot != null"
+			:snapshot="managementCenterSnapshot"
+			@exit="exitManagementCenter"
+			@refresh="refreshManagementCenter"
+			@identity="openMatchmakerIdentity"
+			@action="handleManagementCenterAction"
+		/>
+		<view v-else-if="managementCenterLoading" class="management-center-loading">
+			<view class="management-loading-card management-loading-identity"></view>
+			<view class="management-loading-tabs">
+				<view class="management-loading-pill"></view>
+				<view class="management-loading-pill"></view>
+				<view class="management-loading-pill short"></view>
+			</view>
+			<view class="management-loading-heading"></view>
+			<view class="management-loading-grid">
+				<view class="management-loading-card"></view>
+				<view class="management-loading-card"></view>
+				<view class="management-loading-card"></view>
+				<view class="management-loading-card"></view>
+			</view>
+		</view>
+
+		<scroll-view v-else scroll-y class="page-scroller" :show-scrollbar="false">
 			<view class="page-content">
 				<!-- Banner 宣传区域 -->
 				<view class="banner-card">
@@ -19,6 +98,23 @@
 						<text class="banner-kicker">红娘招募</text>
 						<text class="banner-title">用你的真诚经验，帮助更多人稳稳靠近幸福</text>
 						<text class="banner-desc">提交资料后，平台将尽快联系你确认服务信息。</text>
+					</view>
+				</view>
+
+				<!-- 服务端确认服务红娘角色有效后即可进入；本期不以支付作为门槛。 -->
+				<view class="management-entry" :class="{ ready: canEnterManagementCenter }">
+					<view class="management-entry-copy">
+					<view class="management-entry-title-row">
+						<text class="management-entry-title">红娘管理中心</text>
+					</view>
+						<text class="management-entry-desc">{{ managementAccessDescription }}</text>
+					</view>
+					<view
+						class="management-entry-action"
+						:class="{ disabled: !canEnterManagementCenter || managementAccessLoading || managementCenterLoading }"
+						@click="openManagementCenter"
+					>
+						<text>{{ managementAccessActionText }}</text>
 					</view>
 				</view>
 
@@ -250,7 +346,7 @@
 		</scroll-view>
 
 		<!-- 底部提交按钮 -->
-		<view class="footer-safe">
+		<view v-if="!pendingReviewVisible && !workspaceVisible && !managementCenterVisible && !managementCenterLoading" class="footer-safe">
 			<view
 				class="submit-button"
 				:class="{ disabled: !canSubmit || submitting }"
@@ -266,7 +362,13 @@
 
 <script setup lang="uts">
 import XsaToast from '@/components/XsaToast.uvue'
-import { submitMatchmakerApplication } from '@/api'
+import MatchmakerManagementCenter from '@/components/MatchmakerManagementCenter.uvue'
+import MatchmakerPendingReview from '@/components/MatchmakerPendingReview.uvue'
+import {
+	getMatchmakerManagementCenterAccess,
+	getMatchmakerManagementCenterSnapshot,
+	submitMatchmakerApplication
+} from '@/api'
 
 // ===== 基本信息 =====
 const realName = ref('')
@@ -292,6 +394,38 @@ const toastVisible = ref(false)
 const toastMessage = ref('')
 const qrVisible = ref(false)
 const currentStep = ref(0)
+const managementAccess = ref<any>(null)
+const managementCenterSnapshot = ref<any>(null)
+const managementAccessLoading = ref(true)
+const managementCenterLoading = ref(false)
+const managementCenterVisible = ref(false)
+const pendingReviewVisible = ref(false)
+const workspaceVisible = ref(false)
+const workspaceTitle = ref('')
+const workspaceKind = ref('general')
+const workspaceActiveTab = ref('全部')
+const workspaceKeyword = ref('')
+const workspaceDefaultTabs = ['全部', '进行中', '已完成']
+const workspaceCommissionTabs = ['分成明细', '分成标准']
+const workspaceLeadTabs = ['客源线索', '弃海客源']
+const workspaceMatchTabs = ['全部', '待牵线', '牵线中', '成功', '失败']
+const workspaceTabs = computed(() => {
+	if (workspaceKind.value == 'commission') return workspaceCommissionTabs
+	if (workspaceKind.value == 'lead') return workspaceLeadTabs
+	if (workspaceKind.value == 'match') return workspaceMatchTabs
+	return workspaceDefaultTabs
+})
+const workspaceSearchPlaceholder = computed(() => {
+	if (workspaceKind.value == 'lead') return '请输入昵称、手机或微信'
+	if (workspaceKind.value == 'match') return '请输入申请人昵称、姓名或编号'
+	return '请输入关键词'
+})
+const workspaceCommissionRows: any[] = []
+const workspaceLeads: any[] = []
+const workspaceMatches: any[] = []
+const workspaceMembers: any[] = []
+const workspaceActivities: any[] = []
+const workspaceGenericRows: any[] = []
 
 const specialtyOptions = [
 	'高知青年', '同城牵线', '离异再婚', '大龄脱单',
@@ -321,11 +455,203 @@ const canSubmit = computed(() => {
 		&& isValidOptionalPrice()
 })
 
+const canEnterManagementCenter = computed(() => {
+	return managementAccess.value != null && managementAccess.value.canAccess == true
+})
+
+const managementAccessDescription = computed(() => {
+	if (managementAccessLoading.value) return '正在核验服务红娘开通状态…'
+	if (managementAccess.value == null) return '暂时无法核验开通状态，请稍后重试。'
+	if (canEnterManagementCenter.value) {
+		return '服务开通已确认，可进入工作台处理门店服务事项。'
+	}
+	if (managementAccess.value.roleStatus != 'active') return '服务红娘申请审核通过并激活后，即可进入管理中心。'
+	return managementAccess.value.message != null && String(managementAccess.value.message).length > 0
+		? String(managementAccess.value.message)
+		: '当前账号暂未获得管理中心权限。'
+})
+
+const managementAccessActionText = computed(() => {
+	if (managementAccessLoading.value) return '核验中'
+	if (managementCenterLoading.value) return '进入中'
+	if (canEnterManagementCenter.value) return '进入中心'
+	return '暂不可进入'
+})
+
 // ===== Toast =====
 const showToast = (msg: string) => {
 	toastMessage.value = msg
 	toastVisible.value = true
 }
+
+const selectWorkspaceTab = (tab: string) => {
+	workspaceActiveTab.value = tab
+}
+
+const onWorkspaceKeywordInput = (event: any) => {
+	workspaceKeyword.value = event.detail.value
+}
+
+const runWorkspaceSearch = () => {
+	if (workspaceKeyword.value.trim().length == 0) {
+		showToast('请输入搜索关键词')
+		return
+	}
+	showToast('该工作台能力正在接入服务端数据')
+}
+
+const copyWorkspaceText = (value: string) => {
+	uni.setClipboardData({
+		data: value,
+		success: () => showToast('已复制')
+	})
+}
+
+const copyWorkspaceLink = () => { showToast('专属推广链接尚未开放') }
+
+const loadManagementAccess = async () => {
+	managementAccessLoading.value = true
+	try {
+		const result = await getMatchmakerManagementCenterAccess()
+		if (result.success && result.data != null) {
+			managementAccess.value = result.data
+		} else {
+			managementAccess.value = null
+		}
+	} catch (e) {
+		managementAccess.value = null
+	} finally {
+		managementAccessLoading.value = false
+	}
+}
+
+const openManagementCenter = async () => {
+	if (managementAccessLoading.value || managementCenterLoading.value) return
+	if (!canEnterManagementCenter.value) {
+		showToast(managementAccessDescription.value)
+		return
+	}
+	try {
+		managementCenterLoading.value = true
+		const result = await getMatchmakerManagementCenterSnapshot()
+		if (result.success && result.data != null) {
+			managementCenterSnapshot.value = result.data
+			managementCenterVisible.value = true
+		} else {
+			showToast(result.message != null ? String(result.message) : '工作台加载失败，请稍后重试')
+		}
+	} catch (e) {
+		showToast('工作台加载失败，请检查网络后重试')
+	} finally {
+		managementCenterLoading.value = false
+	}
+}
+
+const exitManagementCenter = () => {
+	pendingReviewVisible.value = false
+	workspaceVisible.value = false
+	managementCenterVisible.value = false
+}
+
+const openPendingReview = () => {
+	if (!managementCenterVisible.value) return
+	pendingReviewVisible.value = true
+}
+
+const closePendingReview = () => {
+	pendingReviewVisible.value = false
+}
+
+const closeWorkspace = () => {
+	if (pendingReviewVisible.value) {
+		closePendingReview()
+		return
+	}
+	workspaceVisible.value = false
+}
+
+const openWorkspace = (title: string, kind: string) => {
+	workspaceTitle.value = title
+	workspaceKind.value = kind
+	workspaceActiveTab.value = kind == 'commission' ? '分成明细' : (kind == 'lead' ? '客源线索' : '全部')
+	workspaceKeyword.value = ''
+	workspaceVisible.value = true
+}
+
+const refreshManagementCenter = async () => {
+	await loadManagementAccess()
+	if (!canEnterManagementCenter.value) {
+		exitManagementCenter()
+		showToast('当前开通状态已变化，已返回申请页')
+		return
+	}
+	try {
+		const result = await getMatchmakerManagementCenterSnapshot()
+		if (result.success && result.data != null) {
+			managementCenterSnapshot.value = result.data
+			showToast('工作台已刷新')
+		} else {
+			showToast(result.message != null ? String(result.message) : '工作台刷新失败')
+		}
+	} catch (e) {
+		showToast('工作台刷新失败，请检查网络后重试')
+	}
+}
+
+const handleManagementCenterAction = (name: string) => {
+	if (name == '资料待审') {
+		openPendingReview()
+		return
+	}
+	if (name == '分成明细' || name == '查看分成明细' || name == '财务明细' || name == '查看财务明细') {
+		openWorkspace(name.indexOf('财务') >= 0 ? '财务明细' : '线上分成', 'commission')
+		return
+	}
+	if (name == '录入线索' || name == '录入会员') {
+		openWorkspace(name == '录入线索' ? '录入客源线索' : '录入会员', 'entry')
+		return
+	}
+	if (name.indexOf('客源') >= 0) {
+		openWorkspace('客源线索', 'lead')
+		return
+	}
+	if (name.indexOf('牵线') >= 0 || name.indexOf('约见') >= 0 || name.indexOf('约会') >= 0 || name == '添加牵线' || name == '安排约见') {
+		openWorkspace(name == '查看牵线记录' ? '牵线管理' : name, 'match')
+		return
+	}
+	if (name.indexOf('推广') >= 0 || name.indexOf('海报') >= 0 || name.indexOf('链接') >= 0) {
+		openWorkspace('专属推广工具', 'commission')
+		return
+	}
+	if (name.indexOf('活动') >= 0) {
+		openWorkspace(name, 'activity')
+		return
+	}
+	if (name.indexOf('会员') >= 0 || name.indexOf('我服务的') >= 0) {
+		openWorkspace(name.replace('查看', ''), 'member')
+		return
+	}
+	if (name.indexOf('视频') >= 0) {
+		openWorkspace('视频管理', 'video')
+		return
+	}
+	if (name.indexOf('账号') >= 0) {
+		openWorkspace('我的账号', 'account')
+		return
+	}
+	openWorkspace(name.replace('查看', ''), 'general')
+}
+
+const openMatchmakerIdentity = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/certification',
+		fail: () => showToast('个人身份信息打开失败，请稍后重试')
+	})
+}
+
+onShow(() => {
+	if (!managementCenterVisible.value && !pendingReviewVisible.value && !workspaceVisible.value) loadManagementAccess()
+})
 
 const guideToRequiredVerification = (message: string) => {
 	const needsPhone = message.indexOf('绑定手机号') >= 0
@@ -355,6 +681,18 @@ const showExistingApplication = () => {
 // ===== 导航 =====
 const goBack = () => {
 	uni.navigateBack()
+}
+
+const handlePageBack = () => {
+	if (pendingReviewVisible.value) {
+		closePendingReview()
+		return
+	}
+	if (workspaceVisible.value) {
+		closeWorkspace()
+		return
+	}
+	goBack()
 }
 
 const showHelp = () => {
@@ -526,9 +864,8 @@ const submitApplication = async () => {
 
 		if (result.success) {
 			const applicationId = result.data != null && result.data.id != null ? String(result.data.id) : ''
-			const isMock = result.data != null && result.data.source == 'mock'
 			uni.redirectTo({
-				url: '/pagesSub/matchmaker/application-success?type=service_matchmaker&id=' + applicationId + '&mock=' + (isMock ? '1' : '0')
+				url: '/pagesSub/matchmaker/application-success?type=service_matchmaker&id=' + applicationId
 			})
 		} else {
 			const message = result.message != null ? String(result.message) : '提交失败，请稍后重试'
@@ -559,8 +896,9 @@ const submitApplication = async () => {
 /* ===== 导航栏 ===== */
 .nav-bar {
 	position: relative;
-	height: 88rpx;
-	padding: 0 12rpx;
+	height: calc(88rpx + var(--status-bar-height));
+	padding: var(--status-bar-height) 12rpx 0;
+	box-sizing: border-box;
 	background: var(--paper);
 	display: flex;
 	flex-direction: row;
@@ -573,7 +911,7 @@ const submitApplication = async () => {
 .nav-back {
 	position: absolute;
 	left: 12rpx;
-	top: 16rpx;
+	top: calc(var(--status-bar-height) + 16rpx);
 	width: 64rpx;
 	height: 56rpx;
 	display: flex;
@@ -591,8 +929,19 @@ const submitApplication = async () => {
 }
 
 .nav-title {
+	position: absolute;
+	left: 120rpx;
+	right: 120rpx;
+	top: calc(var(--status-bar-height) + 22rpx);
+	display: block;
+	min-width: 0;
+	line-height: 1.3;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	font-size: 34rpx;
-	font-family: var(--serif);
+	font-family: var(--sans);
 	font-weight: 700;
 	color: var(--ink);
 }
@@ -600,7 +949,7 @@ const submitApplication = async () => {
 .nav-help {
 	position: absolute;
 	right: 20rpx;
-	top: 22rpx;
+	top: calc(var(--status-bar-height) + 22rpx);
 	height: 44rpx;
 	padding: 0 14rpx;
 	border-radius: 999rpx;
@@ -615,6 +964,27 @@ const submitApplication = async () => {
 }
 
 /* ===== 滚动区域 ===== */
+.workspace-scroller { flex: 1; height: 0; background: var(--review-canvas); }
+.workspace-content { min-height: 100%; padding: 20rpx 22rpx 130rpx; background: var(--review-canvas); }
+.workspace-heading { padding: 8rpx 4rpx 18rpx; display: flex; flex-direction: column; gap: 5rpx; }
+.workspace-title { font-size: 32rpx; font-weight: 800; color: var(--ink); }.workspace-copy,.workspace-muted { font-size: 20rpx; color: var(--muted); }
+.workspace-tabs { height: 74rpx; display: flex; background: var(--surface); border-radius: 18rpx 18rpx 0 0; }.workspace-tab { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; font-size: 21rpx; white-space: nowrap; }.workspace-tab.active { color: var(--review-deep); font-weight: 800; }.workspace-tab.active:after { content: ''; position: absolute; bottom: 0; width: 42rpx; height: 6rpx; border-radius: 99rpx; background: var(--review-purple); }
+.workspace-search { height: 70rpx; margin: 18rpx 0; padding: 0 7rpx 0 18rpx; background: var(--surface); border-radius: 18rpx; display: flex; align-items: center; gap: 10rpx; font-size: 30rpx; color: var(--muted); }.workspace-search input { flex: 1; min-width: 0; font-size: 22rpx; color: var(--ink); }.workspace-search > view { width: 92rpx; height: 56rpx; border-radius: 14rpx; background: var(--review-purple); color: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 21rpx; }
+.workspace-cash { min-height: 254rpx; padding: 30rpx; position: relative; border-radius: 28rpx; background: var(--review-pink); display: flex; flex-direction: column; gap: 12rpx; color: var(--ink2); font-size: 23rpx; }.workspace-cash-value { font-size: 56rpx; color: var(--ink); font-weight: 800; }.workspace-cash > view { position: absolute; top: 40rpx; right: 26rpx; padding: 14rpx 24rpx; border-radius: 999rpx; background: var(--surface); color: var(--review-deep); font-size: 21rpx; font-weight: 800; }
+.workspace-notice,.workspace-promotion { margin-top: 20rpx; padding: 22rpx; border-radius: 24rpx; background: var(--surface); display: flex; flex-direction: column; gap: 10rpx; color: var(--ink2); font-size: 21rpx; line-height: 1.55; }.workspace-notice-title { font-size: 25rpx; color: var(--ink); font-weight: 800; }.workspace-promotion { background: var(--review-lilac); color: var(--review-deep); font-weight: 800; }.workspace-promotion > view { display: flex; gap: 12rpx; }.workspace-promotion > view text { flex: 1; padding: 12rpx 8rpx; border-radius: 999rpx; background: var(--surface); text-align: center; font-size: 19rpx; }
+.workspace-commission-row { margin-top: 18rpx; color: var(--muted); font-size: 20rpx; }.workspace-commission-row > view { margin-top: 8rpx; padding: 20rpx; border-radius: 22rpx; background: var(--surface); display: flex; align-items: center; gap: 16rpx; }.workspace-commission-row image,.workspace-member-header image,.workspace-match-person image { width: 60rpx; height: 60rpx; border-radius: 50%; }.workspace-commission-row > view > view { flex: 1; display: flex; flex-direction: column; gap: 4rpx; color: var(--ink); font-size: 21rpx; }.workspace-commission-row > view > view text:last-child { color: var(--muted); font-size: 19rpx; }.workspace-commission-row > view > text:last-child { color: var(--review-danger); font-size: 27rpx; font-weight: 800; }
+.workspace-info-card,.workspace-match-card { margin-top: 18rpx; padding: 22rpx; border-radius: 25rpx; background: var(--surface); display: flex; flex-direction: column; gap: 16rpx; color: var(--ink); font-size: 28rpx; font-weight: 800; }.workspace-info-card > view:not(.workspace-actions):not(.workspace-member-header) { padding-bottom: 13rpx; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--ink2); font-size: 21rpx; font-weight: 400; }.workspace-info-card > view:not(.workspace-actions):not(.workspace-member-header) text:last-child { color: var(--ink); }.workspace-actions { display: flex; gap: 9rpx; }.workspace-actions text { flex: 1; padding: 12rpx 4rpx; border-radius: 10rpx; background: var(--review-soft); color: var(--review-deep); text-align: center; font-size: 18rpx; font-weight: 400; }
+.workspace-filter-note { padding: 12rpx; color: var(--review-deep); font-size: 22rpx; }.workspace-match-card { font-size: 21rpx; font-weight: 400; }.workspace-match-card > view:first-child { display: flex; justify-content: space-between; color: var(--muted); }.workspace-match-card > view:first-child text:last-child { color: var(--review-orange); }.workspace-match-person { min-height: 64rpx; display: flex; align-items: center; gap: 14rpx; }.workspace-match-person > view { flex: 1; display: flex; flex-direction: column; gap: 4rpx; }.workspace-match-person > view text:last-child { color: var(--muted); font-size: 19rpx; }.workspace-match-person > text { padding: 10rpx; border-radius: 9rpx; background: var(--review-lilac); color: var(--review-deep); font-size: 18rpx; }
+.workspace-member-header { display: flex; align-items: center; gap: 15rpx; }.workspace-member-header > view { display: flex; flex-direction: column; gap: 6rpx; color: var(--muted); font-size: 20rpx; font-weight: 400; }.workspace-member-header > view text:first-child { color: var(--ink); font-size: 28rpx; font-weight: 800; }
+.workspace-entry-card { margin-top: 18rpx; padding: 26rpx; border-radius: 25rpx; background: var(--surface); display: flex; flex-direction: column; gap: 18rpx; color: var(--ink); font-size: 28rpx; font-weight: 800; }.workspace-entry-card > view:not(.workspace-entry-submit) { min-height: 72rpx; padding-bottom: 12rpx; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20rpx; color: var(--ink2); font-size: 22rpx; font-weight: 400; }.workspace-entry-card input { flex: 1; text-align: right; font-size: 22rpx; color: var(--ink); }.workspace-entry-submit { height: 72rpx; border-radius: 999rpx; background: var(--review-pink); display: flex; align-items: center; justify-content: center; color: var(--ink); font-size: 24rpx; font-weight: 800; }
+.workspace-generic-card { margin-top: 18rpx; padding: 24rpx; border-radius: 22rpx; background: var(--surface); display: flex; align-items: center; gap: 16rpx; }.workspace-generic-card > view:first-child { width: 58rpx; height: 58rpx; border-radius: 16rpx; background: var(--review-lilac); color: var(--review-deep); display: flex; align-items: center; justify-content: center; font-size: 25rpx; }.workspace-generic-card > view:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 4rpx; }.workspace-generic-card > view:nth-child(2) text:first-child { font-size: 24rpx; font-weight: 800; }.workspace-generic-card > view:nth-child(2) text:last-child { color: var(--muted); font-size: 18rpx; }.workspace-generic-card > text:last-child { color: var(--review-deep); font-size: 20rpx; }
+.workspace-add { position: fixed; right: 22rpx; bottom: 38rpx; width: 84rpx; height: 84rpx; border-radius: 50%; background: var(--review-pink); display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--ink); font-size: 17rpx; font-weight: 800; box-shadow: var(--shadow-sm); }.workspace-add text:first-child { font-size: 30rpx; line-height: 28rpx; }
+
+/* 微信小程序 uvue 必须显式标记横向 flex，避免文字与操作按钮纵向叠压。 */
+.workspace-tabs, .workspace-search, .workspace-promotion > view, .workspace-commission-row > view, .workspace-info-card > view:not(.workspace-actions):not(.workspace-member-header), .workspace-actions, .workspace-match-card > view:first-child, .workspace-match-person, .workspace-member-header, .workspace-entry-card > view:not(.workspace-entry-submit), .workspace-generic-card { flex-direction: row; }
+.workspace-tabs, .workspace-search, .workspace-actions, .workspace-match-person, .workspace-member-header, .workspace-generic-card { min-width: 0; }
+.workspace-info-card > view, .workspace-match-person > view, .workspace-member-header > view, .workspace-generic-card > view { min-width: 0; }
+
 .page-scroller {
 	flex: 1;
 	height: 0;
@@ -668,6 +1038,135 @@ const submitApplication = async () => {
 	font-size: 21rpx;
 	line-height: 1.55;
 	color: var(--ink2);
+}
+
+/* ===== 红娘管理中心入口 ===== */
+.management-entry {
+	padding: 26rpx;
+	border: 1px solid var(--line);
+	border-radius: 20rpx;
+	background: var(--warm);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18rpx;
+}
+
+.management-entry.ready {
+	background: var(--match-mist);
+	border-color: var(--accent);
+}
+
+.management-entry-copy {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8rpx;
+}
+
+.management-entry-title-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 10rpx;
+}
+
+.management-entry-title {
+	font-size: 28rpx;
+	font-weight: 800;
+	color: var(--ink);
+}
+
+.management-demo-badge {
+	padding: 4rpx 10rpx;
+	border-radius: 999rpx;
+	background: var(--accent-bg);
+	color: var(--accent2);
+	font-size: 18rpx;
+	font-weight: 800;
+}
+
+.management-entry-desc {
+	font-size: 21rpx;
+	line-height: 1.5;
+	color: var(--ink2);
+}
+
+.management-entry-action {
+	min-width: 136rpx;
+	height: 64rpx;
+	padding: 0 16rpx;
+	border-radius: 14rpx;
+	background: var(--accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--paper);
+	font-size: 21rpx;
+	font-weight: 800;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.management-entry-action.disabled {
+	background: var(--muted);
+	opacity: 0.72;
+}
+
+/* ===== 管理中心加载骨架 ===== */
+.management-center-loading {
+	flex: 1;
+	height: 0;
+	padding: 24rpx 32rpx;
+	background: var(--canvas);
+	display: flex;
+	flex-direction: column;
+	gap: 22rpx;
+}
+
+.management-loading-card,
+.management-loading-heading,
+.management-loading-pill {
+	background: var(--warm);
+	border-radius: 16rpx;
+}
+
+.management-loading-identity {
+	height: 260rpx;
+	border-radius: 20rpx;
+}
+
+.management-loading-tabs {
+	display: flex;
+	flex-direction: row;
+	gap: 12rpx;
+}
+
+.management-loading-pill {
+	width: 142rpx;
+	height: 58rpx;
+	border-radius: 999rpx;
+}
+
+.management-loading-pill.short {
+	width: 96rpx;
+}
+
+.management-loading-heading {
+	width: 186rpx;
+	height: 38rpx;
+}
+
+.management-loading-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14rpx;
+}
+
+.management-loading-grid .management-loading-card {
+	height: 176rpx;
 }
 
 /* ===== 表单卡片 ===== */

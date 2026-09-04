@@ -5,13 +5,13 @@
 			<view class="nav-back" @click="goBack">
 				<view class="nav-back-chevron"></view>
 			</view>
-			<text class="nav-title">申请成为合伙人</text>
-			<view class="nav-help" @click="showHelp">
-				<text class="nav-help-text">帮助</text>
+			<text class="nav-title">{{ partnerCenterVisible ? '合伙人中心' : '申请成为合伙人' }}</text>
+			<view class="nav-help" @click="partnerCenterVisible ? closePartnerCenter() : showHelp()">
+				<text class="nav-help-text">{{ partnerCenterVisible ? '申请页' : '帮助' }}</text>
 			</view>
 		</view>
 
-		<scroll-view scroll-y class="page-scroller" :show-scrollbar="false">
+		<scroll-view v-if="!partnerCenterVisible" scroll-y class="page-scroller" :show-scrollbar="false">
 			<view class="page-content">
 				<!-- Banner 宣传区域 -->
 				<view class="banner-card">
@@ -19,6 +19,18 @@
 						<text class="banner-kicker">合伙人招募</text>
 						<text class="banner-title">共建认真婚恋社区，与平台一起成长</text>
 						<text class="banner-desc">提交资料后，平台将尽快联系你确认合伙人信息。</text>
+					</view>
+				</view>
+
+				<view class="partner-center-entry ready">
+					<view class="partner-center-entry-copy">
+						<view class="partner-center-entry-title-row">
+							<text class="partner-center-entry-title">合伙人中心</text>
+						</view>
+						<text class="partner-center-entry-desc">查看合作工作台、申请进度与服务支持</text>
+					</view>
+					<view class="partner-center-entry-action" @click="openPartnerCenter">
+						<text>进入中心</text>
 					</view>
 				</view>
 
@@ -138,8 +150,29 @@
 			</view>
 		</scroll-view>
 
+		<scroll-view v-else scroll-y class="partner-center-scroller" :show-scrollbar="false">
+			<view class="partner-center-content">
+				<view class="partner-center-hero">
+					<text class="partner-center-eyebrow">合作工作台</text>
+					<text class="partner-center-title">合伙人中心</text>
+					<text class="partner-center-copy">集中查看申请进度、合作工具和平台服务支持。</text>
+				</view>
+				<view class="partner-center-card">
+					<text class="partner-center-section-title">我的合作</text>
+					<view class="partner-center-row" @click="showToast('已打开合伙人申请进度')"><view><text>申请进度</text><text>查看资料审核与平台反馈</text></view><text>查看详情</text></view>
+					<view class="partner-center-row" @click="showToast('已打开合作资源')"><view><text>合作资源</text><text>查看可用推广与服务工具</text></view><text>查看详情</text></view>
+					<view class="partner-center-row" @click="showToast('已打开合作记录')"><view><text>合作记录</text><text>查看已保存的本地工作记录</text></view><text>查看详情</text></view>
+				</view>
+				<view class="partner-center-card">
+					<text class="partner-center-section-title">服务支持</text>
+					<view class="partner-center-row" @click="callConsult"><view><text>电话咨询</text><text>联系平台合作顾问</text></view><text>立即拨打</text></view>
+					<view class="partner-center-row" @click="wechatConsult"><view><text>微信咨询</text><text>获取入驻与合作说明</text></view><text>发起咨询</text></view>
+				</view>
+			</view>
+		</scroll-view>
+
 		<!-- 底部提交按钮 -->
-		<view class="footer-safe">
+		<view v-if="!partnerCenterVisible" class="footer-safe">
 			<view
 				class="submit-button"
 				:class="{ disabled: !canSubmit || submitting }"
@@ -171,6 +204,7 @@ const toastVisible = ref(false)
 const toastMessage = ref('')
 const qrVisible = ref(false)
 const currentStep = ref(0)
+const partnerCenterVisible = ref(false)
 
 const processSteps = [
 	{ title: '填写申请', desc: '填写完整资料并提交' },
@@ -194,6 +228,14 @@ const canSubmit = computed(() => {
 const showToast = (msg: string) => {
 	toastMessage.value = msg
 	toastVisible.value = true
+}
+
+const openPartnerCenter = () => {
+	uni.navigateTo({ url: '/pagesSub/matchmaker/partner-center' })
+}
+
+const closePartnerCenter = () => {
+	partnerCenterVisible.value = false
 }
 
 const guideToRequiredVerification = (message: string) => {
@@ -221,6 +263,10 @@ const showExistingApplication = () => {
 
 // ===== 导航 =====
 const goBack = () => {
+	if (partnerCenterVisible.value) {
+		closePartnerCenter()
+		return
+	}
 	uni.navigateBack()
 }
 
@@ -290,9 +336,8 @@ const submitApplication = async () => {
 
 		if (result.success) {
 			const applicationId = result.data != null && result.data.id != null ? String(result.data.id) : ''
-			const isMock = result.data != null && result.data.source == 'mock'
 			uni.redirectTo({
-				url: '/pagesSub/matchmaker/application-success?type=partner&id=' + applicationId + '&mock=' + (isMock ? '1' : '0')
+				url: '/pagesSub/matchmaker/application-success?type=partner&id=' + applicationId
 			})
 		} else {
 			const message = result.message != null ? String(result.message) : '提交失败，请稍后重试'
@@ -379,6 +424,18 @@ const submitApplication = async () => {
 }
 
 /* ===== 滚动区域 ===== */
+.partner-center-entry { margin-top: 18rpx; padding: 26rpx; border: 1px solid var(--line); border-radius: 20rpx; background: var(--warm); display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 18rpx; }
+.partner-center-entry.ready { background: var(--match-mist); border-color: var(--accent); }
+.partner-center-entry-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8rpx; }
+.partner-center-entry-title-row { display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.partner-center-entry-title { font-size: 28rpx; font-weight: 800; color: var(--ink); }
+.partner-center-entry-desc { font-size: 21rpx; line-height: 1.5; color: var(--ink2); }
+.partner-center-entry-action { min-width: 136rpx; height: 64rpx; padding: 0 16rpx; border-radius: 14rpx; background: var(--accent); display: flex; flex-direction: row; align-items: center; justify-content: center; color: var(--paper); font-size: 21rpx; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+.partner-center-entry-action:active { opacity: .78; transform: scale(0.98); }
+
+.partner-center-scroller { flex: 1; height: 0; background: var(--canvas); }.partner-center-content { padding: 28rpx 28rpx calc(env(safe-area-inset-bottom) + 48rpx); display: flex; flex-direction: column; gap: 20rpx; }.partner-center-hero { padding: 30rpx; border-radius: 22rpx; background: var(--accent2); display: flex; flex-direction: column; gap: 9rpx; }.partner-center-eyebrow { color: var(--accent-bg); font-size: 20rpx; }.partner-center-title { color: var(--paper); font-family: var(--sans); font-size: 38rpx; font-weight: 800; }.partner-center-copy { color: var(--accent-bg); font-size: 22rpx; line-height: 1.55; }
+.partner-center-card { overflow: hidden; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }.partner-center-section-title { display: block; padding: 22rpx 24rpx 12rpx; color: var(--ink); font-size: 25rpx; font-weight: 800; }.partner-center-row { min-height: 104rpx; padding: 18rpx 24rpx; border-top: 1px solid var(--line); display: flex; flex-direction: row; align-items: center; gap: 16rpx; }.partner-center-row > view { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }.partner-center-row > view text:first-child { color: var(--ink); font-size: 24rpx; font-weight: 700; }.partner-center-row > view text:last-child { color: var(--muted); font-size: 20rpx; line-height: 1.4; }.partner-center-row > text { flex-shrink: 0; color: var(--accent2); font-size: 20rpx; }.partner-center-row:active { opacity: .78; }
+
 .page-scroller {
 	flex: 1;
 	height: 0;

@@ -208,38 +208,11 @@
 			</view>
 		</view>
 
-		<!-- 联系方式仅使用开发联调 Mock 数据 -->
-		<view v-if="contactPanelVisible" class="contact-overlay" @click="closeContactPanel">
-			<view class="contact-modal" @click.stop>
-				<view class="contact-modal-head">
-					<view>
-						<text class="contact-modal-title">联系专属红娘</text>
-						<text class="contact-modal-sub">{{ matchmakerContact.name }} · 在线咨询 {{ matchmakerContact.availableHours }}</text>
-					</view>
-					<view class="contact-modal-close" @click="closeContactPanel"><text>×</text></view>
-				</view>
-				<view class="contact-note"><text>{{ matchmakerContact.note }}</text></view>
-				<view class="contact-info-row">
-					<view class="contact-info-copy">
-						<text class="contact-info-label">电话</text>
-						<text class="contact-info-value">{{ matchmakerContact.phone }}</text>
-					</view>
-					<view class="contact-action phone-action" @click="callMatchmaker"><text>拨打</text></view>
-				</view>
-				<view class="contact-info-row">
-					<view class="contact-info-copy">
-						<text class="contact-info-label">微信</text>
-						<text class="contact-info-value">{{ matchmakerContact.wechat }}</text>
-					</view>
-					<view class="contact-action wechat-action" @click="copyWechatId"><text>复制</text></view>
-				</view>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
-import { getCustomPlans, getMockMatchmakerContact } from '@/api'
+import { getCustomPlans } from '@/api'
 
 const matchmakerCaseImageA = '/pagesSub/matchmaker/static/cases/wuhan-zhou-zheng.webp'
 const matchmakerCaseImageB = '/pagesSub/matchmaker/static/cases/shenzhen-zhang-liu.webp'
@@ -377,14 +350,6 @@ const caseListWidth = computed((): number => {
 
 const plans = ref<PlanItem[]>(fallbackPlans)
 const selectedPlanId = ref<number>(2)
-const contactPanelVisible = ref(false)
-const matchmakerContact = ref<any>({
-	name: '',
-	phone: '',
-	wechat: '',
-	availableHours: '',
-	note: ''
-})
 
 const activePlan = computed<PlanItem>(() => {
 	const found = plans.value.find((p: PlanItem) => p.id == selectedPlanId.value)
@@ -504,31 +469,7 @@ const showAllCases = () => {
 	}
 
 const contactMatchmaker = async () => {
-	const response = await getMockMatchmakerContact()
-	if (!response.success || response.data == null) {
-		uni.showToast({ title: '暂时无法获取红娘联系方式', icon: 'none' })
-		return
-	}
-	matchmakerContact.value = response.data
-	contactPanelVisible.value = true
-}
-
-const closeContactPanel = () => {
-	contactPanelVisible.value = false
-}
-
-const callMatchmaker = () => {
-	uni.makePhoneCall({
-		phoneNumber: String(matchmakerContact.value.phone),
-		fail: () => uni.showToast({ title: '当前环境暂不支持拨号', icon: 'none' })
-	})
-}
-
-const copyWechatId = () => {
-	uni.setClipboardData({
-		data: String(matchmakerContact.value.wechat),
-		success: () => uni.showToast({ title: '微信号已复制', icon: 'none' })
-	})
+	uni.showToast({ title: '提交服务申请后，平台会在授权流程内安排联系', icon: 'none' })
 }
 
 const applyPlan = () => {

@@ -13,7 +13,7 @@
       </view>
       <view class="advisor-section">
         <text class="advisor-label">希望达到什么效果（选填）</text>
-        <input class="advisor-input" :value="goal" maxlength="300" placeholder="例如：自然地延续话题，不显得着急" @input="onGoalInput" />
+        <input class="advisor-input" type="text" :value="goal" maxlength="300" placeholder="例如：自然地延续话题，不显得着急" confirm-type="done" cursor-spacing="20" @input="onGoalInput" />
       </view>
       <view class="advisor-section">
         <text class="advisor-label">对方刚刚说了什么</text>
@@ -68,6 +68,7 @@ let errorMessage = ref('')
 let advice = ref<any>(null)
 let chatSessionId = ref(0)
 let advisorSessionId = ref(0)
+let adviceIdempotencyKey = ref('')
 
 watch(() => props.visible, async (opened: boolean) => { if (opened) await prepareAdvisor() })
 
@@ -95,6 +96,7 @@ const generateAdvice = async () => {
   if (incomingMessage.value.trim().length == 0) { errorMessage.value = '请先输入或粘贴对方的最新消息。'; return }
   errorMessage.value = ''
   generating.value = true
+  if (adviceIdempotencyKey.value.length == 0) adviceIdempotencyKey.value = 'advisor-' + Date.now().toString() + '-' + Math.floor(Math.random() * 1000000).toString()
   try {
     const ready = await ensureAdvisorSession()
     if (!ready) return
@@ -106,9 +108,10 @@ const generateAdvice = async () => {
       chat_session_id: chatSessionId.value,
       include_history: includeHistory.value,
       max_suggestions: 3
-    })
+    }, adviceIdempotencyKey.value)
     if (!response.success || response.data == null) { errorMessage.value = advisorErrorMessage(Number(response.code), String(response.message)); return }
     advice.value = response.data
+    adviceIdempotencyKey.value = ''
   } finally { generating.value = false }
 }
 
@@ -139,6 +142,7 @@ const riskLabel = (value: string): string => value == 'high' ? '注意风险' : 
 .option-chip, .tone-chip { padding: 8px 11px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink2); font-size: 13px; background: var(--surface); }
 .option-chip.active, .tone-chip.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); font-weight: 700; }
 .advisor-input, .advisor-textarea { width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); font-size: 14px; padding: 12px; }
+.advisor-input { height: 44px; line-height: 20px; }
 .advisor-textarea { min-height: 86px; line-height: 1.55; }
 .history-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
 .history-copy { display: flex; flex: 1; flex-direction: column; gap: 3px; }

@@ -43,10 +43,13 @@ export async function getAdvisorSessions(page: number = 1, pageSize: number = 20
   })
 }
 
-export async function getAdvisorAdvice(sessionId: number, payload: any): Promise<any> {
+export async function getAdvisorAdvice(sessionId: number, payload: any, idempotencyKey: string = ''): Promise<any> {
+  const headers: any = {}
+  if (idempotencyKey.trim().length > 0) headers['Idempotency-Key'] = idempotencyKey.trim()
   return request({
     url: '/ai/advisor/sessions/' + sessionId + '/advice',
     method: 'POST',
+    headers: headers,
     data: payload,
     mockData: USE_MOCK ? mockAdvisorAdvice : null
   })
@@ -78,4 +81,6 @@ export function advisorErrorMessage(code: number, fallback: string = '暂时无�
   if (code == 503 || code == -1) return 'AI 军师暂时不可用，请稍后重试'
   return fallback
 }
+
+
 

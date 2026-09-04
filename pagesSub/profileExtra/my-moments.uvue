@@ -70,6 +70,11 @@
 			</view>
 
 			<!-- 空状态 -->
+			<view v-else-if="!loading && loadError != ''" class="state-wrap">
+				<text class="state-title">动态加载失败</text>
+				<text class="state-desc">{{ loadError }}</text>
+				<view class="state-btn" @tap="reloadAll"><text class="state-btn-text">重新加载</text></view>
+			</view>
 			<view v-else-if="!loading && feedList.length === 0" class="state-wrap">
 				<text class="state-emoji">📝</text>
 				<text class="state-title">还没有动态</text>
@@ -127,11 +132,11 @@
 						<text class="feed-date">{{ feed.location || feed.city || '' }}</text>
 						<view class="feed-actions">
 							<view class="feed-action" @tap.stop="onLike(feed, fi)">
-								<text :class="['ic', feed.liked ? 'ic-home' : 'ic-home', 'feed-action-icon', feed.liked ? 'liked' : '']">{{ feed.liked ? '' : '' }}</text>
+								<text class="ic ic-social feed-action-icon" :class="{ liked: feed.liked }">{{ likeIcon }}</text>
 								<text class="feed-action-count">{{ feed.likeCount }}</text>
 							</view>
 							<view class="feed-action" @tap.stop="goPostDetail(feed.id)">
-								<text class="ic ic-social ic-pinglun feed-action-icon"></text>
+								<text class="ic ic-social feed-action-icon">{{ commentIcon }}</text>
 								<text class="feed-action-count">{{ feed.commentCount }}</text>
 							</view>
 							<view class="feed-action" @tap.stop="onDelete(feed, fi)">
@@ -178,6 +183,10 @@ const page = ref(1)
 const pageSize = 10
 const hasMore = ref(true)
 const total = ref(0)
+const loadError = ref('')
+const hasLoadedOnce = ref(false)
+const likeIcon = String.fromCharCode(0xec8c)
+const commentIcon = String.fromCharCode(0xe679)
 
 const loadProfile = async () => {
 	const profileRes = await getOwnProfile()
@@ -194,8 +203,14 @@ const loadProfile = async () => {
 	const overviewRes = await getProfileOverview()
 	if (overviewRes.success && overviewRes.data != null) {
 		const overview = overviewRes.data as any
-		profile.value.likeCount = overview.like_count != null ? Number(overview.like_count) : 0
-		profile.value.followingCount = overview.following_count != null ? Number(overview.following_count) : 0
+		const likeValue = overview.like_count != null
+			? overview.like_count
+			: (overview.received_like_count != null ? overview.received_like_count : overview.community_like_count)
+		const followingValue = overview.following_count != null
+			? overview.following_count
+			: (overview.following_user_count != null ? overview.following_user_count : overview.follow_count)
+		if (likeValue != null) profile.value.likeCount = Number(likeValue)
+		if (followingValue != null) profile.value.followingCount = Number(followingValue)
 	}
 }
 
@@ -207,6 +222,7 @@ const fetchData = async (isRefresh: boolean = false) => {
 		hasMore.value = true
 	}
 	try {
+		if (isRefresh) loadError.value = ''
 		const res = await getMyPosts({ page: page.value, pageSize })
 		if (res.success && res.data != null) {
 			const data = res.data as any
@@ -223,11 +239,19 @@ const fetchData = async (isRefresh: boolean = false) => {
 			hasMore.value = data.hasMore == true
 			total.value = data.total != null ? (data.total as number) : 0
 			profile.value.postCount = total.value
+			if (profile.value.likeCount == 0 && list.length > 0) {
+				let likes = 0
+				for (let i = 0; i < list.length; i++) likes += Number(list[i].likeCount || 0)
+				profile.value.likeCount = likes
+			}
+		} else {
+			loadError.value = res.message != null ? '' + res.message : '请稍后重试'
 		}
 	} catch (e) {
 		console.error('获取我的动态失败', e)
 		if (isRefresh || page.value === 1) {
 			feedList.value = []
+			loadError.value = '网络异常，请稍后重试'
 		}
 	} finally {
 		loading.value = false
@@ -239,6 +263,12 @@ const fetchData = async (isRefresh: boolean = false) => {
 const onRefresh = () => {
 	refreshing.value = true
 	fetchData(true)
+}
+
+const reloadAll = async () => {
+	loading.value = true
+	await loadProfile()
+	await fetchData(true)
 }
 
 const onLoadMore = () => {
@@ -276,7 +306,9 @@ const onLike = async (feed: any, index: number) => {
 			const list = feedList.value as any[]
 			list[index].liked = data.liked == true
 			list[index].likeCount = data.likeCount != null ? (data.likeCount as number) : (list[index].likeCount as number)
-			feedList.value = list
+			feedList.value = list.slice()
+		} else {
+			uni.showToast({ title: res.message != null ? '' + res.message : '点赞失败，请重试', icon: 'none' })
 		}
 	} catch (e) {
 		console.error('点赞失败', e)
@@ -297,10 +329,12 @@ const onDelete = (feed: any, index: number) => {
 					if (delRes.success) {
 						const list = feedList.value as any[]
 						list.splice(index, 1)
-						feedList.value = list
+						feedList.value = list.slice()
+						total.value = Math.max(0, total.value - 1)
+						profile.value.postCount = total.value
 						uni.showToast({ title: '已删除', icon: 'success' })
 					} else {
-						uni.showToast({ title: '删除失败，请重试', icon: 'none' })
+						uni.showToast({ title: delRes.message != null ? '' + delRes.message : '删除失败，请重试', icon: 'none' })
 					}
 				} catch (e) {
 					console.error('删除动态失败', e)
@@ -312,9 +346,16 @@ const onDelete = (feed: any, index: number) => {
 }
 
 // ========== 生命周期 ==========
-onMounted(() => {
-	loadProfile()
-	fetchData(true)
+onMounted(async () => {
+	await loadProfile()
+	await fetchData(true)
+	hasLoadedOnce.value = true
+})
+
+onShow(async () => {
+	if (!hasLoadedOnce.value) return
+	await loadProfile()
+	await fetchData(true)
 })
 </script>
 
@@ -390,7 +431,7 @@ onMounted(() => {
 /* 背景墙 */
 .cover-bg {
 	width: 100%;
-	height: 107px;
+	height: 150px;
 	display: block;
 }
 
@@ -399,14 +440,14 @@ onMounted(() => {
 	top: 0;
 	left: 0;
 	right: 0;
-	height: 107px;
+	height: 150px;
 	background: linear-gradient(180deg, rgba(17, 23, 24, 0.05) 0%, rgba(17, 23, 24, 0.45) 100%);
 }
 
 /* 头像（悬浮在背景墙与信息卡交界处） */
 .avatar-circle {
 	position: absolute;
-	top: 83px;
+	top: 126px;
 	left: 50%;
 	transform: translateX(-50%);
 	width: 48px;
@@ -694,6 +735,19 @@ onMounted(() => {
 
 .feed-action-icon.liked {
 	color: #F08282;
+}
+
+@font-face {
+	font-family: "iconfont-social";
+	src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff');
+}
+
+.ic {
+	font-style: normal;
+}
+
+.ic-social {
+	font-family: "iconfont-social" !important;
 }
 
 .feed-action-delete {
