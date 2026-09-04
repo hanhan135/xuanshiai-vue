@@ -1,6 +1,6 @@
 <template>
 	<view class="page">
-		<scroll-view class="scroll" scroll-y>
+		<scroll-view class="scroll" scroll-y :scroll-into-view="commentScrollTarget">
 			<view v-if="loading" class="state"><text class="text-muted">加载中…</text></view>
 			<view v-else-if="post == null" class="state">
 				<XsaEmpty text="动态不存在" description="可能已被删除" />
@@ -13,6 +13,7 @@
 					@like="onLike"
 					@comment="focusComment"
 					@collect="onCollect"
+					@share="onShare"
 					@follow="onFollow"
 					@unfollow="onUnfollow"
 					@apply="onApply"
@@ -22,10 +23,11 @@
 				<view class="comment-head">
 					<text class="title">评论 {{ post.commentCount || 0 }}</text>
 				</view>
+				<view v-if="commentTargetMissing" class="target-missing"><text>该评论已不可查看</text></view>
 				<view v-if="comments.length == 0" class="empty-c">
 					<text class="text-muted">还没有评论，说一句真诚的话吧</text>
 				</view>
-<view class="comment" v-for="c in comments" :key="c.id" @longpress="replyTo(c)">
+<view :id="'comment-' + c.id" class="comment" :class="{ highlighted: highlightedCommentId == c.id }" v-for="c in comments" :key="c.id" @longpress="replyTo(c)">
 						<image class="avatar" :src="c.user.avatar" mode="aspectFill"></image>
 						<view class="body">
 							<view class="comment-row">
@@ -41,7 +43,7 @@
 									{{ c.liked ? '已赞' : '点赞' }} {{ c.likeCount > 0 ? c.likeCount : '' }}
 								</text>
 						</view>
-						<view class="reply" v-for="r in c.replies" :key="r.id" @click="replyTo(r)" @longpress="replyTo(r)"><text class="name">{{ r.user.name }}</text><text v-if="r.replyToUserName"> 回复 @{{ r.replyToUserName }}</text><text>：{{ r.content }}</text></view>
+						<view :id="'comment-' + r.id" class="reply" :class="{ highlighted: highlightedCommentId == r.id }" v-for="r in c.replies" :key="r.id" @click="replyTo(r)" @longpress="replyTo(r)"><text class="name">{{ r.user.name }}</text><text v-if="r.replyToUserName"> 回复 @{{ r.replyToUserName }}</text><text>：{{ r.content }}</text></view>
 						<text class="like-btn" v-if="c.replyCount > (c.replies != null ? c.replies.length : 0)" @click="loadReplies(c)">加载更多回复</text>
 					</view>
 				</view>
@@ -89,6 +91,7 @@ import {
 			likeDynamic,
 			likeComment,
 			collectDynamic,
+			shareDynamic,
 			followUserFromCommunity,
 			unfollowUserFromCommunity,
 			commentDynamic,
@@ -111,15 +114,21 @@ import {
 	const applyVisible = ref(false)
 	const applyUserId = ref(0)
 	const reportVisible = ref(false)
+	const reportTargetType = ref('post')
 	const reportTargetId = ref(0)
 	const reportUserId = ref(0)
 	const replyTarget = ref(null as any)
 	const commentCursor = ref('')
 	const commentHasMore = ref(false)
+	const commentIdTarget = ref(0)
+	const commentScrollTarget = ref('')
+	const highlightedCommentId = ref(0)
+	const commentTargetMissing = ref(false)
 	const unfollowPendingUserId = ref(0)
 
 	onLoad((q: any) => {
 		postId.value = q != null && q.id != null ? parseInt('' + q.id) : 0
+		commentIdTarget.value = q != null && q.commentId != null ? parseInt('' + q.commentId) : 0
 		load()
 	})
 
@@ -161,6 +170,7 @@ const load = async () => {
 					comments.value = []
 					commentCursor.value = ''
 					await loadMoreComments()
+					await locateCommentTarget()
 					if (res.data != null && res.data.commentsLoadError == true) {
 						uni.showToast({ title: '评论加载失败', icon: 'none' })
 					}
@@ -192,6 +202,46 @@ const load = async () => {
 		commentHasMore.value = raw.has_more == true
 	}
 	const loadReplies = async (comment: any) => { const res = await getCommentReplies(comment.id, comment.replyCursor != null ? comment.replyCursor : ''); if (res.success && res.data != null) { const data = res.data as any; const more = data.items != null ? data.items as any[] : []; if (comment.replies == null) comment.replies = []; for (let i = 0; i < more.length; i++) comment.replies.push(more[i]); comment.replyCursor = data.next_cursor != null ? data.next_cursor : ''; comment.replyHasMore = data.has_more == true } else uni.showToast({ title: '回复加载失败，请重试', icon: 'none' }) }
+	const findComment = (): any => {
+		if (commentIdTarget.value <= 0) return null
+		const roots = comments.value as any[]
+		for (let i = 0; i < roots.length; i++) {
+			const root = roots[i]
+			if (Number(root.id) == commentIdTarget.value) return root
+			const replies = root.replies != null ? root.replies as any[] : []
+			for (let j = 0; j < replies.length; j++) {
+				if (Number(replies[j].id) == commentIdTarget.value) return replies[j]
+			}
+		}
+		return null
+	}
+	const locateCommentTarget = async () => {
+		if (commentIdTarget.value <= 0) return
+		commentTargetMissing.value = false
+		for (let page = 0; page < 5; page++) {
+			let found = findComment()
+			if (found != null) {
+				highlightedCommentId.value = commentIdTarget.value
+				commentScrollTarget.value = 'comment-' + commentIdTarget.value
+				return
+			}
+			const roots = comments.value as any[]
+			for (let i = 0; i < roots.length; i++) {
+				const root = roots[i]
+				if (root.replyHasMore == true || (root.replyCount != null && Number(root.replyCount) > (root.replies != null ? (root.replies as any[]).length : 0))) await loadReplies(root)
+			}
+			found = findComment()
+			if (found != null) {
+				highlightedCommentId.value = commentIdTarget.value
+				commentScrollTarget.value = 'comment-' + commentIdTarget.value
+				return
+			}
+			if (!commentHasMore.value) break
+			await loadMoreComments()
+		}
+		commentTargetMissing.value = true
+		uni.showToast({ title: '该评论已不可查看', icon: 'none' })
+	}
 	const replyTo = (comment: any) => { if (comment.isDeleted == true) return; replyTarget.value = comment }
 	const removeComment = async (comment: any) => { const res = await deleteComment(comment.id, postId.value); if (res.success) { comment.content = '该评论已删除'; comment.isDeleted = true; comment.canDelete = false } else uni.showToast({ title: '删除失败，请重试', icon: 'none' }) }
 	const discardPendingCommentKey = () => {
@@ -323,22 +373,20 @@ const onLike = async (id: number) => {
 			}
 		}
 
+		const onShare = async (id: number) => {
+			const res = await shareDynamic(id)
+			uni.showToast({ title: res.success ? '已生成分享内容，请使用右上角分享' : '分享暂不可用，请稍后重试', icon: 'none' })
+		}
+
 		const onCollect = async (id: number) => {
 			const ok = await guardRealName('collect')
 			if (!ok) return
 			const res = await collectDynamic(id)
 			if (res.success && post.value != null && res.data != null) {
-				post.value.collected = res.data.collected
-				if (res.data.collectCount != null) {
-					post.value.collectCount = res.data.collectCount
-				}
+				post.value.collected = res.data.collected == true
+				if (res.data.collectCount != null) post.value.collectCount = Number(res.data.collectCount)
 			} else if (!res.success) {
-				const msg =
-					res.data != null && res.data.message != null
-						? res.data.message
-						: res.message != null
-							? res.message
-							: '收藏失败'
+				const msg = res.message != null && res.message != '' ? '' + res.message : '收藏失败，请重试'
 				uni.showToast({ title: msg, icon: 'none' })
 			}
 		}
@@ -461,6 +509,14 @@ const onApply = (userId: number) => {
 	.empty-c {
 		padding: 16px;
 	}
+	.target-missing {
+		margin: 8px 16px 12px;
+		padding: 10px 12px;
+		border-radius: 10px;
+		background: var(--plane-lilac);
+		color: var(--plane-purple-deep);
+		font-size: 12px;
+	}
 	.comment {
 		display: flex;
 		flex-direction: row;
@@ -468,6 +524,10 @@ const onApply = (userId: number) => {
 		padding: 12px 16px;
 		border-bottom: 1px solid var(--line);
 		background: var(--surface);
+	}
+	.comment.highlighted, .reply.highlighted {
+		background: var(--plane-sky);
+		border-color: var(--plane-yellow);
 	}
 	.avatar {
 		width: 32px;

@@ -2,7 +2,7 @@
 	<view class="page-shell">
 		<!-- 欢迎页 -->
 		<view v-if="welcomeVisible" class="welcome-screen">
-			<image class="welcome-image" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+			<image class="welcome-image" src="/static/portraits/profile-woman-main.webp" mode="aspectFill"></image>
 			<view class="welcome-scrim"></view>
 			<view class="welcome-service" @click="showWelcomeService">联系客服</view>
 			<view class="welcome-copy">
@@ -729,7 +729,7 @@
 	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
 	import { resolveMediaUrl } from '@/api/config.uts'
-	import locationJson from '@/static/location.json'
+	import locationJson from '@/data/location.json'
 	import {
 		recordProfileView,
 		resetDailyIfNeeded,

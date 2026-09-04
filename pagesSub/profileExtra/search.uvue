@@ -357,7 +357,7 @@
 	const resultProfile = (item: any): any => item != null && item.profile != null ? item.profile : (item != null ? item : {})
 	const resultAvatar = (item: any): string => {
 		const profile = resultProfile(item)
-		return toText(profile.avatar) || '/static/portraits/profile-woman-main.jpg'
+		return toText(profile.avatar) || '/static/portraits/profile-woman-main.webp'
 	}
 	const resultName = (item: any): string => {
 		const profile = resultProfile(item)

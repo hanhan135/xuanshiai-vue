@@ -101,8 +101,10 @@
 			await markPaperPlaneConversationRead(item.id)
 		} catch (e) {}
 		item.unreadCount = 0
+		const targetUserId = item != null && item.userId != null ? Number(item.userId) : 0
+		const targetQuery = targetUserId > 0 ? '&targetUserId=' + targetUserId : ''
 		uni.navigateTo({
-			url: '/pagesSub/chat/detail?paperPlaneConversationId=' + item.id + '&paperPlaneLabel=' + encodeURIComponent(item.name)
+			url: '/pagesSub/community/paper-plane-chat?conversationId=' + item.id + targetQuery
 		})
 	}
 </script>

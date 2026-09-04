@@ -1,0 +1,22 @@
+const fs = require('fs')
+const path = require('path')
+const assert = require('assert')
+
+const vueRoot = path.join(__dirname, '..')
+const backendRoot = path.join(vueRoot, '..', 'xuanshiai-backend')
+const read = (root, relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
+
+const prompt = read(backendRoot, 'app/services/ai/prompts/moxiang_master.py')
+const route = read(backendRoot, 'app/api/routes/voice_moxiang.py')
+const ws = read(vueRoot, 'api/voice-master-ws.uts')
+const page = read(vueRoot, 'pagesSub/profileExtra/my-portrait-master.uvue')
+
+assert.match(prompt, /AI_ROLE_NAME\s*=\s*["']知遇["']/, 'backend must define the dedicated persona name')
+assert.match(prompt, /你是「\{AI_ROLE_NAME\}」/, 'LLM system prompt must use the persona name')
+assert.match(prompt, /你好，我是\{AI_ROLE_NAME\}/, 'opening must introduce the persona name')
+assert.match(route, /f"\{AI_ROLE_NAME\}暂时无法回复"/, 'voice errors must use the persona name')
+assert.match(ws, /MASTER_ROLE_NAME\s*=\s*'知遇'/, 'frontend WS must expose the same persona name')
+assert.match(page, /const masterRoleName\s*=\s*MASTER_ROLE_NAME/, 'page must render the dedicated persona name')
+assert.doesNotMatch(page, /我是点点/, 'legacy nickname must not be shown by the page')
+
+console.log('Moxiang role identity checks passed')

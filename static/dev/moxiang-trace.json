@@ -1,0 +1,783 @@
+{
+  "run_id": "moxiang-trace",
+  "subject": "personal",
+  "journey_stage": "chatting",
+  "session_id": "6b080f5ba3c441ab992950b4bdba87d7",
+  "elapsed_seconds": 683.2,
+  "turns": [
+    {
+      "turn": 1,
+      "user": "我先自我介绍一下,我叫陆晓,28岁,在杭州做前端工程师,本科毕业工作四年了。",
+      "ai": "下午好，我是知遇。\n\n比起替你寻找一个“标准答案”，我更想先慢慢认识你。\n\n我们聊过的性格、经历、选择和那些藏在细节里的想法，都会让我一点点拼出更真实的你。\n\n随着我们越来越熟，我会逐渐形成两幅画像：\n\n一幅关于你自己，一幅关于真正适合你的人。\n\n所以不用刻意想一个完美的回答。\n\n像平时聊天一样就好。\n\n先聊点轻松的——\n\n最近有没有哪一天，你完全没按原计划过？那天是怎么度过的？\n\n陆晓你好，很高兴认识你。28岁、杭州、前端工程师，这个组合我脑子里已经有画面了——是个写代码时可能还会偷偷调一下 UI 细节的人吧？\n\n先问一个最简单的：目前是单身，还是有在认真相处的对象？这个不用有压力，只是想了解你现在的状态。",
+      "extraction_status": "completed",
+      "task_id": "95aae6c303ee4bf384e7a3f4023bf372",
+      "journey_percent": 41.666666666666664,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "intimacy_pattern": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "emotional_expression": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "relationship_boundaries": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 11977,
+      "error": null
+    },
+    {
+      "turn": 2,
+      "user": "朋友评价我是那种慢热型的人,刚认识话不多,但熟了以后特别愿意倾听。",
+      "ai": "\n\n慢热、愿意倾听——这个组合其实挺难得的。很多人在刚认识时会急着表达自己，你能先听别人说，说明你对关系是有耐心的。\n\n那正好，我们慢慢聊。刚才还没来得及问：你现在是单身，还是有在认真相处的对象？",
+      "extraction_status": "processing",
+      "task_id": "b1452688a4574e05888ab763a76af90c",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30007,
+      "error": null
+    },
+    {
+      "turn": 3,
+      "user": "我比较讨厌人多嘈杂的场合,周末更喜欢一个人泡美术馆,看完了找个安静的咖啡馆坐一下午写东西。",
+      "ai": "\n\n一个人泡美术馆、写东西，这个画面很安静，也很有秩序感。我猜你可能很需要那种不被打扰的独处时间来恢复能量。\n\n那我好奇的是，如果以后有了伴侣，你理想中的周末是依然保留这种一个人的节奏，还是希望两个人一起做点什么？",
+      "extraction_status": "completed",
+      "task_id": "b1452688a4574e05888ab763a76af90c",
+      "journey_percent": 50.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "intimacy_pattern": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 11916,
+      "error": null
+    },
+    {
+      "turn": 4,
+      "user": "做饭是我的解压方式,下班后跑个步,回来做一荤一素一边看纪录片。",
+      "ai": "\n\n做饭、跑步、看纪录片，这个组合特别踏实，像是把一天的疲惫都炖进菜里了。这种有节奏的独处，其实也是一种很健康的充电方式。\n\n顺着这个节奏，我刚好想了解你现在的感情状态——是单身，还是有在认真相处的对象？这个没有标准答案，只是想更清楚地知道你目前站在哪里。",
+      "extraction_status": "processing",
+      "task_id": "48f468de79e443348aa20ca015e5f22a",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30007,
+      "error": null
+    },
+    {
+      "turn": 5,
+      "user": "嗯……其实我不太会说甜言蜜语,但会默默记得对方随口提过的小事,比如想去的店、想吃的菜。",
+      "ai": "\n\n这种默默记事的方式，其实比甜言蜜语更走心。能被这样记住的人，会觉得自己每一句随口的话都被放在了心上。\n\n那我好奇的是，你用这种方弍表达关心的时候，有没有遇到过对方没察觉的情况？比如对方可能没意识到你记了那么多事，或者反而觉得有点压力？",
+      "extraction_status": "processing",
+      "task_id": "e28381ae0f0b41c18b73fef5f75c77b6",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30010,
+      "error": null
+    },
+    {
+      "turn": 6,
+      "user": "如果吵架我不会冷战,但需要先冷静半小时,气头上说的话我会后悔,宁愿晚点好好说。",
+      "ai": "\n\n冷静半小时再好好说，这个习惯其实特别成熟，能避免很多气头上收回的话。那我有点好奇，这半小时里你一般会做什么？是需要一个人待会儿，还是希望对方也给你一点空间？",
+      "extraction_status": "completed",
+      "task_id": "dccd7f09226445608f3d15407987ceae",
+      "journey_percent": 50.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 29457,
+      "error": null
+    },
+    {
+      "turn": 7,
+      "user": "我希望恋爱里有各自的空间,感情再好每周也有一两天独处充电,不然我会觉得消耗。",
+      "ai": "\n\n这种“定期充电”的需求，其实和你之前说的喜欢独处、写东西是同一件事——你需要固定的、不被打扰的时间来恢复能量。这不是疏远，而是你维持自己状态的方式。\n\n那我们顺着这个聊下去。你希望的那种“有空间的恋爱”，两个人在一起时的相处模式大概是什么样的？比如周末的时候，你们会各做各的，还是会有共同的活动？",
+      "extraction_status": "processing",
+      "task_id": "2cb630b5aeed46f991d339a1f92bbf20",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30006,
+      "error": null
+    },
+    {
+      "turn": 8,
+      "user": "我的底线是不忠和欺骗,一次都不行,其他生活习惯差异我愿意一起磨合。",
+      "ai": "\n\n这个底线很清晰，也很有分量。不忠和欺骗是原则问题，其他习惯都可以磨合，说明你在关系里分得清什么是可以商量的，什么是不能碰的。\n\n聊完边界，我们再往里走一点。你之前提到自己慢热，需要空间，但又会默默记住对方的小事。那我好奇的是，在你心里，那种“亲密感”长什么样？是那种两个人各做各的事，偶尔抬头聊几句就很舒服，还是更希望有那种专门属于两个人的、放下手机认真聊天的时刻？",
+      "extraction_status": "processing",
+      "task_id": "f465ece16fde4f0a80ce4ad8f597b54e",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30011,
+      "error": null
+    },
+    {
+      "turn": 9,
+      "user": "未来三五年我希望能在杭州安定下来,养一只猫,周末和另一半一起爬山、露营,过烟火气的日子。",
+      "ai": "\n\n爬山、露营，还有一只猫，这个画面特别温暖，像是那种会一起在帐篷里煮泡面、晚上数星星的感觉。你能把未来的生活想象得这么具体，说明你心里对“两个人一起过日子”是有期待的。\n\n那我想问问，在你设想的这种关系里，两个人日常的相处模式大概是什么样的？是那种有很多一起做的事，还是更偏向于各有各的节奏、偶尔交集但很舒服的状态？",
+      "extraction_status": "processing",
+      "task_id": "d59f12533af64852b0e17adc790c6bd5",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30001,
+      "error": null
+    },
+    {
+      "turn": 10,
+      "user": "对于婚姻我期待我们是彼此的队友,大事一起商量,不想要一方一味妥协。",
+      "ai": "\n\n“队友”这个词用得特别好，它不是谁依附谁，而是并肩站着、一起扛事的那种感觉。那我好奇的是，在你设想的这种“队友”关系里，如果遇到分歧，比如对某件事的看法不一样，你们会怎么处理？是坐下来一起商量出一个双方都能接受的方案，还是会有其他的方式？",
+      "extraction_status": "completed",
+      "task_id": "e28381ae0f0b41c18b73fef5f75c77b6",
+      "journey_percent": 58.333333333333336,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 0.0,
+          "evidence_count": 0
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 17277,
+      "error": null
+    },
+    {
+      "turn": 11,
+      "user": "我喜欢尝试新鲜事物,科技类的东西我都愿意去摸一摸,算是个愿意折腾的人。",
+      "ai": "",
+      "extraction_status": "completed",
+      "task_id": "27e0b5320e7c4dbca248e0162578763a",
+      "journey_percent": 66.66666666666667,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 2720,
+      "error": null
+    },
+    {
+      "turn": 12,
+      "user": "啊……具体想要什么样的人,我还没想好。",
+      "ai": "\n\n没想好很正常，很多人都是被问到具体场景时才慢慢浮现画面的。\n\n那我换个问法——你刚才说未来想和另一半一起爬山露营，那是个什么样的场景？比如你们是那种会在帐篷里一起煮泡面、晚上数星星的，还是更偏向各自背包、偶尔聊几句就很舒服的状态？你脑海里浮现的是哪个画面？",
+      "extraction_status": "completed",
+      "task_id": "2cb630b5aeed46f991d339a1f92bbf20",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 19473,
+      "error": null
+    },
+    {
+      "turn": 13,
+      "user": "我不喜欢特别粘人的人,我自己也不粘人,需要各自独处的时间。",
+      "ai": "\n\n这个特质其实和你之前说的“需要空间”是同一个底色——你对关系的期待是两个独立的人并肩站着，而不是紧紧绑在一起。\n\n那我好奇的是，你理想的那种“不粘人但又亲密”的状态，具体是什么样的？比如，你们会各自有忙的时候，但隔几天会坐下来认真聊聊天，还是那种偶尔碰面、但每次都很舒服的感觉？",
+      "extraction_status": "completed",
+      "task_id": "48f468de79e443348aa20ca015e5f22a",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 11824,
+      "error": null
+    },
+    {
+      "turn": 14,
+      "user": "其实我不太喜欢爬山,刚才说的可能有点夸张,我更愿意城市散步+咖啡馆。",
+      "ai": "\n\n哈哈，原来我想象的画面跑偏了。城市散步+咖啡馆，这个画面反而更真实，也更符合你之前说的喜欢安静、有秩序感的特质。\n\n那你在这些时刻一般会是什么心情？是那种很放松、脑子放空的状态，还是会有特别多的念头冒出来？",
+      "extraction_status": "processing",
+      "task_id": "54b528154a884efabf52e1314220ffd4",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30004,
+      "error": null
+    },
+    {
+      "turn": 15,
+      "user": "我前女友也是前端,后来发现彼此工作节奏太同步,反而没火花,现在想想其实跟职业没关系,跟性格有关。",
+      "ai": "\n\n这个反思挺有分量的——原来你早就把“职业”和“性格”拆开来看了。工作节奏同步反而没火花，听起来像是两个人太像了，反而缺少了那种互相牵引的感觉。\n\n那我好奇的是，你后来慢慢发现，什么样的性格搭配反而会有火花？是那种互补一点的，还是虽然不同但能对上拍的？",
+      "extraction_status": "completed",
+      "task_id": "f465ece16fde4f0a80ce4ad8f597b54e",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 17822,
+      "error": null
+    },
+    {
+      "turn": 16,
+      "user": "我的工作节奏是 996,但我下班后会强制自己断联一小时,这段时间不接工作消息。",
+      "ai": "\n\n这种强制断联的一小时，是你一天里最珍贵的重启时间吧。996 的工作节奏本身就很耗人，能主动切断工作消息，说明你很清楚自己需要什么，也懂得保护自己的精力。\n\n那我好奇的是，你希望对方怎么理解你这段时间？是希望 TA 知道你在这段时间里不会回消息，但不会因此觉得被冷落，还是会有其他的想法？",
+      "extraction_status": "processing",
+      "task_id": "78f45521eb344938a9ed9bca19b042da",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30012,
+      "error": null
+    },
+    {
+      "turn": 17,
+      "user": "我不太愿意把工作和感情搅在一起,希望她有自己稳定的生活节奏,我也别被打乱。",
+      "ai": "\n\n这个边界其实挺清晰的，你希望感情是感情，工作是工作，彼此不掺杂。那我好奇的是，在你设想的相处里，周末或者假期的时候，你们的生活节奏大概会是什么样的？比如是各自安排，还是会有一些固定的交集？",
+      "extraction_status": "processing",
+      "task_id": "6891a2f8e2ee44169d179b56d3983b83",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30013,
+      "error": null
+    },
+    {
+      "turn": 18,
+      "user": "吵架的时候我倾向先各自梳理再谈,而不是当场争对错,情绪过了再复盘。",
+      "ai": "\n\n这个模式和你之前说的冷静半小时其实是同一件事——你把情绪处理和问题解决分得很清楚，先让情绪落地，再理性沟通。这种能力在亲密关系里其实很难得，能避免很多不必要的伤害。\n\n那我们顺着这个往下聊。你提到希望彼此是队友，大事一起商量。那在日常的小事上，你们会怎么分工？比如家务、记事这类，是那种互相提醒、有商有量的，还是各自负责一块、互不打扰的？",
+      "extraction_status": "processing",
+      "task_id": "4d9a11b6ce8146acb549fc04e58f6ff3",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30005,
+      "error": null
+    },
+    {
+      "turn": 19,
+      "user": "我希望对方也是愿意表达的人,不一定要甜言蜜语,但愿意讲出自己真实的感受。",
+      "ai": "\n\n你愿意讲出真实感受，这其实和你自己那种「默默记住对方小事」的表达方式是对应的——你不是用嘴说爱，是用行动记着。这种表达虽然不甜，但很稳。\n\n那我好奇的是，你自己在关系里，除了默默做事，有没有那种特别想被对方理解、但又不太容易说出口的感受？比如什么样的时刻会让你觉得「要是对方能懂我就好了」？",
+      "extraction_status": "completed",
+      "task_id": "1a57c3a71aa34f3baf1725a26a67c622",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 14548,
+      "error": null
+    },
+    {
+      "turn": 20,
+      "user": "我父母是大学老师,从小家里讲究独立思考,我习惯了不被安排,也不太会安排别人。",
+      "ai": "\n\n这种家庭氛围确实容易养出独立思考、不喜被安排的人。你习惯了自己拿主意，也不太会去安排别人，这和你之前说的「需要个人空间」、「希望彼此是队友」其实是同一条线上的。\n\n那我好奇的是，在亲密关系里，你对「被依赖」是什么感觉？比如对方遇到事情会习惯性地问你的意见、依赖你做决定，你会觉得这是一种信任，还是会有压力？",
+      "extraction_status": "completed",
+      "task_id": "68b9973ed2874688ba8f32292ad09322",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 12958,
+      "error": null
+    },
+    {
+      "turn": 21,
+      "user": "我之前说过我不喜欢爬山,补充一句:偶尔一次徒步可以接受,但不想要长期户外。",
+      "ai": "",
+      "extraction_status": "completed",
+      "task_id": "ca290b1e5f0b4d72a457e8d4b849155f",
+      "journey_percent": 75.0,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 2019,
+      "error": null
+    },
+    {
+      "turn": 22,
+      "user": "嗯……对未来伴侣的城市,我希望也是杭州或者上海,离家近一点也好互相照应。",
+      "ai": "回城市里——在你设想的关系中，两个人表达爱意的方式大概是什么样的？是那种会主动制造小惊喜、写长长的 message，还是更偏向于默默记住对方的喜好、用行动表达？\n\n这个想法挺实在的，杭州或者上海，离家近，互相照应也方便。那我好奇的是，你希望对方是跟你一样在科技行业，还是其他领域？这个有偏好吗？",
+      "extraction_status": "completed",
+      "task_id": "ec75558aa09d4ff98f7dc3ea69aa3a6d",
+      "journey_percent": 83.33333333333333,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 30868,
+      "error": null
+    },
+    {
+      "turn": 23,
+      "user": "我不会做饭吗?其实我会,但只做自己想吃的,不太会考虑对方口味,这点需要磨合。",
+      "ai": "\n\n原来你做饭是为自己解压的，不是为了照顾别人口味——这个区别其实挺重要的。那我好奇的是，如果对方有忌口或者特别喜欢的口味，你会怎么处理？是照着做，还是希望对方来适应你的风格？\n\n另外，我注意到你之前提到自己是慢热型，熟了以后特别愿意倾听。那在亲密关系里，你希望对方怎么理解你的慢热？是觉得这样很舒服，还是会有压力？",
+      "extraction_status": "processing",
+      "task_id": "654de1bd99ae427088adc962387263ea",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30002,
+      "error": null
+    },
+    {
+      "turn": 24,
+      "user": "我希望周末我们是各干各的,她看书我跑步,晚上一起做饭聊天,而不是整天形影不离。",
+      "ai": "\n\n这个画面很舒服，各自有空间，晚上又有交集。这种模式其实很适合你——不是靠密度维持感情，而是靠质量。\n\n那我好奇的是，在「晚上一起做饭聊天」这部分，你更享受的是哪一块？是两个人一起在厨房里配合的过程，还是饭桌上那种放下一天疲惫、认真聊天的时刻？",
+      "extraction_status": "processing",
+      "task_id": "597660ed20a04555a4f92d246c94c8ca",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30002,
+      "error": null
+    },
+    {
+      "turn": 25,
+      "user": "如果有一天我愿意为对方改变习惯,大概是因为我认定她了,否则我比较坚持自己的节奏。",
+      "ai": "\n\n这个说法很实在，你不是抗拒改变，而是改变需要一个足够重的理由。你对自己的节奏有清晰的边界，但同时也保留了深度联结的可能——这种反差其实很动人。\n\n那我顺着这个往下问：你有没有想过，那个“认定”的瞬间，大概会是什么样子的？是某个很日常的时刻，还是某个特别的节点？",
+      "extraction_status": "processing",
+      "task_id": "753dc88b4d3f4b0ea4aefcb5fc00ce30",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30007,
+      "error": null
+    },
+    {
+      "turn": 26,
+      "user": "今天杭州下了好大的雨,出门带了两把伞。",
+      "ai": "\n\n带两把伞，这个细节很温柔。杭州的雨一下起来确实很大，你出门前会想到多带一把，是不是心里也住着一个会为别人撑伞的人？\n\n那我好奇的是，除了伞，你平时还有没有这种下意识为别人多准备一点的习惯？比如出门带两份早餐，或者看到合适的东西会想着也给对方带一份？",
+      "extraction_status": "completed",
+      "task_id": "54b528154a884efabf52e1314220ffd4",
+      "journey_percent": 83.33333333333333,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 15684,
+      "error": null
+    },
+    {
+      "turn": 27,
+      "user": "哦对了,我前面提到的工作断联一小时,周末会延展到半天,基本不主动看消息。",
+      "ai": "\n\n这个补充很重要，说明你对个人空间的保护不是一时的冲动，而是一种稳定的生活方式。周末半天不看消息，这个边界其实挺清晰的。\n\n那我好奇的是，如果对方在你断联的这段时间里遇到急事，或者情绪特别低落，需要你，你会怎么处理？是完全不管，还是会有特殊的安排？",
+      "extraction_status": "completed",
+      "task_id": "5ce0ea9fa5704d1daa75758a623cf0fa",
+      "journey_percent": 83.33333333333333,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 7275,
+      "error": null
+    },
+    {
+      "turn": 28,
+      "user": "我不太会主动关心对方身体,比如提醒吃药,但她会记住我的事,我也会记住她的,只是方式不同。",
+      "ai": "\n\n你这么说，让我想到你之前提过的那种「默默记住对方小事」的表达方式——不是靠嘴上提醒，而是放在心里，用行动去回应。\n\n那有没有一个具体的时刻，让你觉得「她记住了我的事，我也记住了她的事」？比如她无意间提过喜欢某种口味，你下次做饭就加了；或者你注意到她某个习惯，悄悄做了调整。这种互相记得的感觉，对你来说意味着什么？",
+      "extraction_status": "completed",
+      "task_id": "78f45521eb344938a9ed9bca19b042da",
+      "journey_percent": 83.33333333333333,
+      "dimensions": {
+        "personality_social": {
+          "percent": 100.0,
+          "evidence_count": 4
+        },
+        "intimacy_pattern": {
+          "percent": 100.0,
+          "evidence_count": 2
+        },
+        "lifestyle": {
+          "percent": 100.0,
+          "evidence_count": 5
+        },
+        "emotional_expression": {
+          "percent": 50.0,
+          "evidence_count": 1
+        },
+        "relationship_boundaries": {
+          "percent": 100.0,
+          "evidence_count": 3
+        },
+        "future_expectations": {
+          "percent": 50.0,
+          "evidence_count": 1
+        }
+      },
+      "build_invite_id": "invite-9b7dd5d08c57455fbef232794c2dd435",
+      "publish_ready": false,
+      "ai_reply_time_ms": 27083,
+      "error": null
+    },
+    {
+      "turn": 29,
+      "user": "如果她跟我抱怨工作,我会先听不急着给建议,等她情绪过了再一起想怎么办。",
+      "ai": "\n\n这个顺序其实很关键——先处理心情，再处理事情。你不是急着当那个解决问题的人，而是先让对方把情绪倒出来，等她心里的水倒干净了，再一起找路。\n\n那有没有一次，对方跟你抱怨工作，你印象比较深的？比如她当时说了什么，你听完之后是怎么做的，后来你们是一起想的主意，还是她自己就想通了？",
+      "extraction_status": "processing",
+      "task_id": "ab934250c17348f4b2bbc11f4e3f48a0",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30002,
+      "error": null
+    },
+    {
+      "turn": 30,
+      "user": "希望十年后我们还是愿意一起吃早餐聊天的两个人,而不是只剩责任。",
+      "ai": "\n\n这个画面特别好——十年后的早餐，不是义务，是愿意。这和你之前说的「各自空间，晚上交集」其实是一回事，你想要的不是黏在一起，是那种「就算什么都不做也愿意坐在一起」的松弛感。\n\n那我顺着这个想问一下，你现在是单身还是已经在一段关系里了？这个会影响我们聊「未来期待」的角度，我想知道你现在是往前看，还是在经营中。",
+      "extraction_status": "processing",
+      "task_id": "5065676ed5e64c6189f4084299450e68",
+      "journey_percent": null,
+      "dimensions": {},
+      "build_invite_id": null,
+      "publish_ready": false,
+      "ai_reply_time_ms": 30003,
+      "error": null
+    }
+  ],
+  "summary": {
+    "score_total": 89.54,
+    "score_breakdown": {
+      "dimension": 65.2,
+      "style_safety": 97.5,
+      "evidence": 95.45,
+      "state_dedup": 100.0
+    }
+  }
+}

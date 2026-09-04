@@ -7,6 +7,7 @@
 	import { request } from './request.uts'
 	import { getAccessToken, buildApiUrl, resolveMediaUrl } from './config.uts'
 	import { sleep } from '@/utils/sleep.uts'
+	import { entryFieldLabel } from '@/utils/moxiang-dimension.uts'
 /** 画像主体:关于我 / 关于对方 */
 export type ProfileSubject = 'personal' | 'ideal_partner'
 
@@ -54,15 +55,19 @@ ENUM_OPTIONS.set('education_level', [
   { label: '博士', value: 6 }
 ])
 ENUM_OPTIONS.set('income_band', [
-  { label: '无收入', value: 0 },
-  { label: '一档', value: 1 },
-  { label: '二档', value: 2 },
-  { label: '三档', value: 3 },
-  { label: '四档', value: 4 },
-  { label: '五档及以上', value: 5 }
+  { label: '无收入/暂不固定', value: 0 },
+  { label: '5千以下', value: 1 },
+  { label: '5千-1万', value: 2 },
+  { label: '1万-2万', value: 3 },
+  { label: '2万-3万5', value: 4 },
+  { label: '3万5-5万', value: 5 },
+  { label: '5万以上', value: 6 }
 ])
 
 export function fieldLabel(key: string): string {
+  // 旅程晋升生成的 entry 字段（entry_<dimension>_<hash>）解码为六维中文名（#21）。
+  const entryLabel = entryFieldLabel(key)
+  if (entryLabel != '') return entryLabel
   const label = FIELD_KEY_LABELS.get(key)
   return label != null ? label : key
 }
@@ -152,15 +157,15 @@ export function fieldAction(fieldKey: string, action: string, value: any = null,
 }
 
 /**
-	 * 发布已确认字段。
- * 注意:后端契约要求 expected_revision 作为 query 参数传递(非 body),
- * 缺失会返回 400 AI_INPUT_INVALID。
+ * 发布已确认字段。
+ * expected_revision 走 query 参数；新版结果页同时传入用户实际确认过的 preview_id。
+ * previewId 为空时保留旧调用链兼容。
  */
-export async function publishProfileDraft(draftId: string, expectedRevision: number): Promise<any> {
+export async function publishProfileDraft(draftId: string, expectedRevision: number, previewId: string = ''): Promise<any> {
   return request({
     url: '/ai/profile-drafts/' + draftId + '/publish?expected_revision=' + expectedRevision,
     method: 'POST',
-    data: {},
+    data: previewId != '' ? { preview_id: previewId } : {},
     headers: { 'Idempotency-Key': genIdempotencyKey() }
   })
 }
@@ -331,6 +336,37 @@ export async function revokeProfileTextConsent(expectedPrivacyRevision: number):
   })
 }
 
+/**
+ * 纸飞机草稿 AI 润色预览。只提交当前输入，不保存、不发送，也不自动替换草稿。
+ */
+export async function polishPaperPlaneText(content: string, field: string, style: string = 'natural'): Promise<any> {
+  const original = content != null ? ('' + content).trim() : ''
+  if (original == '') return { success: false, data: null, code: 422, message: '请输入需要润色的内容' }
+  const normalizedField = field == 'idealPartner' ? 'ideal_partner' : 'self_introduction'
+  const res = await request({
+    url: '/ai/profile/polish',
+    method: 'POST',
+    data: { content: original, field: normalizedField, style: style != '' ? style : 'natural', max_length: 300 },
+    mockData: { original: original, polished: original, style: style != '' ? style : 'natural', changed_points: [] }
+  })
+  if (!res.success) {
+    const code = res.code != null ? Number(res.code) : 0
+    const message = code == 401
+      ? '请先登录后再使用 AI 润色'
+      : code == 402
+        ? 'AI 润色次数已用完，请稍后再试'
+        : code == 403
+          ? '当前内容不符合 AI 润色规则，请修改后重试'
+          : code == 503
+            ? 'AI 服务暂时不可用，请稍后再试'
+            : (res.message != null ? '' + res.message : 'AI 润色失败，请稍后再试')
+    return { success: false, data: null, code: res.code, message }
+  }
+  const raw = res.data != null ? res.data : {}
+  const polished = raw.polished != null && ('' + raw.polished).trim() != '' ? ('' + raw.polished).trim() : original
+  return { success: true, data: { original: original, polished: polished, field: field, style: raw.style != null ? raw.style : style, changedPoints: raw.changed_points != null ? raw.changed_points : [] }, code: 0, message: 'success' }
+}
+
 	/**
  * 语音转写:上传音频到 /voice/transcribe → 拿 task_id → 轮询 /ai/tasks/{id}
  * → status=succeeded 时从 result_payload.transcript 取转写文本。
@@ -474,5 +510,14 @@ export async function getPortraitNarrative(subject: string): Promise<any> {
   return request({
     url: '/ai/profiles/' + subject + '/narrative',
     method: 'GET'
+  })
+}
+
+/** 用户确认最新生成的画像叙事层。 */
+export async function confirmPortraitNarrative(subject: string): Promise<any> {
+  return request({
+    url: '/ai/profiles/' + subject + '/narrative/confirm',
+    method: 'POST',
+    data: {}
   })
 }

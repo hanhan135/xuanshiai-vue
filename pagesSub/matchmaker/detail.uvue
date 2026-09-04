@@ -192,13 +192,13 @@ import MatchmakerAvatar from '@/components/MatchmakerAvatar.uvue'
 import { getServiceMatchmakers, getCustomMatchmakers, getMatchmakerDetail } from '@/api'
 import { mockMatchmakerContact } from '@/mock'
 
-const matchmakerCaseImageA = '/static/cases/wuhan-zhou-zheng.jpg'
-const matchmakerCaseImageB = '/static/cases/shenzhen-zhang-liu.jpg'
+const matchmakerCaseImageA = '/pagesSub/matchmaker/static/cases/wuhan-zhou-zheng.webp'
+const matchmakerCaseImageB = '/pagesSub/matchmaker/static/cases/shenzhen-zhang-liu.webp'
 
 const fallbackMatchmaker = {
 	id: 1,
 	name: '沈知意',
-	avatar: '/static/portraits/profile-woman-main.jpg',
+	avatar: '/static/portraits/profile-woman-main.webp',
 	gender: 'female',
 	age: 35,
 	city: '杭州',

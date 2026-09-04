@@ -1,0 +1,82 @@
+// 墨相六维统一映射表（批次3 #21/#20）。
+// 六维 slug（personality_social 等）与 entry category slug（basics 等 9 枚举）
+// 此前散落在进度面板、邀请卡、确认卡与档案页各自实现，命名与兜底不一致。
+// 这里集中一份常量供四处复用：
+//   - 进度面板 MoxiangProgressPanel：dimensionLabel/dimensionDesc
+//   - 邀请卡 MoxiangBuildInviteCard：dimensionLabel（#19 分维小标题）
+//   - 确认卡 my-portrait-master：categoryLabel（#20 未知 category 兜底「其他」）
+//   - 档案页 api/ai-profile.uts fieldLabel：entryFieldLabel 解码 entry_<dim>_<hash>
+// category 词典与后端 app/schemas/ai_profile.py 的 PROFILE_ENTRY_CATEGORY_LABELS
+// 对齐；六维中文命名沿用进度面板已定稿的用户侧文案（亲密与关系/边界与分寸）。
+
+export interface MoxiangDimensionMeta {
+	key: string
+	label: string
+	glyph: string
+	desc: string
+}
+
+/** 六维固定顺序与展示元数据。glyph 为单字墨印（不用 emoji 图标）。 */
+export const MOXIANG_DIMENSIONS: MoxiangDimensionMeta[] = [
+	{ key: 'personality_social', label: '性格与社交', glyph: '格', desc: '你是个什么样的人，怎么和人相处' },
+	{ key: 'intimacy_pattern', label: '亲密与关系', glyph: '密', desc: '你在关系里的沟通与陪伴方式' },
+	{ key: 'lifestyle', label: '生活方式', glyph: '生', desc: '你的日常、兴趣与作息' },
+	{ key: 'emotional_expression', label: '情绪表达', glyph: '情', desc: '你怎么感受、表达和安放情绪' },
+	{ key: 'relationship_boundaries', label: '边界与分寸', glyph: '界', desc: '你在关系里看重和坚持的底线' },
+	{ key: 'future_expectations', label: '未来期待', glyph: '期', desc: '你想过什么样的生活与长远规划' },
+]
+
+const DIMENSION_BY_KEY: Map<string, MoxiangDimensionMeta> = new Map()
+for (const dim of MOXIANG_DIMENSIONS) {
+	DIMENSION_BY_KEY.set(dim.key, dim)
+}
+
+/** 六维 slug → 中文名；未知 slug 兜底「其他理解」，不裸显英文。 */
+export function dimensionLabel(key: string): string {
+	const hit = DIMENSION_BY_KEY.get(key)
+	return hit != null ? hit.label : '其他理解'
+}
+
+/** 六维 slug → 单字墨印；未知兜底「墨」。 */
+export function dimensionGlyph(key: string): string {
+	const hit = DIMENSION_BY_KEY.get(key)
+	return hit != null ? hit.glyph : '墨'
+}
+
+/** 六维 slug → 一句话描述；未知返回空串（调用方自行隐藏）。 */
+export function dimensionDesc(key: string): string {
+	const hit = DIMENSION_BY_KEY.get(key)
+	return hit != null ? hit.desc : ''
+}
+
+/** entry category 9 枚举 → 中文标签（与后端 PROFILE_ENTRY_CATEGORY_LABELS 对齐）。 */
+const CATEGORY_LABELS: Map<string, string> = new Map()
+CATEGORY_LABELS.set('basics', '基本情况')
+CATEGORY_LABELS.set('occupation', '工作状态')
+CATEGORY_LABELS.set('appearance', '外形特征')
+CATEGORY_LABELS.set('personality', '性格特征')
+CATEGORY_LABELS.set('values', '价值观')
+CATEGORY_LABELS.set('interests', '兴趣爱好')
+CATEGORY_LABELS.set('routine', '作息习惯')
+CATEGORY_LABELS.set('diet', '饮食习惯')
+CATEGORY_LABELS.set('life_plan', '生活规划')
+
+/** category slug → 中文标签；空串返回空（调用方隐藏徽标），未知兜底「其他」（#20）。 */
+export function categoryLabel(category: string): string {
+	if (category == '') return ''
+	const hit = CATEGORY_LABELS.get(category)
+	return hit != null ? hit : '其他'
+}
+
+/**
+ * 旅程晋升生成的 entry 字段 key（entry_<dimension>_<hash>）→ 维度中文名。
+ * 非 entry 前缀返回空串，由调用方回落既有 fieldLabel 词典。
+ */
+export function entryFieldLabel(fieldKey: string): string {
+	if (!fieldKey.startsWith('entry_')) return ''
+	const rest = fieldKey.substring('entry_'.length)
+	for (const dim of MOXIANG_DIMENSIONS) {
+		if (rest.startsWith(dim.key + '_')) return dim.label
+	}
+	return ''
+}

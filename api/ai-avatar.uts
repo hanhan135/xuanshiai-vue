@@ -16,7 +16,7 @@ export const AI_AVATAR_STORAGE_PREFIX = 'xsa-ai-avatar-conversations-v1-'
 export const AI_AVATAR_OWNER_STORAGE_PREFIX = 'xsa-ai-avatar-owner-v1-'
 export const AI_AVATAR_HANDOFF_DELAY = 6000
 const AI_AVATAR_PROFILE_PREFIX = 'xsa-ai-avatar-profile-v1-'
-const SELF_AVATAR = '/static/portraits/profile-man-light.jpg'
+const SELF_AVATAR = '/static/portraits/profile-man-light.webp'
 const USER_ID_STORAGE_KEY = 'xsa_user_id'
 
 function success(data: any = null, message: string = 'success'): any {

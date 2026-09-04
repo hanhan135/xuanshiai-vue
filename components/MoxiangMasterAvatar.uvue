@@ -19,10 +19,10 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const avatarSrc = computed(() : string => {
-	if (props.state == 'listening') return '/static/moxiang-master-listening.png'
-	if (props.state == 'thinking') return '/static/moxiang-master-thinking.png'
-	if (props.state == 'speaking') return '/static/moxiang-master-speaking.png'
-	return '/static/moxiang-master-idle.png'
+	if (props.state == 'listening') return '/pagesSub/profileExtra/static/moxiang-master-listening.webp'
+	if (props.state == 'thinking') return '/pagesSub/profileExtra/static/moxiang-master-thinking.webp'
+	if (props.state == 'speaking') return '/pagesSub/profileExtra/static/moxiang-master-speaking.webp'
+	return '/pagesSub/profileExtra/static/moxiang-master-idle.webp'
 })
 </script>
 

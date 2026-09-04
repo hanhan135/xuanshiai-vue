@@ -4,9 +4,9 @@
  */
 
 const PORTRAIT = {
-  main: '/static/portraits/profile-woman-main.jpg',
-  community: '/static/portraits/profile-woman-community.jpg',
-  man: '/static/portraits/profile-man-light.jpg'
+  main: '/static/portraits/profile-woman-main.webp',
+  community: '/static/portraits/profile-woman-community.webp',
+  man: '/static/portraits/profile-man-light.webp'
 }
 
 /** 会话列表 */
@@ -116,7 +116,7 @@ export const mockChatMessages = [
     senderId: 1,
     senderName: '苏晚晴',
     senderAvatar: PORTRAIT.main,
-    content: '/static/portraits/profile-woman-community.jpg',
+    content: '/static/portraits/profile-woman-community.webp',
     type: 'image',
     time: Date.now() - 34 * 60 * 1000,
     isMine: false
@@ -190,7 +190,7 @@ export const mockApplications = [
   {
     id: 2,
     userId: 4,
-    avatar: '/static/portraits/profile-woman-alt.jpg',
+    avatar: '/static/portraits/profile-woman-alt.webp',
     name: '林雨桐',
     age: 28,
     city: '南京',

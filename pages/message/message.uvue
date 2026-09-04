@@ -323,7 +323,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 					id: 1,
 					userId: 1,
 					name: '苏晚晴',
-					avatar: '/static/portraits/profile-woman-main.jpg',
+					avatar: '/static/portraits/profile-woman-main.webp',
 					message: '资料匹配度 92% · 想认真认识你',
 					direction: 'out',
 					statusText: '待回应'
@@ -337,7 +337,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 			id: x.id != null ? x.id : x.userId,
 			userId: x.userId != null ? x.userId : x.id,
 			name: x.name != null ? x.name : '用户',
-			avatar: x.avatar != null ? x.avatar : '/static/portraits/profile-woman-main.jpg',
+			avatar: x.avatar != null ? x.avatar : '/static/portraits/profile-woman-main.webp',
 			message: x.message != null ? x.message : (x.remark != null ? x.remark : '申请认识'),
 			direction: x.direction != null ? x.direction : dir,
 			status: x.status != null ? x.status : 'pending',
@@ -518,7 +518,7 @@ const openPaperPlane = () => {
 			item.avatar,
 			'application',
 			greetingIsMine,
-			greetingIsMine ? '/static/portraits/profile-man-light.jpg' : item.avatar
+			greetingIsMine ? '/static/portraits/profile-man-light.webp' : item.avatar
 		)
 		if (result.conversation != null) {
 			const currentList = messageList.value as any[]

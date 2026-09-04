@@ -75,7 +75,7 @@ export function createMatchedConversation(
 		if (source === 'application' && existing.source === 'application' && existing.greetingMessage != null) {
 			const resolvedGreetingAvatar = greetingAvatar.length > 0
 				? greetingAvatar
-				: (greetingIsMine ? '/static/portraits/profile-man-light.jpg' : avatar)
+				: (greetingIsMine ? '/static/portraits/profile-man-light.webp' : avatar)
 			existing.greetingMessage.type = 'text'
 			existing.greetingMessage.content = MATCH_GREETING
 			existing.greetingMessage.isMine = greetingIsMine
@@ -101,7 +101,7 @@ export function createMatchedConversation(
 		isMine: greetingIsMine,
 		avatar: greetingAvatar.length > 0
 			? greetingAvatar
-			: (greetingIsMine ? '/static/portraits/profile-man-light.jpg' : avatar)
+			: (greetingIsMine ? '/static/portraits/profile-man-light.webp' : avatar)
 	}
 	const conversation = {
 		id: now,

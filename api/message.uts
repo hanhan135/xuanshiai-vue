@@ -8,8 +8,8 @@ import { request } from './request.uts'
 import { USE_MOCK } from './config.uts'
 import { mockMessageList, mockChatMessages, mockApplications } from '@/mock'
 
-const DEFAULT_PEER_AVATAR = '/static/portraits/profile-woman-main.jpg'
-const DEFAULT_ME_AVATAR = '/static/portraits/profile-man-light.jpg'
+const DEFAULT_PEER_AVATAR = '/static/portraits/profile-woman-main.webp'
+const DEFAULT_ME_AVATAR = '/static/portraits/profile-man-light.webp'
 
 function okRes(data: any): any {
   return {

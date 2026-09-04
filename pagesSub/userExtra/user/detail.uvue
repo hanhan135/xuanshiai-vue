@@ -150,7 +150,7 @@ import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
 import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, getUserVisitorCount, saveAiAvatarProfileSnapshot } from '@/api'
 import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
-import locationJson from '@/static/location.json'
+import locationJson from '@/data/location.json'
 import { SPOTLIGHT_AMOUNT, paySpotlight } from '@/api/spotlight.uts'
 import { guardRealName } from '@/utils/realNameGate.uts'
 
@@ -185,9 +185,9 @@ const certs = ref([
 ])
 
 const dynamics = ref([
-	{ id: 1, time: '2小时前 · 大理', content: '周末和朋友去了趟大理，洱海边的风真的好舒服。停下来拍照的时候，感觉整个世界都慢下来了。', photo: '/static/portraits/profile-woman-community.jpg', topic: '#旅行', likes: 89, comments: 12 },
-	{ id: 2, time: '昨天 18:30 · 奥体中心', content: '完成了人生第一个半马！虽然很累，但冲线的那一刻，一切都值得。', photo: '/static/portraits/profile-woman-alt.jpg', topic: '#健身', likes: 156, comments: 28 },
-	{ id: 3, time: '3天前 · 蜂巢剧场', content: '新年第一场脱口秀。笑到腹肌疼，才发现快乐原来这么简单。', photo: '/static/portraits/profile-woman-main.jpg', topic: '#生活', likes: 203, comments: 8 }
+	{ id: 1, time: '2小时前 · 大理', content: '周末和朋友去了趟大理，洱海边的风真的好舒服。停下来拍照的时候，感觉整个世界都慢下来了。', photo: '/static/portraits/profile-woman-community.webp', topic: '#旅行', likes: 89, comments: 12 },
+	{ id: 2, time: '昨天 18:30 · 奥体中心', content: '完成了人生第一个半马！虽然很累，但冲线的那一刻，一切都值得。', photo: '/static/portraits/profile-woman-alt.webp', topic: '#健身', likes: 156, comments: 28 },
+	{ id: 3, time: '3天前 · 蜂巢剧场', content: '新年第一场脱口秀。笑到腹肌疼，才发现快乐原来这么简单。', photo: '/static/portraits/profile-woman-main.webp', topic: '#生活', likes: 203, comments: 8 }
 ])
 
 const textValue = (value: any, fallback: string): string => {

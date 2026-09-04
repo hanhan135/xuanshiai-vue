@@ -137,6 +137,7 @@
 					@like="handleLike"
 					@comment="handleComment"
 					@collect="handleCollect"
+					@share="handleShare"
 					@follow="handleFollow"
 					@unfollow="handleUnfollow"
 					@apply="handleApply"
@@ -189,6 +190,7 @@ import XsaTabBar from '@/components/XsaTabBar.uvue'
 		COMMUNITY_CITY_OPTIONS,
 		likeDynamic,
 		collectDynamic,
+		shareDynamic,
 		followUserFromCommunity,
 		unfollowUserFromCommunity
 	} from '@/api'
@@ -249,7 +251,7 @@ const cityName = ref('')
 				{ key: 'latest', label: '最新' }
 			]
 		}
-return [
+		return [
 				{ key: 'all', label: '全部' },
 				{ key: 'mbti', label: 'MBTI' },
 				{ key: 'alumni', label: '校友' }
@@ -613,31 +615,36 @@ const handleLike = async (dynamicId: number) => {
 		uni.navigateTo({ url: '/pagesSub/community/post-detail?id=' + dynamicId })
 	}
 
-const handleCollect = async (dynamicId: number) => {
-			const ok = await guardRealName('collect')
-			if (!ok) return
-			try {
-				const res = await collectDynamic(dynamicId)
-				if (res.success && res.data != null) {
-					const list = dynamicList.value as any[]
-					const idx = list.findIndex((d: any) => d.id == dynamicId)
-					if (idx >= 0) {
-						list[idx].collected = res.data.collected
-						list[idx].collectCount = res.data.collectCount
-					}
-				} else {
-					const msg =
-						res.data != null && res.data.message != null
-							? res.data.message
-							: res.message != null
-								? res.message
-								: '收藏失败，请重试'
-					uni.showToast({ title: msg, icon: 'none' })
+	const handleCollect = async (dynamicId: number) => {
+		const ok = await guardRealName('collect')
+		if (!ok) return
+		try {
+			const res = await collectDynamic(dynamicId)
+			if (res.success && res.data != null) {
+				const list = dynamicList.value as any[]
+				const idx = list.findIndex((d: any) => d.id == dynamicId)
+				if (idx >= 0) {
+					list[idx].collected = res.data.collected == true
+					if (res.data.collectCount != null) list[idx].collectCount = Number(res.data.collectCount)
 				}
-			} catch (e) {
-				uni.showToast({ title: '收藏失败，请重试', icon: 'none' })
+				dynamicList.value = list.slice()
+			} else {
+				const msg = res.message != null && res.message != '' ? '' + res.message : '收藏失败，请重试'
+				uni.showToast({ title: msg, icon: 'none' })
 			}
+		} catch (e) {
+			uni.showToast({ title: '收藏失败，请重试', icon: 'none' })
 		}
+	}
+
+	const handleShare = async (dynamicId: number) => {
+		try {
+			const res = await shareDynamic(dynamicId)
+			uni.showToast({ title: res.success ? '已生成分享内容，请使用右上角分享' : '分享暂不可用，请稍后重试', icon: 'none' })
+		} catch (e) {
+			uni.showToast({ title: '分享暂不可用，请稍后重试', icon: 'none' })
+		}
+	}
 
 	const syncFollowed = (userId: number, followed: boolean) => {
 		const list = dynamicList.value as any[]

@@ -344,7 +344,7 @@
 		{
 			id: 1,
 			userId: 1,
-			avatar: '/static/portraits/profile-woman-alt.jpg',
+			avatar: '/static/portraits/profile-woman-alt.webp',
 			name: '林雨桐',
 			birthYear: '1998年',
 			ip: '杭州',
@@ -355,7 +355,7 @@
 		{
 			id: 2,
 			userId: 7,
-					avatar: '/static/portraits/profile-woman-alt.jpg',
+					avatar: '/static/portraits/profile-woman-alt.webp',
 			name: '周予安',
 			birthYear: '1997年',
 			ip: '南京',

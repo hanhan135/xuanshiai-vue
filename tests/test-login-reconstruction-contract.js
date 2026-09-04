@@ -23,8 +23,10 @@ assert.doesNotMatch(login, /uni\.request\(/)
 
 assert.match(login, /调试登录，直接进入首页/)
 assert.match(login, /首次登录/)
-assert.match(login, /setAuthTokens/)
-assert.match(login, /debug_access_token_xsa/)
+assert.match(login, /loginByExistingAccount/)
+assert.match(login, /const handleDebugLogin = async/)
+assert.match(login, /await loginByExistingAccount\(debugPhone, debugAccountPassword\)/)
+assert.doesNotMatch(login, /debug_access_token_xsa/)
 assert.doesNotMatch(login, /loginWithMockSms/)
 
 assert.match(authApi, /export async function loginByWechat/)

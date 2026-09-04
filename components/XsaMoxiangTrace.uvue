@@ -1,0 +1,239 @@
+<!--
+  XsaMoxiangTrace - 墨相师·dev-only 折叠层
+  仅在 __DEV__ 编译宏开启时挂载,展示最近一次 moxiang_prompt_loop 回放的
+  逐轮对话 / 抽取状态 / 评分。生产构建通过 __DEV__ 静态剔除,产物不增加体积。
+-->
+<template>
+	<view v-if="visible" class="xsa-moxiang-trace">
+		<view class="xsa-moxiang-trace-header" @tap="toggle">
+			<text class="xsa-moxiang-trace-title">墨相·自动化回放 trace</text>
+			<text class="xsa-moxiang-trace-score">{{ scoreText }}</text>
+			<text class="xsa-moxiang-trace-toggle">{{ expanded ? '收起' : '展开' }}</text>
+		</view>
+		<view v-if="expanded" class="xsa-moxiang-trace-body">
+			<view class="xsa-moxiang-trace-meta">
+				<text class="xsa-moxiang-trace-meta-text">run_id: {{ trace?.run_id || '-' }}</text>
+				<text class="xsa-moxiang-trace-meta-text">subject: {{ trace?.subject || '-' }}</text>
+				<text class="xsa-moxiang-trace-meta-text">elapsed: {{ trace?.elapsed_seconds || 0 }}s</text>
+			</view>
+			<scroll-view scroll-y="true" class="xsa-moxiang-trace-scroll">
+				<view v-for="turn in trace?.turns || []" :key="turn.turn" class="xsa-moxiang-trace-turn">
+					<view class="xsa-moxiang-trace-turn-head">
+						<text class="xsa-moxiang-trace-turn-no">#{{ turn.turn }}</text>
+						<text class="xsa-moxiang-trace-turn-status" :class="statusClass(turn)">
+							{{ turnStatus(turn) }}
+						</text>
+						<text class="xsa-moxiang-trace-turn-time">{{ turn.ai_reply_time_ms }}ms</text>
+					</view>
+					<view class="xsa-moxiang-trace-bubble user">
+						<text class="xsa-moxiang-trace-bubble-label">USER</text>
+						<text class="xsa-moxiang-trace-bubble-text">{{ turn.user }}</text>
+					</view>
+					<view class="xsa-moxiang-trace-bubble ai">
+						<text class="xsa-moxiang-trace-bubble-label">AI</text>
+						<text class="xsa-moxiang-trace-bubble-text">{{ turn.ai || '(无回复)' }}</text>
+					</view>
+					<view v-if="turn.journey_percent != null" class="xsa-moxiang-trace-meta">
+						<text class="xsa-moxiang-trace-meta-text">
+							progress: {{ Math.round(turn.journey_percent || 0) }}%
+						</text>
+					</view>
+					<view v-if="turn.error" class="xsa-moxiang-trace-error">
+						<text class="xsa-moxiang-trace-error-text">{{ turn.error.code }} · {{ turn.error.message }}</text>
+					</view>
+				</view>
+			</scroll-view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+/**
+ * Dev-only:由宿主页面在 onMount 调 ``loadMoxiangTrace()``,再把结果传进来。
+ */
+import type { MoxiangTrace } from '@/utils/moxiangTrace.uts'
+
+interface Props {
+	trace: MoxiangTrace | null
+}
+
+const props = defineProps<Props>()
+
+const expanded = ref(false)
+const visible = computed(() => props.trace != null)
+
+const scoreText = computed(() => {
+	if (props.trace == null) return ''
+	const s = props.trace.summary?.score_total ?? 0
+	return `总分 ${s}`
+})
+
+function toggle(): void {
+	expanded.value = !expanded.value
+}
+
+function turnStatus(turn: any): string {
+	if (turn.error) return '失败'
+	if (!turn.ai) return '未回复'
+	if (turn.extraction_status === 'failed') return '抽取失败'
+	if (turn.publish_ready) return '可发布'
+	if (turn.build_invite_id) return '邀请'
+	if (turn.extraction_status === 'completed') return '已抽取'
+	return '进行中'
+}
+
+function statusClass(turn: any): string {
+	if (turn.error) return 'is-error'
+	if (!turn.ai) return 'is-warn'
+	if (turn.publish_ready || turn.build_invite_id) return 'is-good'
+	return 'is-neutral'
+}
+</script>
+
+<style scoped>
+.xsa-moxiang-trace {
+	position: fixed;
+	left: 16rpx;
+	right: 16rpx;
+	bottom: 32rpx;
+	background: rgba(28, 28, 32, 0.92);
+	color: #f4f1ea;
+	border-radius: 16rpx;
+	padding: 16rpx;
+	z-index: 9999;
+	max-height: 60vh;
+	box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.3);
+	font-size: 22rpx;
+}
+
+.xsa-moxiang-trace-header {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 12rpx;
+}
+
+.xsa-moxiang-trace-title {
+	flex: 1;
+	font-weight: 600;
+}
+
+.xsa-moxiang-trace-score {
+	background: #8a5a3b;
+	color: #f4f1ea;
+	padding: 2rpx 10rpx;
+	border-radius: 8rpx;
+	font-size: 20rpx;
+}
+
+.xsa-moxiang-trace-toggle {
+	color: #c4b9a9;
+	font-size: 20rpx;
+}
+
+.xsa-moxiang-trace-body {
+	margin-top: 12rpx;
+}
+
+.xsa-moxiang-trace-meta {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 12rpx;
+	margin-bottom: 8rpx;
+}
+
+.xsa-moxiang-trace-meta-text {
+	color: #b0a796;
+	font-size: 18rpx;
+}
+
+.xsa-moxiang-trace-scroll {
+	max-height: 50vh;
+}
+
+.xsa-moxiang-trace-turn {
+	padding: 12rpx 0;
+	border-bottom: 1rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.xsa-moxiang-trace-turn-head {
+	display: flex;
+	flex-direction: row;
+	gap: 12rpx;
+	align-items: center;
+	margin-bottom: 6rpx;
+}
+
+.xsa-moxiang-trace-turn-no {
+	color: #c4b9a9;
+	font-weight: 600;
+}
+
+.xsa-moxiang-trace-turn-status {
+	font-size: 18rpx;
+	padding: 2rpx 8rpx;
+	border-radius: 6rpx;
+}
+
+.xsa-moxiang-trace-turn-status.is-error {
+	background: #b14747;
+}
+
+.xsa-moxiang-trace-turn-status.is-warn {
+	background: #b58b3b;
+}
+
+.xsa-moxiang-trace-turn-status.is-good {
+	background: #3b6e57;
+}
+
+.xsa-moxiang-trace-turn-status.is-neutral {
+	background: #4a4a52;
+}
+
+.xsa-moxiang-trace-turn-time {
+	color: #b0a796;
+	font-size: 18rpx;
+	margin-left: auto;
+}
+
+.xsa-moxiang-trace-bubble {
+	padding: 8rpx 12rpx;
+	border-radius: 8rpx;
+	margin-top: 6rpx;
+}
+
+.xsa-moxiang-trace-bubble.user {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.xsa-moxiang-trace-bubble.ai {
+	background: rgba(138, 90, 59, 0.18);
+}
+
+.xsa-moxiang-trace-bubble-label {
+	display: block;
+	color: #b0a796;
+	font-size: 16rpx;
+	margin-bottom: 4rpx;
+}
+
+.xsa-moxiang-trace-bubble-text {
+	display: block;
+	font-size: 22rpx;
+	line-height: 1.4;
+}
+
+.xsa-moxiang-trace-error {
+	background: rgba(177, 71, 71, 0.2);
+	padding: 6rpx 10rpx;
+	border-radius: 6rpx;
+	margin-top: 6rpx;
+}
+
+.xsa-moxiang-trace-error-text {
+	color: #f5b6b6;
+	font-size: 18rpx;
+}
+</style>

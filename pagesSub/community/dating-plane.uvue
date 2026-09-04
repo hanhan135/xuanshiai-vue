@@ -76,7 +76,7 @@
 	const reportVisible = ref(false)
 	const receivedPlane = ref({
 		id: 2,
-		avatar: '/static/portraits/profile-woman-alt.jpg',
+		avatar: '/static/portraits/profile-woman-alt.webp',
 		name: '林雨桐',
 		gender: '女',
 		age: 26,
@@ -97,7 +97,7 @@
 				const item: any = list[0]
 				receivedPlane.value = {
 					id: item.id != null ? item.id : 2,
-					avatar: '/static/portraits/profile-woman-alt.jpg',
+					avatar: '/static/portraits/profile-woman-alt.webp',
 					name: item.name != null ? item.name : '林雨桐',
 					gender: item.gender != null ? item.gender : '女',
 					age: item.age != null ? item.age : 26,

@@ -33,13 +33,13 @@ console.log('====================================')
 console.log('社区闭环流程测试')
 console.log('====================================\n')
 
-// 0. 调试登录必须完全本地化，不能因登录按钮请求后端。
+// 0. 真实后端模式下，调试登录必须换取后端签发的有效 Token。
 console.log('0. 本地开发登录...')
 const loginPage = read('pages/auth/login.uvue')
-if (loginPage.includes('setAuthTokens') && loginPage.includes('debug_access_token_xsa') && !loginPage.includes('loginWithMockSms')) {
-  ok('调试登录只写入本地 Token，不请求后端')
+if (loginPage.includes('loginByExistingAccount') && !loginPage.includes('debug_access_token_xsa')) {
+  ok('调试登录使用后端签发的有效 Token')
 } else {
-  fail('调试登录仍依赖后端请求')
+  fail('调试登录仍写入后端无法识别的固定 Token')
 }
 
 // 1. 页面与路由

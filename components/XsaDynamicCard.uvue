@@ -98,8 +98,10 @@
 		<!-- 互动栏 -->
 		<view class="card-footer" @click.stop>
 			<view class="action-item" @click="handleLike">
-				<text class="icon" :class="{ liked: liked }">{{ liked ? '❤️' : '🤍' }}</text>
-				<text class="text text-muted" v-if="likeCount > 0">{{ likeCount }}</text>
+				<view class="like-icon" :class="{ liked: liked }">
+					<text class="icon">{{ liked ? '👍' : '👍🏻' }}</text>
+				</view>
+				<text class="text text-muted" :class="{ liked: liked }" v-if="likeCount > 0">{{ likeCount }}</text>
 			</view>
 			<view class="action-item" @click="handleComment">
 				<text class="icon">💬</text>
@@ -108,6 +110,10 @@
 			<view class="action-item" @click="handleCollect">
 				<text class="icon">{{ collected ? '⭐' : '☆' }}</text>
 				<text class="text text-muted" v-if="collectCount > 0">{{ collectCount }}</text>
+			</view>
+			<view class="action-item" @click="handleShare">
+				<text class="icon">↗</text>
+				<text class="text text-muted">分享</text>
 			</view>
 			<button
 				class="apply-btn"
@@ -376,6 +382,10 @@ const handleLike = () => {
 
 const handleComment = () => {
 	emit('comment', props.dynamic.id)
+}
+
+const handleShare = () => {
+	emit('share', props.dynamic.id)
 }
 
 const handleCollect = () => {
@@ -748,8 +758,26 @@ const handleOpen = () => {
 	font-size: 18px;
 }
 
-.action-item .icon.liked {
-	animation: heartBeat 0.3s ease;
+/* mp-weixin 下 emoji 是彩色字形，color 无法改变其颜色；已赞态用 👍 肤色变体（👍🏻→👍）+ 底色圆 + 计数变主题色表达 */
+.like-icon {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s ease;
+}
+
+.like-icon.liked {
+	background: var(--accent-bg);
+	animation: thumbPulse 0.3s ease;
+}
+
+.action-item .text.liked {
+	color: var(--accent2);
+	font-weight: 700;
 }
 
 .action-item .text {
@@ -776,7 +804,7 @@ const handleOpen = () => {
 	border: 1px solid var(--line);
 }
 
-@keyframes heartBeat {
+@keyframes thumbPulse {
 	0%,
 	100% {
 		transform: scale(1);

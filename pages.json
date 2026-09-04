@@ -157,6 +157,13 @@
           }
         },
         {
+          "path": "paper-plane-chat",
+          "style": {
+            "navigationBarTitleText": "纸飞机聊天",
+            "navigationStyle": "custom"
+          }
+        },
+        {
           "path": "paper-plane-sent",
           "style": {
             "navigationBarTitleText": "我发出的",
@@ -354,6 +361,14 @@
         {
           "path": "my-portrait-master",
           "style": { "navigationBarTitleText": "墨相师", "navigationStyle": "custom" }
+        },
+        {
+          "path": "my-portrait-result",
+          "style": { "navigationBarTitleText": "画像成稿", "navigationStyle": "custom" }
+        },
+        {
+          "path": "my-portrait-archive",
+          "style": { "navigationBarTitleText": "我的墨相档案", "navigationStyle": "custom" }
         }
       ]
     },

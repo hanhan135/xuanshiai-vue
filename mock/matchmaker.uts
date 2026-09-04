@@ -4,12 +4,13 @@
  */
 
 const PORTRAIT = {
-  main: '/static/portraits/profile-woman-main.jpg',
-  alt: '/static/portraits/profile-woman-alt.jpg',
-  community: '/static/portraits/profile-woman-community.jpg',
-  man: '/static/portraits/profile-man-light.jpg',
-  sea: '/static/portraits/profile-man-sea.jpg',
-  manAlt: '/static/portraits/profile-man-alt.jpg'
+  main: '/static/portraits/profile-woman-pose1.png',
+  alt: '/static/portraits/profile-woman-pose2.png',
+  community: '/static/portraits/profile-woman-pose3.png',
+  pose4: '/static/portraits/profile-woman-pose4.png',
+  man: '/static/portraits/profile-man-light.webp',
+  sea: '/static/portraits/profile-man-sea.webp',
+  manAlt: '/static/portraits/profile-man-alt.webp'
 }
 
 /**

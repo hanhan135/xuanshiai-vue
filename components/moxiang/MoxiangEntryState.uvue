@@ -1,0 +1,237 @@
+<!--
+  Phase 1 Contract v1.1 P1-D：墨相师首次/恢复页
+  - consent_granted=false:渲染授权引导卡片(profile_text_extract)
+  - consent_granted=true && 无会话:渲染首次介绍 + 开始聊聊
+  - consent_granted=true && 有会话:渲染欢迎回来、最后话题、时间、继续上次对话
+  不在此组件内做 subject_switch，主体切换由上层页面统一调度。
+-->
+<template>
+	<view class="mx-entry">
+		<!-- 顶部角色形象 -->
+		<view class="mx-entry-hero">
+			<text class="mx-entry-title">{{ heroTitle }}</text>
+			<text class="mx-entry-sub">{{ heroSub }}</text>
+		</view>
+
+		<!-- 未授权:授权引导 -->
+		<view v-if="!state.consentGranted" class="mx-entry-card mx-entry-consent">
+			<text class="mx-entry-card-title">需要你的允许</text>
+			<text class="mx-entry-card-body">墨相师会自然地跟你聊聊，记得你说过的关键细节，然后把整理好的画像给你确认。在开始前，需要获得你「资料摘要抽取」的同意。</text>
+			<view class="mx-entry-card-actions">
+				<view class="mx-entry-btn mx-entry-btn-primary" @tap="onGrantConsent">
+					<text class="mx-entry-btn-text mx-entry-btn-text-primary">同意并开始</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 已授权且无历史:首次 -->
+		<view v-else-if="!hasSession" class="mx-entry-card mx-entry-first">
+			<text class="mx-entry-card-title">第一次见你</text>
+			<text class="mx-entry-card-body">墨相师是一位有耐心的引路人。和你慢慢聊、记住你说过的关键细节，在合适的时候邀请你一起整理一份属于你的画像。</text>
+			<view class="mx-entry-card-actions">
+				<view class="mx-entry-btn mx-entry-btn-primary" @tap="onStartChat">
+					<text class="mx-entry-btn-text mx-entry-btn-text-primary">开始聊聊</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 已授权且有会话:恢复 -->
+		<view v-else class="mx-entry-card mx-entry-resume">
+			<text class="mx-entry-card-title">欢迎回来</text>
+			<view class="mx-entry-meta">
+				<text class="mx-entry-meta-label">最近话题</text>
+				<text class="mx-entry-meta-value">{{ lastTopic }}</text>
+			</view>
+			<view class="mx-entry-meta">
+				<text class="mx-entry-meta-label">最近时间</text>
+				<text class="mx-entry-meta-value">{{ lastTurnLabel }}</text>
+			</view>
+			<view class="mx-entry-card-actions">
+				<view class="mx-entry-btn mx-entry-btn-primary" @tap="onContinue">
+					<text class="mx-entry-btn-text mx-entry-btn-text-primary">继续上次对话</text>
+				</view>
+				<view class="mx-entry-btn" @tap="onStartChat">
+					<text class="mx-entry-btn-text">重新开始</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 错误重试 -->
+		<view v-if="errorMessage != ''" class="mx-entry-error">
+			<text class="mx-entry-error-text">{{ errorMessage }}</text>
+			<view class="mx-entry-error-btn" @tap="onRetry">
+				<text class="mx-entry-error-btn-text">重试</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import { computed } from 'vue'
+import type { MoxiangStateResponse, MoxiangSubjectSummary } from '@/api/ai-moxiang.uts'
+import type { ProfileSubject } from '@/api/ai-profile.uts'
+
+const props = defineProps<{
+	state: MoxiangStateResponse
+	subject: ProfileSubject
+	errorMessage?: string
+}>()
+
+const emit = defineEmits<{
+	(e: 'grant-consent'): void
+	(e: 'start-chat'): void
+	(e: 'continue-chat'): void
+	(e: 'retry'): void
+}>()
+
+function summary(): MoxiangSubjectSummary {
+	return props.subject == 'ideal_partner' ? props.state.idealPartner : props.state.personal
+}
+
+const hasSession = computed((): boolean => {
+	const s = summary()
+	return s != null && s.sessionId != null && s.sessionId != ''
+})
+
+const lastTopic = computed((): string => {
+	const s = summary()
+	if (s == null) return ''
+	return s.lastTopicExcerpt || ''
+})
+
+const lastTurnLabel = computed((): string => {
+	const s = summary()
+	if (s == null || s.lastTurnAt == null || s.lastTurnAt == '') return '还没有对话'
+	return s.lastTurnAt
+})
+
+const heroTitle = computed((): string => {
+	return props.subject == 'personal' ? '你好，我是墨相师' : '我们聊聊你期待的关系'
+})
+
+const heroSub = computed((): string => {
+	if (!props.state.consentGranted) return '先跟我说说授权的事'
+	if (hasSession.value) return '上次的对话还在这里'
+	return '我想慢慢认识你'
+})
+
+function onGrantConsent() {
+	emit('grant-consent')
+}
+function onStartChat() {
+	emit('start-chat')
+}
+function onContinue() {
+	emit('continue-chat')
+}
+function onRetry() {
+	emit('retry')
+}
+</script>
+
+<style scoped>
+.mx-entry {
+	display: flex;
+	flex-direction: column;
+	padding: 24px 16px 16px;
+}
+.mx-entry-hero {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-bottom: 20px;
+}
+.mx-entry-title {
+	font-size: 22px;
+	font-weight: 700;
+	color: #2E2418;
+	font-family: var(--serif, serif);
+}
+.mx-entry-sub {
+	font-size: 13px;
+	color: #9A8C77;
+	margin-top: 4px;
+}
+.mx-entry-card {
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	border-radius: 12px;
+	padding: 16px;
+}
+.mx-entry-card-title {
+	font-size: 16px;
+	font-weight: 700;
+	color: #2E2418;
+}
+.mx-entry-card-body {
+	font-size: 13px;
+	color: #5C4F3D;
+	line-height: 1.6;
+	margin-top: 8px;
+}
+.mx-entry-card-actions {
+	display: flex;
+	flex-direction: row;
+	margin-top: 14px;
+	gap: 8px;
+}
+.mx-entry-btn {
+	flex: 1;
+	height: 38px;
+	border-radius: 8px;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mx-entry-btn-primary {
+	background: #B4762B;
+	border-color: none;
+}
+.mx-entry-btn-text {
+	font-size: 13px;
+	color: #B4762B;
+	font-weight: 700;
+}
+.mx-entry-btn-text-primary {
+	color: #FFFCF5;
+}
+.mx-entry-meta {
+	margin-top: 10px;
+}
+.mx-entry-meta-label {
+	font-size: 11px;
+	color: #9A8C77;
+}
+.mx-entry-meta-value {
+	font-size: 13px;
+	color: #2E2418;
+	margin-top: 2px;
+}
+.mx-entry-error {
+	margin-top: 14px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: rgba(201, 123, 87, 0.12);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+}
+.mx-entry-error-text {
+	flex: 1;
+	font-size: 12px;
+	color: #A05A3E;
+}
+.mx-entry-error-btn {
+	padding: 4px 10px;
+	border-radius: 6px;
+	background: #A05A3E;
+}
+.mx-entry-error-btn-text {
+	font-size: 11px;
+	color: #FFFCF5;
+	font-weight: 700;
+}
+</style>

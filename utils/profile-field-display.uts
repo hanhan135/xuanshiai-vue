@@ -1,0 +1,136 @@
+// 画像结构化字段的裸值 → 中文展示映射（#18）。
+// 后端旅程 master 草稿的 display_value 直接下发编码值（如 city_code='330100'、
+// education_level=4、income_band=2、marriage_status='single'、occupation_group=
+// 'technology'），前端确认卡与协商中心若原样展示会漏裸码。这里集中一份与后端
+// 冻结字典（app/schemas/ai_profile.py）及 PRODUCT.md 收入档位口径对齐的词典，
+// 供展示层兜底。枚举值一旦后端调整，需同步此处。
+import locationJson from '@/data/location.json'
+
+/** 婚姻状态：后端 frozenset({single,divorced,widowed}) */
+const MARRIAGE_STATUS_LABELS: Map<string, string> = new Map()
+MARRIAGE_STATUS_LABELS.set('single', '未婚')
+MARRIAGE_STATUS_LABELS.set('divorced', '离异')
+MARRIAGE_STATUS_LABELS.set('widowed', '丧偶')
+
+/** 学历：与落笔页 ENUM_OPTIONS 对齐（1-6），后端区间上限 8 时回落原值 */
+const EDUCATION_LEVEL_LABELS: Map<string, string> = new Map()
+EDUCATION_LEVEL_LABELS.set('1', '初中及以下')
+EDUCATION_LEVEL_LABELS.set('2', '高中/中专')
+EDUCATION_LEVEL_LABELS.set('3', '大专')
+EDUCATION_LEVEL_LABELS.set('4', '本科')
+EDUCATION_LEVEL_LABELS.set('5', '硕士')
+EDUCATION_LEVEL_LABELS.set('6', '博士')
+
+/** 收入档位：PRODUCT.md 2026-09-03 口径，个人月收入、左闭右开、0-6 */
+const INCOME_BAND_LABELS: Map<string, string> = new Map()
+INCOME_BAND_LABELS.set('0', '无收入/暂不固定')
+INCOME_BAND_LABELS.set('1', '5千以下')
+INCOME_BAND_LABELS.set('2', '5千-1万')
+INCOME_BAND_LABELS.set('3', '1万-2万')
+INCOME_BAND_LABELS.set('4', '2万-3万5')
+INCOME_BAND_LABELS.set('5', '3万5-5万')
+INCOME_BAND_LABELS.set('6', '5万以上')
+
+/** 职业大类：后端 frozenset({technology,education,healthcare,finance,public_service,other}) */
+const OCCUPATION_GROUP_LABELS: Map<string, string> = new Map()
+OCCUPATION_GROUP_LABELS.set('technology', '互联网/技术')
+OCCUPATION_GROUP_LABELS.set('education', '教育')
+OCCUPATION_GROUP_LABELS.set('healthcare', '医疗')
+OCCUPATION_GROUP_LABELS.set('finance', '金融')
+OCCUPATION_GROUP_LABELS.set('public_service', '公职')
+OCCUPATION_GROUP_LABELS.set('other', '其他')
+
+/** 关系期待：后端 frozenset({marriage,dating,friendship}) */
+const RELATIONSHIP_GOAL_LABELS: Map<string, string> = new Map()
+RELATIONSHIP_GOAL_LABELS.set('marriage', '以结婚为目标')
+RELATIONSHIP_GOAL_LABELS.set('dating', '认真交往')
+RELATIONSHIP_GOAL_LABELS.set('friendship', '先做朋友')
+
+function mapLookup(dict: Map<string, string>, raw: any): string {
+	const key = '' + raw
+	const hit = dict.get(key)
+	return hit != null ? hit : ''
+}
+
+/** 城市码 → 城市名。匹配市/区/省级码；直辖市「市辖区」回落省名。 */
+export function cityNameByCode(code: any): string {
+	const target = '' + code
+	if (target == '') return ''
+	const provinces = Array.isArray(locationJson) ? locationJson as any[] : []
+	for (const province of provinces) {
+		const cities = Array.isArray(province.city) ? province.city as any[] : []
+		for (const city of cities) {
+			if ('' + city.code == target) {
+				const cityName = '' + city.name
+				return cityName == '市辖区' ? ('' + province.name) : cityName
+			}
+			const areas = Array.isArray(city.area) ? city.area as any[] : []
+			for (const area of areas) {
+				if ('' + area.code == target) return '' + area.name
+			}
+		}
+		if ('' + province.code == target) return '' + province.name
+	}
+	return ''
+}
+
+/** 标签数组 → 顿号连接（值多为中文标签本身，直接拼接）。 */
+function tagsText(value: any): string {
+	if (Array.isArray(value)) {
+		const parts = value as any[]
+		const texts: string[] = []
+		for (const item of parts) {
+			const text = '' + item
+			if (text != '') texts.push(text)
+		}
+		return texts.join('、')
+	}
+	return '' + value
+}
+
+/**
+ * 把画像字段的裸值翻译成中文展示串。
+ * 优先返回映射结果；无映射时回落服务端 display_value，再回落原值字符串。
+ * 数组（标签/多选）统一顿号连接。
+ */
+export function displayFieldValue(fieldKey: string, value: any, displayValue?: string): string {
+	if (value == null) {
+		return displayValue != null && displayValue != '' ? displayValue : ''
+	}
+	let translated = ''
+	switch (fieldKey) {
+		case 'marriage_status':
+			translated = mapLookup(MARRIAGE_STATUS_LABELS, value)
+			break
+		case 'education_level':
+			translated = mapLookup(EDUCATION_LEVEL_LABELS, value)
+			break
+		case 'income_band':
+			translated = mapLookup(INCOME_BAND_LABELS, value)
+			break
+		case 'occupation_group':
+			translated = mapLookup(OCCUPATION_GROUP_LABELS, value)
+			break
+		case 'relationship_goal':
+			translated = mapLookup(RELATIONSHIP_GOAL_LABELS, value)
+			break
+		case 'city_code':
+			translated = cityNameByCode(value)
+			break
+		case 'age':
+			translated = '' + value + '岁'
+			break
+		case 'height_cm':
+			translated = '' + value + 'cm'
+			break
+		case 'interest_tags':
+		case 'lifestyle_tags':
+			translated = tagsText(value)
+			break
+		default:
+			translated = ''
+	}
+	if (translated != '') return translated
+	if (displayValue != null && displayValue != '') return displayValue
+	return Array.isArray(value) ? tagsText(value) : '' + value
+}

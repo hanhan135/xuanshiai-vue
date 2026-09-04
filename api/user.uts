@@ -725,3 +725,34 @@ export async function likeUser(userId: number) {
     matched: res.data != null && res.data.matched == true
   })
 }
+
+/** 获取当前用户私有的“我的喜欢”用户列表；不会作为帖子互动计数返回。 */
+export async function getMyLikedProfiles(page: number = 1, pageSize: number = 20) {
+  if (USE_MOCK) {
+    const ids = mockLikedUserIds as number[]
+    const rows: any[] = []
+    const pool = ([] as any[]).concat(mockRecommendUsers as any[], mockSquareUsers as any[])
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = 0; j < pool.length; j++) {
+        const row = pool[j]
+        const rowId = row != null && row.id != null ? Number(row.id) : (row != null && row.userId != null ? Number(row.userId) : 0)
+        if (rowId == ids[i]) { rows.push(row); break }
+      }
+    }
+    const start = Math.max(0, (page - 1) * pageSize)
+    const items = rows.slice(start, start + pageSize)
+    return request({
+      url: '/users/me/likes',
+      cloudFunctionName: 'user',
+      action: 'getMyLikedProfiles',
+      method: 'GET',
+      data: { page, pageSize },
+      mockData: { items, total: rows.length, page, pageSize }
+    })
+  }
+  return await request({
+    url: '/users/me/likes',
+    method: 'GET',
+    data: { page, page_size: pageSize }
+  })
+}

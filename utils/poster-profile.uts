@@ -18,7 +18,7 @@ export type PosterProfile = {
 	realNameVerified: boolean
 }
 
-const FALLBACK_AVATAR = '/static/portraits/profile-woman-main.jpg'
+const FALLBACK_AVATAR = '/static/portraits/profile-woman-main.webp'
 const EMPTY_VALUE = '未填写'
 
 function textValue(source: any, key: string, fallback: string = EMPTY_VALUE): string {
@@ -124,8 +124,8 @@ export function defaultPosterProfile(): PosterProfile {
 		job: '产品经理',
 		income: EMPTY_VALUE,
 		marriage: EMPTY_VALUE,
-		avatar: '/static/portraits/profile-man-light.jpg',
-		photos: ['/static/portraits/profile-man-light.jpg', '/static/portraits/profile-man-alt.jpg', '/static/portraits/profile-man-sea.jpg'],
+		avatar: '/static/portraits/profile-man-light.webp',
+		photos: ['/static/portraits/profile-man-light.webp', '/static/portraits/profile-man-alt.webp', '/static/portraits/profile-man-sea.webp'],
 		tags: [EMPTY_VALUE, EMPTY_VALUE],
 		introduction: '认真生活，也愿意为重要的人留出时间。',
 		expectations: [EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE, EMPTY_VALUE],

@@ -1,0 +1,210 @@
+<template>
+	<view class="mpa-page">
+		<view class="mpa-nav">
+			<view class="mpa-nav-back" @tap="navBack"><text class="mpa-nav-back-text">←</text></view>
+			<text class="mpa-nav-title">我的墨相档案</text>
+			<view class="mpa-nav-side"></view>
+		</view>
+
+		<view v-if="loading" class="mpa-loading">
+			<view class="mpa-loading-dot"></view>
+			<text class="mpa-loading-text">正在整理档案…</text>
+		</view>
+
+		<view v-else-if="errorMessage" class="mpa-error">
+			<text class="mpa-error-text">{{ errorMessage }}</text>
+			<view class="mpa-error-btn" @tap="loadArchive"><text class="mpa-error-btn-text">重试</text></view>
+		</view>
+
+		<view v-else class="mpa-body">
+			<view class="mpa-subject" :class="mpa-subject-personal">
+				<text class="mpa-subject-title">我的墨相</text>
+				<text class="mpa-subject-sub">{{ personalStateSub }}</text>
+				<text v-if="archive.personal.consentActive" class="mpa-badge">授权中</text>
+				<text v-else class="mpa-badge mpa-badge-off">未授权</text>
+				<view class="mpa-subject-actions">
+					<view class="mpa-btn" @tap="goMaster('personal')">
+						<text class="mpa-btn-text">{{ personalCta }}</text>
+					</view>
+					<view v-if="archive.personal.currentRevision" class="mpa-btn mpa-btn-ghost" @tap="goResult('personal')">
+						<text class="mpa-btn-text">看成稿</text>
+					</view>
+				</view>
+				<view v-if="archive.personal.history.length > 0" class="mpa-history">
+					<text class="mpa-history-title">历史版本</text>
+					<view v-for="(item, idx) in archive.personal.history" :key="idx" class="mpa-history-item">
+						<text class="mpa-history-no">#{{ item.revisionNo }}</text>
+						<text class="mpa-history-time">{{ formatTime(item.publishedAt) }}</text>
+						<text class="mpa-history-fields">{{ item.fieldCount }} 字段</text>
+					</view>
+				</view>
+				<view v-if="archive.personal.preview" class="mpa-preview-tip">
+					<text class="mpa-preview-tip-text">草稿上有未发布的预览(rev {{ archive.personal.preview.expectedRevision }})</text>
+				</view>
+			</view>
+
+			<view class="mpa-subject" :class="mpa-subject-ideal">
+				<text class="mpa-subject-title">愿遇之相</text>
+				<text class="mpa-subject-sub">{{ idealPartnerStateSub }}</text>
+				<text v-if="archive.idealPartner.consentActive" class="mpa-badge">授权中</text>
+				<text v-else class="mpa-badge mpa-badge-off">未授权</text>
+				<view class="mpa-subject-actions">
+					<view class="mpa-btn" @tap="goMaster('ideal_partner')">
+						<text class="mpa-btn-text">{{ idealPartnerCta }}</text>
+					</view>
+					<view v-if="archive.idealPartner.currentRevision" class="mpa-btn mpa-btn-ghost" @tap="goResult('ideal_partner')">
+						<text class="mpa-btn-text">看成稿</text>
+					</view>
+				</view>
+				<view v-if="archive.idealPartner.history.length > 0" class="mpa-history">
+					<text class="mpa-history-title">历史版本</text>
+					<view v-for="(item, idx) in archive.idealPartner.history" :key="idx" class="mpa-history-item">
+						<text class="mpa-history-no">#{{ item.revisionNo }}</text>
+						<text class="mpa-history-time">{{ formatTime(item.publishedAt) }}</text>
+						<text class="mpa-history-fields">{{ item.fieldCount }} 字段</text>
+					</view>
+				</view>
+				<view v-if="archive.idealPartner.preview" class="mpa-preview-tip">
+					<text class="mpa-preview-tip-text">草稿上有未发布的预览(rev {{ archive.idealPartner.preview.expectedRevision }})</text>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script lang="uts">
+	/**
+	 * Phase 3 P3-03 —— 我的墨相档案
+	 *
+	 * 路径: pagesSub/profileExtra/my-portrait-archive
+	 * 入口: 我的页面"我的墨相档案"双入口(配合墨相师入口)
+	 *
+	 * 行为契约:
+	 * 1. 永远 GET /ai/moxiang/archive(200),不依赖其它状态
+	 * 2. 双主体资产卡独立展示,主体互不干扰
+	 * 3. 撤回授权后,主体资产卡仍可读(只把 consentActive 标 false)
+	 */
+	import { getMoxiangArchive, type MoxiangArchiveResponse, type ArchiveSubject } from '@/api/ai-moxiang.uts'
+
+	function emptySubject(subject: 'personal' | 'ideal_partner'): ArchiveSubject {
+		return {
+			subject,
+			consentActive: false,
+			currentRevision: null,
+			activeDraft: null,
+			summaryExcerpt: null,
+			history: [],
+			preview: null
+		}
+	}
+
+	export default {
+		data() {
+			return {
+				loading: true,
+				errorMessage: '',
+				archive: {
+					personal: emptySubject('personal'),
+					idealPartner: emptySubject('ideal_partner'),
+					fallbackAvailable: false
+				} as MoxiangArchiveResponse
+			}
+		},
+		computed: {
+			personalStateSub(): string {
+				const p = this.archive.personal
+				if (p.currentRevision) return '已发布第 ' + p.currentRevision.revisionNo + ' 版'
+				if (p.activeDraft) return '草稿进行中 · rev ' + p.activeDraft.expectedRevision
+				return '尚未开始'
+			},
+			idealPartnerStateSub(): string {
+				const p = this.archive.idealPartner
+				if (p.currentRevision) return '已发布第 ' + p.currentRevision.revisionNo + ' 版'
+				if (p.activeDraft) return '草稿进行中 · rev ' + p.activeDraft.expectedRevision
+				return '需要先完成我的墨相'
+			},
+			personalCta(): string {
+				const p = this.archive.personal
+				if (p.currentRevision) return '继续完善'
+				if (p.activeDraft) return '继续聊聊'
+				return '开始聊聊'
+			},
+			idealPartnerCta(): string {
+				const p = this.archive.idealPartner
+				if (p.currentRevision) return '继续完善'
+				if (p.activeDraft) return '继续聊聊'
+				return '开始聊聊'
+			}
+		},
+		onLoad() {
+			this.loadArchive()
+		},
+		onShow() {
+			// 从结果页发布/恢复后,档案可能变化,自动重拉
+			if (!this.loading) this.loadArchive()
+		},
+		methods: {
+			navBack() {
+				uni.navigateBack({ delta: 1, fail: () => {
+					uni.switchTab({ url: '/pages/profile/profile' })
+				} })
+			},
+			async loadArchive() {
+				this.loading = true
+				this.errorMessage = ''
+				try {
+					const data = await getMoxiangArchive()
+					this.archive = data
+				} catch (e: any) {
+					this.errorMessage = '读取档案失败:' + (e?.message ?? String(e))
+				} finally {
+					this.loading = false
+				}
+			},
+			goMaster(subject: string) {
+				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-master?subject=' + subject })
+			},
+			goResult(subject: string) {
+				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-result?subject=' + subject })
+			},
+			formatTime(t: string | null): string {
+				if (!t) return ''
+				if (t.length >= 10) return t.substring(0, 10)
+				return t
+			}
+		}
+	}
+</script>
+
+<style>
+	.mpa-page { min-height: 100vh; background: #faf7f2; padding: 0 0 80rpx 0; }
+	.mpa-nav { display: flex; align-items: center; padding: 32rpx 32rpx 24rpx 32rpx; }
+	.mpa-nav-back { width: 64rpx; height: 64rpx; display: flex; align-items: center; justify-content: center; }
+	.mpa-nav-back-text { font-size: 36rpx; color: #5a4632; }
+	.mpa-nav-title { flex: 1; text-align: center; font-size: 32rpx; color: #3a2c1f; font-weight: 600; }
+	.mpa-nav-side { width: 64rpx; }
+	.mpa-loading, .mpa-error { padding: 120rpx 32rpx; text-align: center; }
+	.mpa-loading-dot { width: 24rpx; height: 24rpx; border-radius: 50%; background: #b89878; margin: 0 auto 16rpx; }
+	.mpa-loading-text, .mpa-error-text { font-size: 28rpx; color: #5a4632; }
+	.mpa-error-btn { margin-top: 32rpx; padding: 24rpx 0; background: #efe6d9; border-radius: 12rpx; }
+	.mpa-error-btn-text { font-size: 28rpx; color: #3a2c1f; }
+	.mpa-body { padding: 0 32rpx; }
+	.mpa-subject { background: #fff; border-radius: 16rpx; padding: 32rpx; margin-top: 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.04); }
+	.mpa-subject-title { font-size: 32rpx; color: #3a2c1f; font-weight: 600; display: block; }
+	.mpa-subject-sub { font-size: 26rpx; color: #8c7860; display: block; margin-top: 8rpx; }
+	.mpa-badge { display: inline-block; margin-top: 12rpx; padding: 4rpx 16rpx; font-size: 22rpx; border-radius: 999rpx; background: #efe6d9; color: #5a4632; }
+	.mpa-badge-off { background: #f0e0d0; color: #8c7860; }
+	.mpa-subject-actions { display: flex; gap: 16rpx; margin-top: 24rpx; }
+	.mpa-btn { flex: 1; padding: 20rpx 0; background: #b89878; border-radius: 12rpx; text-align: center; }
+	.mpa-btn-ghost { background: transparent; border: 1rpx solid #b89878; }
+	.mpa-btn-text { font-size: 26rpx; color: #fff; }
+	.mpa-btn-ghost .mpa-btn-text { color: #b89878; }
+	.mpa-history { margin-top: 24rpx; padding-top: 16rpx; border-top: 1rpx solid #efe6d9; }
+	.mpa-history-title { font-size: 22rpx; color: #8c7860; display: block; margin-bottom: 8rpx; }
+	.mpa-history-item { display: flex; gap: 24rpx; padding: 8rpx 0; font-size: 24rpx; color: #5a4632; }
+	.mpa-history-no { color: #b89878; font-weight: 600; }
+	.mpa-history-time { color: #8c7860; }
+	.mpa-history-fields { color: #5a4632; }
+	.mpa-preview-tip { margin-top: 16rpx; padding: 12rpx 16rpx; background: #fdf3e0; border-radius: 8rpx; }
+	.mpa-preview-tip-text { font-size: 22rpx; color: #8a6a3a; }
+</style>
