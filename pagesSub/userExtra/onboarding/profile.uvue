@@ -116,6 +116,10 @@
 	}
 	const heightOptions = numericOptions(140, 220, 'cm')
 	const weightOptions = numericOptions(40, 120, 'kg')
+	const educationOptions = ['小学', '初中', '技校', '高中', '大专', '本科', '硕士', '博士']
+	const heightTouched = ref(false)
+	const weightTouched = ref(false)
+	const bodyDefaults = (gender: string): any => gender === '女' ? { height: '160cm', weight: '50kg' } : { height: '170cm', weight: '60kg' }
 	const yearOptions = numericOptions(1966, 2008, '')
 	const monthOptions = numericOptions(1, 12, '')
 	const dayOptions = numericOptions(1, 31, '')
@@ -129,7 +133,7 @@
 		{ title: '您的工作地区', type: 'location', options: [] as string[] },
 		{ title: '您的身高是多少', type: 'picker', options: heightOptions },
 		{ title: '您的体重是多少', type: 'picker', options: weightOptions },
-		{ title: '您的最高学历', type: 'picker', options: ['大专', '本科', '硕士', '博士'] },
+		{ title: '您的最高学历', type: 'picker', options: educationOptions },
 		{ title: '您从事何种工作', type: 'grid', options: ['不限', '私企员工', '央企/国企', '外企', '事业单位', '公务员', '教师', '医生', '护士', '互联网行业', '自由职业', '军人', '工人', '服务业', '金融', '律师', '求职中', '在校学生'] },
 		{ title: '您的婚姻状况', type: 'picker', options: ['未婚', '离异', '丧偶'] },
 		{ title: '您的收入状况', type: 'picker', options: ['小于10w', '10-20w', '30-50w', '50-100w', '100w以上', '保密'] }
@@ -226,6 +230,12 @@
 			if (question.type === 'picker' && question.options.length > 0) return question.options[0]
 			return ''
 		})
+		const body = bodyDefaults(selections.value[0])
+		selections.value[4] = body.height
+		selections.value[5] = body.weight
+		selections.value[6] = '大专'
+		heightTouched.value = false
+		weightTouched.value = false
 		if (locationLabel.value != '') {
 			selections.value[2] = locationLabel.value
 			selections.value[3] = locationLabel.value
@@ -259,7 +269,15 @@
 		const index = Number(values[0])
 		pickerIndex.value = index
 		const options = currentOptions.value
-		if (index >= 0 && index < options.length) selectOption(options[index])
+		if (index < 0 || index >= options.length) return
+		if (step.value === 5) heightTouched.value = true
+		if (step.value === 6) weightTouched.value = true
+		if (step.value === 1) {
+			const body = bodyDefaults(options[index])
+			if (!heightTouched.value) selections.value[4] = body.height
+			if (!weightTouched.value) selections.value[5] = body.weight
+		}
+		selectOption(options[index])
 	}
 	const onDatePickerChange = (event: any) => {
 		const values = event.detail.value as any[]
@@ -303,7 +321,7 @@
 		const birthday = selections.value[1]
 		const heightText = selections.value[4].replace('cm', '')
 		const weightText = selections.value[5].replace('kg', '')
-		const educationMap: any = { '大专': 4, '本科': 3, '硕士': 2, '博士': 1 }
+		const educationMap: any = { '大专': 4, '本科': 3, '硕士': 2, '博士': 1, '高中': 5, '技校': 6, '初中': 7, '小学': 8 }
 		const marriageMap: any = { '未婚': 1, '离异': 2, '丧偶': 3 }
 		const incomeMap: any = { '小于10w': 50000, '10-20w': 150000, '30-50w': 400000, '50-100w': 750000, '100w以上': 1000000 }
 		const payload: any = {

@@ -44,7 +44,7 @@
 					<view class="function-icon" :class="item.tone"><text>{{ item.icon }}</text></view>
 					<text class="function-label">{{ item.label }}</text>
 					<text v-if="item.trailing" class="function-trailing">{{ item.trailing }}</text>
-					<text class="function-link">{{ item.actionLabel }} ></text>
+					<text class="function-link">{{ item.actionLabel }} ›</text>
 				</view>
 			</view>
 
@@ -122,9 +122,9 @@ const navigationItems = [
 .welcome-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7rpx; }
 .welcome-title { color: var(--ink); font-size: 34rpx; line-height: 1.25; font-weight: 800; }
 .welcome-subtitle { color: var(--muted); font-size: 21rpx; line-height: 1.45; }
-.role-badge { padding: 12rpx 16rpx; border-radius: 999rpx; background: var(--review-purple); color: var(--paper); font-size: 19rpx; font-weight: 800; white-space: nowrap; }
+.role-badge { padding: 12rpx 16rpx; border-radius: 999rpx; background: var(--accent2); color: var(--paper); font-size: 19rpx; font-weight: 800; white-space: nowrap; }
 .store-brief { overflow: hidden; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
-.brief-heading { padding: 22rpx 26rpx; background: var(--review-purple); display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
+.brief-heading { padding: 22rpx 26rpx; background: var(--accent2); display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
 .brief-title { color: var(--paper); font-size: 27rpx; font-weight: 800; }
 .brief-copy { color: var(--accent-bg); font-size: 20rpx; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }

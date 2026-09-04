@@ -25,7 +25,7 @@
 			<view class="workspace-content">
 				<view class="workspace-heading">
 					<text class="workspace-title">{{ workspaceTitle }}</text>
-					<text class="workspace-copy">本地 Mock 数据 · 可直接处理工作记录</text>
+					<text class="workspace-copy">仅展示服务端已提供的数据，未开放能力不会创建本地记录。</text>
 				</view>
 				<view class="workspace-tabs">
 					<view v-for="item in workspaceTabs" :key="item" class="workspace-tab" :class="{ active: workspaceActiveTab == item }" @click="selectWorkspaceTab(item)"><text>{{ item }}</text></view>
@@ -33,9 +33,8 @@
 				<view class="workspace-search"><text>搜</text><input :placeholder="workspaceSearchPlaceholder" :value="workspaceKeyword" @input="onWorkspaceKeywordInput"/><view @click="runWorkspaceSearch"><text>搜索</text></view></view>
 
 				<view v-if="workspaceKind == 'commission'">
-					<view class="workspace-cash"><text>可提现额度（元）</text><text class="workspace-cash-value">509.00</text><text>芷希老师 · 累计赚了 ¥509</text><view @click="showToast('提现申请已保存到本地')"><text>立即提现</text></view></view>
-					<view class="workspace-notice"><text class="workspace-notice-title">温馨提示</text><text>分享平台首页、会员资料海报或专属推广链接后，引流注册的会员会自动纳入您的服务名下。</text></view>
-					<view class="workspace-promotion"><text>任何人通过您的专属海报或链接注册，即计入您的名下</text><view><text @click="copyWorkspaceLink">复制我的专属推广链接</text><text @click="showToast('专属推广海报已保存')">下载我的专属推广海报</text></view></view>
+					<view class="workspace-cash"><text>资金结算</text><text class="workspace-cash-value">--</text><text>分成、账本和提现不在本期范围内。</text></view>
+					<view class="workspace-notice"><text class="workspace-notice-title">温馨提示</text><text>专属推广链接与海报将在后端配置后开放。</text></view>
 					<view v-for="row in workspaceCommissionRows" :key="row.time" class="workspace-commission-row"><text>{{ row.time }}</text><view><image :src="row.avatar" mode="aspectFill"/><view><text>{{ row.name }}</text><text>{{ row.item }}</text></view><text>{{ row.amount }}</text></view></view>
 				</view>
 
@@ -49,7 +48,7 @@
 					<view v-for="row in workspaceMatches" :key="row.id" class="workspace-match-card"><view><text>申请时间：{{ row.time }}</text><text>{{ row.status }}</text></view><view class="workspace-match-person"><image :src="row.a.avatar" mode="aspectFill"/><view><text>{{ row.a.name }} · {{ row.a.gender }}</text><text>编号：{{ row.a.id }}</text></view><text @click="showToast('联系信息已打开')">联系 Ta</text></view><view class="workspace-match-person"><image :src="row.b.avatar" mode="aspectFill"/><view><text>{{ row.b.name }} · {{ row.b.gender }}</text><text>编号：{{ row.b.id }}</text></view><text @click="showToast('联系信息已打开')">联系 Ta</text></view><text>服务红娘：芷希老师</text></view>
 				</view>
 
-				<view v-else-if="workspaceKind == 'entry'" class="workspace-entry-card"><text>{{ workspaceTitle }}</text><text class="workspace-muted">资料提交后将进入“资料待审”，审核通过后才会对外展示。</text><view><text>昵称</text><input placeholder="请输入昵称"/></view><view><text>手机号码</text><input placeholder="请输入手机号码" type="number"/></view><view><text>微信号</text><input placeholder="请输入微信号"/></view><view><text>会员类型</text><text>{{ workspaceTitle == '录入会员' ? '线上VIP' : '客源线索' }}</text></view><view class="workspace-entry-submit" @click="showToast('本地 Mock 资料已保存，等待审核')"><text>保存并进入资料待审</text></view></view>
+				<view v-else-if="workspaceKind == 'entry'" class="workspace-entry-card"><text>{{ workspaceTitle }}</text><text class="workspace-muted">录入会员、牵线和约见需等待对应服务端流程开放；当前不会保存本地模拟记录。</text></view>
 
 				<view v-else-if="workspaceKind == 'member'">
 					<view v-for="member in workspaceMembers" :key="member.id" class="workspace-info-card"><view class="workspace-member-header"><image :src="member.avatar" mode="aspectFill"/><view><text>{{ member.name }} · {{ member.gender }}</text><text>编号：{{ member.id }} · {{ member.type }}</text></view></view><view><text>服务红娘</text><text>{{ member.owner }}</text></view><view><text>资料状态</text><text>{{ member.status }}</text></view><view class="workspace-actions"><text @click="showToast('已打开会员资料')">详细资料</text><text @click="showToast('已打开服务跟进')">服务跟进</text><text @click="showToast('已打开牵线记录')">牵线记录</text></view></view>
@@ -59,9 +58,9 @@
 					<view v-for="activity in workspaceActivities" :key="activity.title" class="workspace-info-card"><text>{{ activity.title }}</text><text class="workspace-muted">{{ activity.time }} · {{ activity.city }}</text><view><text>报名人数</text><text>{{ activity.count }} 人</text></view><view><text>审核状态</text><text>{{ activity.status }}</text></view><view class="workspace-actions"><text @click="showToast('已打开报名名单')">报名名单</text><text @click="showToast('已打开活动编辑')">编辑</text><text @click="showToast('报名审核已保存')">报名审核</text></view></view>
 				</view>
 
-				<view v-else-if="workspaceKind == 'video'" class="workspace-info-card"><text>视频管理</text><text class="workspace-muted">可维护会员展示视频与审核状态</text><view><text>待审核视频</text><text>2 条</text></view><view><text>已发布视频</text><text>8 条</text></view><view class="workspace-actions"><text @click="showToast('已打开待审核视频')">待审核</text><text @click="showToast('已打开视频资料库')">视频资料库</text></view></view>
+				<view v-else-if="workspaceKind == 'video'" class="workspace-info-card"><text>视频管理</text><text class="workspace-muted">该能力尚未在移动工作台开放。</text></view>
 
-				<view v-else-if="workspaceKind == 'account'" class="workspace-info-card"><text>我的账号</text><view><text>账号昵称</text><text>依依</text></view><view><text>服务门店</text><text>南京总店</text></view><view><text>红娘等级</text><text>超级红娘</text></view><view><text>账号权限</text><text>门店服务范围</text></view><view class="workspace-actions"><text @click="showToast('账号资料已打开')">编辑资料</text><text @click="copyWorkspaceLink">复制链接</text></view></view>
+				<view v-else-if="workspaceKind == 'account'" class="workspace-info-card"><text>我的账号</text><text class="workspace-muted">账号昵称、身份范围与安全设置由服务端账号资料管理。</text></view>
 
 				<view v-else><view v-for="row in workspaceGenericRows" :key="row.title" class="workspace-generic-card"><view><text>{{ row.icon }}</text></view><view><text>{{ row.title }}</text><text>{{ row.desc }}</text></view><text @click="showToast(row.action)">{{ row.action }} ></text></view></view>
 			</view>
@@ -102,7 +101,7 @@
 					</view>
 				</view>
 
-				<!-- 总店红娘工作台入口：服务端确认已付款且账号激活后才可进入。 -->
+				<!-- 服务端确认服务红娘角色有效后即可进入；本期不以支付作为门槛。 -->
 				<view class="management-entry" :class="{ ready: canEnterManagementCenter }">
 					<view class="management-entry-copy">
 					<view class="management-entry-title-row">
@@ -421,17 +420,12 @@ const workspaceSearchPlaceholder = computed(() => {
 	if (workspaceKind.value == 'match') return '请输入申请人昵称、姓名或编号'
 	return '请输入关键词'
 })
-const workspaceAvatarWoman = '/static/portraits/profile-woman-alt.jpg'
-const workspaceCommissionRows = [
-	{ time: '06-30 20:37', name: '乌龙茶07i', item: '购买了爆灯', amount: '+5.00', avatar: workspaceAvatarWoman },
-	{ time: '06-30 11:53', name: '是静香本人没错', item: '购买了爆灯', amount: '+5.00', avatar: '/static/portraits/profile-man-light.jpg' },
-	{ time: '06-20 11:18', name: '毛毛', item: '购买了臻爱专享', amount: '+300.00', avatar: '/static/portraits/profile-woman-community.jpg' }
-]
-const workspaceLeads = [{ id: 'lead-1', time: '2026-08-27 09:36:31', name: 'Lemon', gender: '女', phone: '13777297543', wechat: '未填写', source: '未填写', owner: '依依' }]
-const workspaceMatches = [{ id: 'match-1', time: '2026-06-26 17:25:09', status: '待牵线', a: { name: 'Good Ni~李会强', gender: '男', id: 'B134461', avatar: '/static/portraits/profile-man-light.jpg' }, b: { name: '尤宋~尼颜', gender: '女', id: 'G298094', avatar: workspaceAvatarWoman } }]
-const workspaceMembers = [{ id: 'G522362', name: '依依', gender: '女', type: '线上VIP', owner: '芷希老师', status: '审核通过', avatar: workspaceAvatarWoman }, { id: 'B053440', name: '胡毓恒', gender: '男', type: '公开相亲', owner: '未分派', status: '待审核', avatar: '/static/portraits/profile-man-light.jpg' }]
-const workspaceActivities = [{ title: '认真相亲线下见面会', time: '2026-09-06 14:00', city: '南京', count: 18, status: '待审核' }, { title: '高知青年同城交流活动', time: '2026-09-13 15:00', city: '南京', count: 26, status: '报名中' }]
-const workspaceGenericRows = [{ icon: '办', title: '工作记录', desc: '状态、负责人和操作历史已保留在本地 Mock 中。', action: '添加记录' }, { icon: '设', title: '相关设置', desc: '后端接入前，变更仅在当前设备会话中生效。', action: '管理设置' }]
+const workspaceCommissionRows: any[] = []
+const workspaceLeads: any[] = []
+const workspaceMatches: any[] = []
+const workspaceMembers: any[] = []
+const workspaceActivities: any[] = []
+const workspaceGenericRows: any[] = []
 
 const specialtyOptions = [
 	'高知青年', '同城牵线', '离异再婚', '大龄脱单',
@@ -471,8 +465,7 @@ const managementAccessDescription = computed(() => {
 	if (canEnterManagementCenter.value) {
 		return '服务开通已确认，可进入工作台处理门店服务事项。'
 	}
-	if (managementAccess.value.paymentStatus != 'paid') return '完成服务开通付款后，即可进入管理中心。'
-	if (managementAccess.value.roleStatus != 'active') return '付款已确认，正在等待服务红娘账号激活。'
+	if (managementAccess.value.roleStatus != 'active') return '服务红娘申请审核通过并激活后，即可进入管理中心。'
 	return managementAccess.value.message != null && String(managementAccess.value.message).length > 0
 		? String(managementAccess.value.message)
 		: '当前账号暂未获得管理中心权限。'
@@ -504,7 +497,7 @@ const runWorkspaceSearch = () => {
 		showToast('请输入搜索关键词')
 		return
 	}
-	showToast('已按关键词筛选本地数据')
+	showToast('该工作台能力正在接入服务端数据')
 }
 
 const copyWorkspaceText = (value: string) => {
@@ -514,9 +507,7 @@ const copyWorkspaceText = (value: string) => {
 	})
 }
 
-const copyWorkspaceLink = () => {
-	copyWorkspaceText('https://xuanshiai.example/matchmaker/yiyi')
-}
+const copyWorkspaceLink = () => { showToast('专属推广链接尚未开放') }
 
 const loadManagementAccess = async () => {
 	managementAccessLoading.value = true
@@ -873,9 +864,8 @@ const submitApplication = async () => {
 
 		if (result.success) {
 			const applicationId = result.data != null && result.data.id != null ? String(result.data.id) : ''
-			const isMock = result.data != null && result.data.source == 'mock'
 			uni.redirectTo({
-				url: '/pagesSub/matchmaker/application-success?type=service_matchmaker&id=' + applicationId + '&mock=' + (isMock ? '1' : '0')
+				url: '/pagesSub/matchmaker/application-success?type=service_matchmaker&id=' + applicationId
 			})
 		} else {
 			const message = result.message != null ? String(result.message) : '提交失败，请稍后重试'
@@ -906,8 +896,9 @@ const submitApplication = async () => {
 /* ===== 导航栏 ===== */
 .nav-bar {
 	position: relative;
-	height: 88rpx;
-	padding: 0 12rpx;
+	height: calc(88rpx + var(--status-bar-height));
+	padding: var(--status-bar-height) 12rpx 0;
+	box-sizing: border-box;
 	background: var(--paper);
 	display: flex;
 	flex-direction: row;
@@ -920,7 +911,7 @@ const submitApplication = async () => {
 .nav-back {
 	position: absolute;
 	left: 12rpx;
-	top: 16rpx;
+	top: calc(var(--status-bar-height) + 16rpx);
 	width: 64rpx;
 	height: 56rpx;
 	display: flex;
@@ -941,6 +932,7 @@ const submitApplication = async () => {
 	position: absolute;
 	left: 120rpx;
 	right: 120rpx;
+	top: calc(var(--status-bar-height) + 22rpx);
 	display: block;
 	min-width: 0;
 	line-height: 1.3;
@@ -957,7 +949,7 @@ const submitApplication = async () => {
 .nav-help {
 	position: absolute;
 	right: 20rpx;
-	top: 22rpx;
+	top: calc(var(--status-bar-height) + 22rpx);
 	height: 44rpx;
 	padding: 0 14rpx;
 	border-radius: 999rpx;

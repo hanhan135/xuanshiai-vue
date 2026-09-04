@@ -15,13 +15,18 @@
 			<view v-if="activeTab === 0" class="search-panel ai-panel">
 				<view class="ai-input-wrap">
 					<textarea class="ai-input" :value="aiQuery" maxlength="300" :placeholder="aiPlaceholder" @input="onAiInput"></textarea>
-					<view class="ai-input-foot"><view class="ai-template-trigger" @tap="requestAiSuggestedQuery"><text>猜你喜欢</text></view></view>
+					<view class="ai-input-foot"><view class="ai-template-trigger" @tap="requestAiSuggestedQuery"><text class="ai-trigger-text">{{ aiGenerating ? '生成中' : '猜你喜欢' }}</text><view class="ai-trigger-shine"></view></view></view>
 				</view>
 
-				<view class="ai-filter-groups">
-					<view class="ai-filter-row"><text class="filter-row-label">地域</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in regionOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiRegion === item }" @tap="aiRegion = item"><text>{{ item }}</text></view></scroll-view></view>
-					<view class="ai-filter-row"><text class="filter-row-label">边界</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in boundaryOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiBoundary === item }" @tap="aiBoundary = item"><text>{{ item }}</text></view></scroll-view></view>
-					<view class="ai-filter-row"><text class="filter-row-label">兴趣</text><scroll-view class="chip-scroll" :scroll-x="true" :show-scrollbar="false"><view v-for="item in interestOptions" :key="item" class="choice-chip ai-choice-chip" :class="{ selected: aiInterests.indexOf(item) >= 0 }" @tap="toggleInterest(item)"><text>{{ item }}</text></view></scroll-view></view>
+				<view class="ai-drift-field">
+					<text class="drift-word dw-1">认真对待感情</text>
+					<text class="drift-word dw-2">情绪稳定</text>
+					<text class="drift-word dw-3">聊得来</text>
+					<text class="drift-word dw-4">会好好商量</text>
+					<text class="drift-word dw-5">热爱生活</text>
+					<text class="drift-word dw-6">温柔且坚定</text>
+					<text class="drift-word dw-7">靠得住</text>
+					<text class="drift-caption">有些期待，说不出来也能被听见</text>
 				</view>
 			</view>
 
@@ -161,7 +166,7 @@
 <script setup lang="uts">
 	import XsaSheet from '@/components/XsaSheet.uvue'
 	import XsaTag from '@/components/XsaTag.uvue'
-	import { getOwnProfile, updateOwnProfile, getRecommendUsers } from '@/api'
+	import { getOwnProfile, updateOwnProfile, getRecommendUsers, generateIdealPartner } from '@/api'
 
 	const systemInfo = uni.getSystemInfoSync()
 	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
@@ -207,12 +212,8 @@
 	}
 
 	const aiQuery = ref('')
-	const regionOptions = ['同城优先', '全市范围', '不限距离']
-	const boundaryOptions = ['独立私人空间', '高频互动陪伴', '适度黏连']
-	const interestOptions = ['文艺艺术', '户外运动', '游戏数码', '美食旅行', '阅读学习']
-	const aiRegion = ref('同城优先')
-	const aiBoundary = ref('')
-	const aiInterests = ref<string[]>([])
+	const aiGenerating = ref(false)
+	let aiTypingTimer: any = null
 
 	const hometownOptions = ['不限', '江苏', '浙江', '上海', '安徽']
 	const residenceOptions = ['不限', '南京', '杭州', '上海', '深圳']
@@ -286,16 +287,42 @@
 	const goBack = () => uni.navigateBack({ delta: 1 })
 	const handleBack = () => { if (resultState.value != 'idle') openSearchEditor(); else goBack() }
 	const onAiInput = (event: any) => { aiQuery.value = toText(event.detail.value) }
-	const requestAiSuggestedQuery = () => {
-		// TODO: 接入 AI 档案分析后，将生成的搜索词回填到 aiQuery。
-		uni.showToast({ title: 'AI 推荐功能待接入', icon: 'none' })
+	const stopAiTyping = () => {
+		if (aiTypingTimer != null) {
+			clearInterval(aiTypingTimer)
+			aiTypingTimer = null
+		}
 	}
-	const toggleInterest = (item: string) => {
-		const next = aiInterests.value.slice()
-		const index = next.indexOf(item)
-		if (index >= 0) next.splice(index, 1)
-		else next.push(item)
-		aiInterests.value = next
+	const typeAiText = (value: string) => {
+		stopAiTyping()
+		aiQuery.value = ''
+		let index = 0
+		aiTypingTimer = setInterval(() => {
+			if (index >= value.length) {
+				stopAiTyping()
+				return
+			}
+			aiQuery.value += value.charAt(index)
+			index += 1
+		}, 45)
+	}
+	const requestAiSuggestedQuery = async () => {
+		if (aiGenerating.value) return
+		aiGenerating.value = true
+		stopAiTyping()
+		try {
+			const result = await generateIdealPartner()
+			if (!result.success || result.data == null) {
+				uni.showToast({ title: result.message != null ? toText(result.message) : '暂时无法生成，请稍后重试', icon: 'none' })
+				return
+			}
+			typeAiText(toText(result.data))
+		} catch (error) {
+			console.error('[Search] AI suggestion failed', error)
+			uni.showToast({ title: 'AI 暂时不可用，请稍后重试', icon: 'none' })
+		} finally {
+			aiGenerating.value = false
+		}
 	}
 	const onHometownChange = (event: any) => { hometownIndex.value = Number(event.detail.value) }
 	const onResidenceChange = (event: any) => { residenceIndex.value = Number(event.detail.value) }
@@ -316,9 +343,6 @@
 			tab: activeTab.value,
 			label: '',
 			aiQuery: aiQuery.value,
-			aiRegion: aiRegion.value,
-			aiBoundary: aiBoundary.value,
-			aiInterests: aiInterests.value.slice(),
 			targetMbtis: targetMbtis.value.slice(),
 			hometownIndex: hometownIndex.value,
 			residenceIndex: residenceIndex.value,
@@ -377,7 +401,7 @@
 		return parts.join(' | ')
 	}
 	const resultMatchCount = (index: number): number => {
-		const base = activeTab.value == 0 ? 1 + (aiBoundary.value != '' ? 1 : 0) + aiInterests.value.length : activeTab.value == 1 ? targetMbtis.value.length : 1 + (education.value != '' ? 1 : 0) + (income.value != '' ? 1 : 0)
+		const base = activeTab.value == 0 ? 2 : activeTab.value == 1 ? targetMbtis.value.length : 1 + (education.value != '' ? 1 : 0) + (income.value != '' ? 1 : 0)
 		return Math.max(1, Math.min(5, base - (index % 2)))
 	}
 	const resultReasons = (index: number): string[] => {
@@ -453,10 +477,6 @@
 			certificationOnly.value = item.certificationOnly == true
 		} else {
 			aiQuery.value = toText(item.aiQuery)
-			aiRegion.value = toText(item.aiRegion) || regionOptions[0]
-			aiBoundary.value = toText(item.aiBoundary)
-			if (Array.isArray(item.aiInterests)) aiInterests.value = item.aiInterests as string[]
-			else aiInterests.value = []
 		}
 		activeTab.value = tab >= 0 && tab <= 2 ? tab : 0
 		resultState.value = 'idle'
@@ -498,6 +518,7 @@
 	}
 
 	onMounted(() => { loadOwnMbti(); loadHistory() })
+	onUnmounted(() => { stopAiTyping() })
 </script>
 
 <style scoped>
@@ -517,12 +538,23 @@
 .ai-input-wrap { padding: 24rpx; border: 1rpx solid var(--line); border-radius: 32rpx; background: var(--canvas); }
 .ai-input { width: 100%; height: 300rpx; padding: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--sans); font-size: 28rpx; line-height: 1.75; }
 .ai-input-foot { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; min-height: 44rpx; }
-.ai-template-trigger { padding: 10rpx 18rpx; border-radius: 999rpx; background: var(--accent-bg); color: var(--accent2); font-size: 22rpx; }
-.ai-filter-groups { display: flex; flex-direction: column; gap: 18rpx; margin-top: 32rpx; }
-.ai-filter-row { display: flex; flex-direction: row; align-items: center; min-width: 0; }
-.filter-row-label { width: 64rpx; flex: 0 0 auto; color: var(--muted); font-size: 22rpx; }
-.chip-scroll, .condition-choice-scroll { width: 0; min-width: 0; flex: 1; display: block; white-space: nowrap; touch-action: pan-x; }
-.ai-choice-chip { display: inline-flex; flex-direction: row; align-items: center; margin: 2rpx 14rpx 2rpx 0; vertical-align: middle; }
+.ai-template-trigger { position: relative; overflow: hidden; display: flex; flex-direction: row; align-items: center; gap: 12rpx; padding: 12rpx 26rpx; border-radius: 999rpx; background: var(--accent-bg); box-shadow: 0 6rpx 20rpx var(--accent-glow); }
+.ai-trigger-star { color: var(--accent2); font-size: 22rpx; animation: ai-trigger-breathe 2.8s ease-in-out infinite; }
+.ai-trigger-text { color: var(--accent2); font-size: 22rpx; font-weight: 600; letter-spacing: .04em; }
+.ai-trigger-shine { position: absolute; top: -8rpx; right: auto; bottom: -8rpx; left: -40rpx; width: 52rpx; background: var(--paper); opacity: .55; transform: translateX(0) skewX(-16deg); animation: ai-trigger-shine 4.4s ease-in-out infinite; }
+.ai-drift-field { position: relative; height: 640rpx; margin-top: 8rpx; overflow: hidden; }
+.drift-word { position: absolute; color: var(--ink); font-family: var(--serif); letter-spacing: .1em; animation: ai-drift 9s ease-in-out infinite alternate; }
+.drift-caption { position: absolute; bottom: 32rpx; right: 0; left: 0; color: var(--muted); opacity: .78; font-family: var(--serif); font-size: 26rpx; letter-spacing: .22em; text-align: center; }
+.dw-1 { left: 6%; top: 10%; font-size: 44rpx; opacity: .12; }
+.dw-2 { right: 8%; top: 7%; font-size: 32rpx; opacity: .08; animation-delay: 1.2s; }
+.dw-3 { left: 40%; top: 29%; font-size: 28rpx; opacity: .1; animation-delay: 2.1s; }
+.dw-4 { left: 8%; top: 50%; font-size: 26rpx; opacity: .09; animation-delay: 3s; }
+.dw-5 { right: 12%; top: 45%; font-size: 38rpx; opacity: .07; animation-delay: 1.7s; }
+.dw-6 { left: 17%; top: 70%; font-size: 30rpx; opacity: .1; animation-delay: 2.6s; }
+.dw-7 { right: 19%; top: 69%; font-size: 42rpx; opacity: .11; animation-delay: 3.4s; }
+@keyframes ai-trigger-breathe { 0% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); opacity: .6; } }
+@keyframes ai-trigger-shine { 0% { transform: translateX(0) skewX(-16deg); } 48% { transform: translateX(200px) skewX(-16deg); } 100% { transform: translateX(200px) skewX(-16deg); } }
+@keyframes ai-drift { from { transform: translateY(0); } to { transform: translateY(-9px); } }
 .choice-chip { flex: 0 0 auto; padding: 14rpx 22rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--ink2); font-size: 24rpx; line-height: 1; }
 .choice-chip.selected { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); }
 .mbti-panel { display: flex; flex-direction: column; }
@@ -580,7 +612,7 @@
 .wide-condition-picker { min-width: 0; flex: 1; }
 .wide-picker-value { width: 100%; min-height: 78rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 22rpx; border-radius: 20rpx; background: var(--canvas); color: var(--muted); font-size: 22rpx; }
 .bottom-actions { flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 20rpx; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
-.reset-button, .search-button { height: 96rpx; border-radius: 999rpx; font-size: 29rpx; font-weight: 700; }
+.reset-button, .search-button { height: 96rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; font-size: 29rpx; font-weight: 700; }
 .reset-button { width: 176rpx; border: 1rpx solid var(--line); background: var(--surface); color: var(--ink2); }
 .search-button { flex: 1; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); }
 .search-button.wide { width: 100%; }
@@ -614,7 +646,7 @@
 .result-message-state { justify-content: center; padding-top: 40rpx; }
 .result-message-mark { width: 104rpx; height: 104rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-family: var(--serif); font-size: 48rpx; }
 .result-message-title { display: block; margin-top: 32rpx; color: var(--ink); font-family: var(--serif); font-size: 36rpx; font-weight: 700; }
-.result-secondary-button { width: 320rpx; height: 88rpx; margin-top: 46rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-size: 27rpx; font-weight: 700; }
+.result-secondary-button { width: 320rpx; height: 88rpx; margin-top: 46rpx; display: flex; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--surface); color: var(--accent2); font-size: 27rpx; font-weight: 700; }
 .result-success-state { min-height: 100%; padding: 34rpx 40rpx 56rpx; box-sizing: border-box; }
 .result-heading { padding: 18rpx 0 36rpx; }
 .result-heading-title { display: block; color: var(--ink); font-family: var(--serif); font-size: 42rpx; font-weight: 700; }
@@ -635,21 +667,21 @@
 .result-card-hint { display: block; margin-top: auto; padding-top: 13rpx; color: var(--muted); font-size: 20rpx; }
 .result-disclaimer { display: block; padding: 34rpx 12rpx 0; color: var(--muted); font-size: 21rpx; line-height: 1.65; text-align: center; }
 .result-bottom-actions { flex: 0 0 auto; padding: 20rpx 40rpx calc(env(safe-area-inset-bottom) + 24rpx); background: var(--paper); box-shadow: var(--shadow-sm); }
-.result-primary-button { width: 100%; height: 96rpx; border-radius: 999rpx; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); font-size: 29rpx; font-weight: 700; }
+.result-primary-button { width: 100%; height: 96rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; background: var(--accent); color: var(--text-invert); box-shadow: var(--shadow-md); font-size: 29rpx; font-weight: 700; }
 .history-list { display: flex; flex-direction: column; gap: 16rpx; }
 .history-empty { padding: 36rpx 24rpx; color: var(--muted); font-size: 26rpx; text-align: center; }
 .history-item { padding: 24rpx; border-radius: 16rpx; background: var(--canvas); color: var(--ink2); font-size: 26rpx; }
 .sheet-copy { display: block; color: var(--muted); font-size: 25rpx; line-height: 1.65; }
-.sheet-secondary-button, .sheet-primary-button { width: 100%; height: 90rpx; margin-top: 28rpx; border-radius: 20rpx; font-size: 27rpx; font-weight: 700; }
+.sheet-secondary-button, .sheet-primary-button { width: 100%; height: 90rpx; margin-top: 28rpx; display: flex; align-items: center; justify-content: center; border-radius: 20rpx; font-size: 27rpx; font-weight: 700; }
 .sheet-secondary-button { background: var(--accent-bg); color: var(--accent2); }
 .sheet-primary-button { background: var(--accent); color: var(--text-invert); }
 .manual-mbti-row { display: flex; flex-direction: row; align-items: center; gap: 16rpx; margin-top: 18rpx; }
 .mbti-input { flex: 1; min-width: 0; height: 90rpx; padding: 0 22rpx; border: 1rpx solid var(--line); border-radius: 20rpx; background: var(--surface); color: var(--ink); font-size: 27rpx; text-transform: uppercase; }
-.sheet-save-button { width: 124rpx; height: 90rpx; border-radius: 20rpx; background: var(--ink); color: var(--paper); font-size: 25rpx; }
+.sheet-save-button { width: 124rpx; height: 90rpx; display: flex; align-items: center; justify-content: center; border-radius: 20rpx; background: var(--ink); color: var(--paper); font-size: 25rpx; }
 .sheet-selection-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; min-height: 44rpx; margin-bottom: 20rpx; color: var(--accent2); font-size: 24rpx; }
 .sheet-limit { color: var(--muted); }
 .mbti-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14rpx; }
-.mbti-type-button { height: 86rpx; border: 1rpx solid var(--line); border-radius: 18rpx; background: var(--surface); color: var(--ink2); font-size: 26rpx; }
+.mbti-type-button { height: 86rpx; display: flex; align-items: center; justify-content: center; border: 1rpx solid var(--line); border-radius: 18rpx; background: var(--surface); color: var(--ink2); font-size: 26rpx; }
 .mbti-type-button.selected { border-color: var(--accent); background: var(--accent-bg); color: var(--accent2); }
 .sheet-selected-tags { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10rpx; min-height: 54rpx; margin-top: 22rpx; }
 .sheet-empty-text { color: var(--muted); font-size: 23rpx; }

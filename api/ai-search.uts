@@ -1,0 +1,30 @@
+/**
+ * 理想对象条件草稿。
+ *
+ * 小程序只调用本项目后端：资料、择偶偏好、供应商地址和服务密钥均不在端侧
+ * 拼接、存储或传输。保留可选参数仅为兼容已有页面调用；它们不会发送到网络。
+ */
+
+import { request } from './request.uts'
+
+const LOCAL_DRAFT = '希望彼此真诚沟通，也愿意一起分享喜欢的生活方式。'
+
+export async function generateIdealPartner(_profile: any = null, _preferences: any = null): Promise<any> {
+  const result = await request({
+    url: '/ai/ideal-partner',
+    method: 'POST',
+    data: {},
+    mockData: { content: LOCAL_DRAFT }
+  })
+
+  if (result != null && result.success == true && result.data != null) {
+    const content = result.data.content != null ? String(result.data.content).trim() : ''
+    if (content != '') result.data = content
+    else {
+      result.success = false
+      result.code = 'INVALID_AI_RESPONSE'
+      result.message = 'AI 返回内容无效，请稍后重试'
+    }
+  }
+  return result
+}

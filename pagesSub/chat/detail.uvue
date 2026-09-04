@@ -15,20 +15,36 @@
 		</view>
 
 		<template v-else>
+			<view
+				v-if="isAiAvatarMode && !isParentMode && aiAvatarProfile != null"
+				class="ai-head"
+			>
+				<view class="ai-head-avatar">
+					<image
+						v-if="aiAvatarProfile.avatar != null && aiAvatarProfile.avatar != ''"
+						class="ai-head-img"
+						:src="aiAvatarProfile.avatar"
+						mode="aspectFill"
+					></image>
+					<view v-else class="ai-head-avatar-fallback"><text>AI</text></view>
+					<view class="ai-head-badge"><text>AI</text></view>
+				</view>
+				<view class="ai-head-copy">
+					<text class="ai-head-name">{{ aiAvatarProfile.name != null ? aiAvatarProfile.name + '的 AI 分身' : 'AI 分身' }}</text>
+					<text class="ai-head-desc">只参考当前公开资料；对方不会收到提醒。</text>
+				</view>
+				<button class="ai-avatar-clear" :disabled="aiAvatarSending" @click="clearAiAvatarHistory">清空</button>
+			</view>
+
 			<scroll-view
 				class="message-list"
+				:class="{ 'ai-thread': isAiAvatarMode && !isParentMode }"
 				scroll-y
 				:scroll-into-view="scrollToView"
 				scroll-with-animation
 			>
-				<view v-if="isAiAvatarMode" class="ai-avatar-notice">
-					<view class="ai-avatar-notice-head">
-						<view class="ai-avatar-notice-copy">
-							<text class="ai-avatar-notice-title">AI 分身对话</text>
-							<text class="ai-avatar-notice-desc">只参考当前公开填写的资料，不是真人消息，对方不会收到提醒。</text>
-						</view>
-						<button class="ai-avatar-clear" :disabled="aiAvatarSending" @click="clearAiAvatarHistory">清空记录</button>
-					</view>
+				<view v-if="isAiAvatarMode && !isParentMode" class="ai-avatar-notice">
+					<text class="ai-avatar-notice-title">AI 公开资料问答</text>
 					<scroll-view v-if="aiQuickQuestions.length > 0" class="ai-quick-list" scroll-x show-scrollbar="false">
 						<view v-for="question in aiQuickQuestions" :key="question.id" class="ai-quick-question" @click="askQuickQuestion(question.prompt)">
 							<text>{{ question.label }}</text>
@@ -69,7 +85,7 @@
 							class="avatar"
 							:src="message.avatar"
 							mode="aspectFill"
-							v-else-if="!message.isMine"
+							v-else-if="!message.isMine && !isAiAvatarMode"
 							@click="openPeerProfile"
 						></image>
 
@@ -81,6 +97,13 @@
 										<text class="protected-content-text">内容已保护</text>
 									</view>
 									<text class="text-content" v-else-if="message.type === 'text'">{{ message.content }}</text>
+									<view
+										v-if="isAiAvatarMode && !message.isMine && message.handoffStatus === 'pending'"
+										class="ai-handoff-state"
+									>
+										<view class="ai-handoff-dot"></view>
+										<text>演示状态：不会通知对方</text>
+									</view>
 								<image
 									class="image-content"
 									:src="message.content"
@@ -123,10 +146,11 @@
 				</view>
 			</scroll-view>
 
-			<view class="input-bar" :class="{ expanded: showMore && !isAiAvatarMode }">
+			<view class="input-bar" :class="{ expanded: showMore && !isAiAvatarMode, 'ai-mode': isAiAvatarMode && !isParentMode }">
 				<view class="input-wrapper">
 					<input
 						class="input"
+						:class="{ 'ai-mode': isAiAvatarMode && !isParentMode }"
 						type="text"
 						:value="inputText"
 						@input="onInput"
@@ -138,6 +162,9 @@
 					<button v-if="!isAiAvatarMode" class="tool-btn more-toggle" @click="toggleMoreMenu">
 						<text class="icon">{{ showMore ? '×' : '+' }}</text>
 					</button>
+				</view>
+				<view v-if="isAiAvatarMode && !isParentMode" class="ai-disclaimer">
+					<text>内容由 AI 生成，仅参考当前公开资料</text>
 				</view>
 
 				<view class="more-actions" v-if="showMore && !isAiAvatarMode">
@@ -192,7 +219,7 @@
 				@close="aiAdvisorVisible = false"
 			/>
 
-			<XsaSheet v-if="!isAiAvatarMode" :visible="contactVisible" title="联系方式交换" @close="closeContactExchange">
+			<XsaSheet v-if="!isParentMode && !isAiAvatarMode" :visible="contactVisible" title="联系方式交换" @close="closeContactExchange">
 				<view class="contact-sheet">
 					<text class="contact-note">双方已同意认识。对方明确确认前，不会显示你提交的联系方式。</text>
 					<view class="contact-type-row">
@@ -1513,20 +1540,63 @@
 
 	.ai-avatar-notice {
 		margin: 12px 16px 4px;
-		padding: 14px;
-		border: 1px solid var(--line);
-		border-radius: 14px;
-		background: var(--accent-bg);
+		padding: 0;
 	}
 
-	.ai-avatar-notice-head {
+	.ai-head {
 		display: flex;
 		flex-direction: row;
-		align-items: flex-start;
-		gap: 12px;
+		align-items: center;
+		gap: 10px;
+		padding: 12px 16px;
+		background: var(--accent-bg);
+		border-bottom: 1px solid var(--line);
 	}
 
-	.ai-avatar-notice-copy {
+	.ai-head-avatar {
+		position: relative;
+		width: 42px;
+		height: 42px;
+		flex-shrink: 0;
+	}
+
+	.ai-head-img,
+	.ai-head-avatar-fallback {
+		width: 42px;
+		height: 42px;
+		border-radius: 50%;
+	}
+
+	.ai-head-avatar-fallback {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		background: var(--surface);
+		color: var(--accent2);
+		font-size: 13px;
+		font-weight: 700;
+	}
+
+	.ai-head-badge {
+		position: absolute;
+		right: -3px;
+		bottom: -2px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 3px;
+		border: 1px solid var(--surface);
+		border-radius: 9px;
+		background: var(--accent);
+		color: var(--text-invert);
+		font-size: 10px;
+		font-weight: 700;
+	}
+
+	.ai-head-copy {
 		min-width: 0;
 		flex: 1;
 		display: flex;
@@ -1534,13 +1604,17 @@
 		gap: 4px;
 	}
 
+	.ai-head-name,
 	.ai-avatar-notice-title { color: var(--accent2); font-size: 15px; font-weight: 700; }
-	.ai-avatar-notice-desc { color: var(--ink2); font-size: 12px; line-height: 1.5; }
+	.ai-head-desc { color: var(--ink2); font-size: 12px; line-height: 1.5; }
 	.ai-avatar-clear { flex-shrink: 0; margin: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--accent2); font-size: 12px; line-height: 1.3; }
 	.ai-avatar-clear[disabled] { opacity: 0.55; }
 	.ai-quick-list { margin-top: 12px; white-space: nowrap; }
 	.ai-quick-question { display: inline-flex; margin-right: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--ink2); font-size: 12px; }
 	.ai-message-source { display: block; margin-bottom: 4px; color: var(--accent2); font-size: 11px; line-height: 1.3; }
+	.ai-thread .message-bubble { max-width: 270px; }
+	.ai-handoff-state { display: flex; flex-direction: row; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+	.ai-handoff-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 
 	.input-bar {
 		background: var(--surface);
@@ -1553,6 +1627,7 @@
 	}
 
 	.input-bar.expanded { padding-top: 12px; }
+	.input-bar.ai-mode { background: var(--accent-bg); }
 	.input-wrapper { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 
 	.tool-btn {
@@ -1581,6 +1656,8 @@
 		color: var(--ink);
 	}
 
+	.input.ai-mode { background: var(--surface); }
+
 	.send-btn {
 		padding: 0 20px;
 		height: 36px;
@@ -1592,6 +1669,9 @@
 	}
 
 	.send-btn[disabled] { opacity: 0.5; }
+	.send-btn.ai-mode { min-width: 64px; }
+	.ai-disclaimer { padding: 0 2px; }
+	.ai-disclaimer > text { color: var(--muted); font-size: 11px; line-height: 1.4; }
 	.more-actions { width: 100%; padding: 4px 0 2px; }
 	.menu-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 	.menu-item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 4px 0; }

@@ -1,20 +1,19 @@
 import { request } from './request.uts'
 import { CURRENT_USER_ID_KEY, USE_MOCK, clearAuthTokens, getAccessToken } from './config.uts'
-import {
-	applyToMeet,
-	getLikedUsers,
-	getRecommendUsers,
-	getUserDetail,
-	likeUser
-} from './user.uts'
 import { getApplications, getMessageList } from './message.uts'
 import type { MessageSubject } from './message.uts'
 import { getCustomMatchmakers, getServiceMatchmakers } from './matchmaker.uts'
 import { blockUser, reportContent } from './community.uts'
 import {
-		getMockParentContextData,
-		syncMockParentRemainingApplicationsData,
-		updateMockParentChildProfileData
+	getMockParentCandidateDetailData,
+	getMockParentCandidatesData,
+	getMockParentLikedCandidatesData,
+	getMockParentMatchmakersData,
+  getMockParentContextData,
+	submitMockParentIntroductionData,
+  syncMockParentRemainingApplicationsData,
+	toggleMockParentLikeData,
+  updateMockParentChildProfileData
 } from '@/mock/parent.uts'
 
 /**
@@ -513,7 +512,14 @@ export async function getParentCandidates(context: ParentContext | null) {
 	if (blocked != null) return blocked
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
-	const result = await getRecommendUsers(parentInternalMockScope(context))
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		return okResponse(getMockParentCandidatesData())
+	}
+	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
+	const result = await request({
+		url: '/parent/children/' + String(context != null && context.child != null ? context.child.id : 0) + '/candidates',
+		method: 'GET'
+	})
 	if (result == null || result.success != true) return result
 	const source = responseList(result.data)
 
@@ -530,7 +536,14 @@ export async function getParentLikedCandidates(context: ParentContext | null) {
 	if (blocked != null) return blocked
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
-	const result = await getLikedUsers(parentInternalMockScope(context))
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		return okResponse(getMockParentLikedCandidatesData())
+	}
+	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
+	const result = await request({
+		url: '/parent/children/' + String(context != null && context.child != null ? context.child.id : 0) + '/likes',
+		method: 'GET'
+	})
 	if (result == null || result.success != true) return result
 	const source = responseList(result.data)
 	const candidates: ParentCandidate[] = []
@@ -547,7 +560,22 @@ export async function getParentCandidateDetail(context: ParentContext | null, ca
 	if (!validCandidateId(candidateId)) return candidateIdFailure()
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
-	const result = await getUserDetail(candidateId, parentInternalMockScope(context))
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		const mockDetail = getMockParentCandidateDetailData(candidateId)
+		if (mockDetail == null) return failureResponse('未找到该候选资料', 'CANDIDATE_NOT_FOUND')
+		const candidate = toParentCandidate(mockDetail)
+		if (candidate == null) return failureResponse('候选资料格式无效', 'INVALID_CANDIDATE_RESPONSE')
+		if (canParentViewClearPhoto(context, mockDetail)) {
+			candidate.canViewClearPhoto = true
+			candidate.clearAvatar = clearPhotoUrl(mockDetail)
+		}
+		return okResponse(candidate)
+	}
+	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
+	const result = await request({
+		url: '/parent/children/' + String(context != null && context.child != null ? context.child.id : 0) + '/candidates/' + String(candidateId),
+		method: 'GET'
+	})
 	if (result == null || result.success != true || result.data == null) return result
 	const source = result.data
 	const candidate = toParentCandidate(source)
@@ -582,13 +610,19 @@ export async function getParentMessages(context: ParentContext | null) {
 export async function getParentMatchmakers(context: ParentContext | null) {
 	const blocked = gated(context)
 	if (blocked != null) return blocked
-	return getServiceMatchmakers(parentInternalMockScope(context) != '')
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		return okResponse(getMockParentMatchmakersData('service'))
+	}
+	return getServiceMatchmakers()
 }
 
 export async function getParentCustomMatchmakers(context: ParentContext | null) {
 	const blocked = gated(context)
 	if (blocked != null) return blocked
-	return getCustomMatchmakers(parentInternalMockScope(context) != '')
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		return okResponse(getMockParentMatchmakersData('custom'))
+	}
+	return getCustomMatchmakers()
 }
 
 export async function toggleParentLike(context: ParentContext | null, candidateId: number) {
@@ -597,7 +631,14 @@ export async function toggleParentLike(context: ParentContext | null, candidateI
 	if (!validCandidateId(candidateId)) return candidateIdFailure()
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
-	return likeUser(candidateId, parentInternalMockScope(context))
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		return okResponse(toggleMockParentLikeData(candidateId))
+	}
+	if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
+	return request({
+		url: '/parent/children/' + String(context != null && context.child != null ? context.child.id : 0) + '/candidates/' + String(candidateId) + '/like',
+		method: 'POST'
+	})
 }
 
 export async function applyParentIntroduction(
@@ -614,7 +655,18 @@ export async function applyParentIntroduction(
 	const subjectBlocked = subjectGated(context)
 	if (subjectBlocked != null) return subjectBlocked
 
-	const result = await applyToMeet(candidateId, String(note).trim(), parentInternalMockScope(context))
+	let result: any = null
+	if (PARENT_USE_MOCK && context != null && context.dataMode == 'mock') {
+		const remaining = context.quota != null ? Number(context.quota.remainingApplications) : 0
+		result = submitMockParentIntroductionData(candidateId, isNaN(remaining) ? 0 : remaining)
+	} else {
+		if (!PARENT_RELATIONSHIP_BACKEND_READY) return relationshipBackendFailure()
+		result = await request({
+			url: '/parent/children/' + String(context != null && context.child != null ? context.child.id : 0) + '/candidates/' + String(candidateId) + '/applications',
+			method: 'POST',
+			data: { note: String(note).trim() }
+		})
+	}
 	syncRemainingApplications(context, result)
 	return result
 }
