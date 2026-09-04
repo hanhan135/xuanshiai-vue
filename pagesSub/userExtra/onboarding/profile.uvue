@@ -42,7 +42,7 @@
 			</view>
 
 			<view v-if="currentType === 'date'" class="onboarding-picker">
-				<picker-view class="date-picker-view" :value="datePickerValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @change="onDatePickerChange">
+				<picker-view class="date-picker-view" :value="datePickerValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @pickstart="onWheelStart" @pickend="onWheelEnd" @change="onDatePickerChange">
 					<picker-view-column><view v-for="year in yearOptions" :key="year" class="picker-column-item"><text>{{ year }}年</text></view></picker-view-column>
 					<picker-view-column><view v-for="month in monthOptions" :key="month" class="picker-column-item"><text>{{ month }}月</text></view></picker-view-column>
 					<picker-view-column><view v-for="day in dayOptions" :key="day" class="picker-column-item"><text>{{ day }}日</text></view></picker-view-column>
@@ -50,13 +50,13 @@
 				<text class="picker-selected-text">{{ selectedValue || '上下滑动选择出生日期' }}</text>
 			</view>
 			<view v-if="currentType === 'picker'" class="onboarding-picker">
-				<picker-view class="single-picker-view" :value="pickerViewValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @change="onPickerViewChange">
+				<picker-view class="single-picker-view" :value="pickerViewValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @pickstart="onWheelStart" @pickend="onWheelEnd" @change="onPickerViewChange">
 					<picker-view-column><view v-for="option in currentOptions" :key="option" class="picker-column-item"><text>{{ option }}</text></view></picker-view-column>
 				</picker-view>
 				<text class="picker-selected-text">{{ selectedValue || '上下滑动选择' }}</text>
 			</view>
 			<view v-if="currentType === 'location'" class="onboarding-picker location-picker">
-				<picker-view class="location-picker-view" :value="locationPickerValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @change="onLocationPickerChange">
+				<picker-view class="location-picker-view" :value="locationPickerValue" indicator-style="height: 52px; background: transparent; border-top: 2px solid #C9CED3; border-bottom: 2px solid #C9CED3;" mask-style="background: linear-gradient(to bottom, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 28%, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%);" @pickstart="onWheelStart" @pickend="onWheelEnd" @change="onLocationPickerChange">
 					<picker-view-column><view v-for="province in provinceOptions" :key="province" class="picker-column-item"><text>{{ province }}</text></view></picker-view-column>
 					<picker-view-column><view v-for="city in cityOptions" :key="city" class="picker-column-item"><text>{{ city }}</text></view></picker-view-column>
 					<picker-view-column><view v-for="district in districtOptions" :key="district" class="picker-column-item"><text>{{ district }}</text></view></picker-view-column>
@@ -120,12 +120,27 @@
 	const heightTouched = ref(false)
 	const weightTouched = ref(false)
 	const bodyDefaults = (gender: string): any => gender === '女' ? { height: '160cm', weight: '50kg' } : { height: '170cm', weight: '60kg' }
+	const applyBodyDefaults = (gender: string) => {
+		const body = bodyDefaults(gender)
+		if (!heightTouched.value) selections.value[4] = body.height
+		if (!weightTouched.value) selections.value[5] = body.weight
+	}
 	const yearOptions = numericOptions(1966, 2008, '')
 	const monthOptions = numericOptions(1, 12, '')
 	const dayOptions = numericOptions(1, 31, '')
 	const datePickerValue = ref([34, 0, 0] as number[])
 	const pickerIndex = ref(0)
 	const pickerViewValue = computed(() => [pickerIndex.value])
+	const wheelBusy = ref(false)
+	const onWheelStart = () => { wheelBusy.value = true }
+	const onWheelEnd = () => { wheelBusy.value = false }
+	const waitWheelSettled = async () => {
+		let waited = 0
+		while (wheelBusy.value && waited < 800) {
+			await new Promise<void>((resolve) => { setTimeout(() => { resolve() }, 50) })
+			waited += 50
+		}
+	}
 	const questions = [
 		{ title: '您的性别', type: 'picker', options: ['男', '女'] },
 		{ title: '您的出生日期', type: 'date', options: [] as string[] },
@@ -224,12 +239,10 @@
 			if (question.type === 'picker' && question.options.length > 0) return question.options[0]
 			return ''
 		})
-		const body = bodyDefaults(selections.value[0])
-		selections.value[4] = body.height
-		selections.value[5] = body.weight
 		selections.value[6] = '大专'
 		heightTouched.value = false
 		weightTouched.value = false
+		applyBodyDefaults(selections.value[0])
 		if (locationLabel.value != '') {
 			selections.value[2] = locationLabel.value
 			selections.value[3] = locationLabel.value
@@ -251,6 +264,7 @@
 		if (step.value <= 0 || step.value > totalSteps) return
 		while (selections.value.length < step.value) selections.value.push('')
 		selections.value[step.value - 1] = option
+		if (step.value === 1) applyBodyDefaults(option)
 	}
 	const selectPicker = (event: any) => {
 		const index = Number(event.detail.value)
@@ -266,11 +280,6 @@
 		if (index < 0 || index >= options.length) return
 		if (step.value === 5) heightTouched.value = true
 		if (step.value === 6) weightTouched.value = true
-		if (step.value === 1) {
-			const body = bodyDefaults(options[index])
-			if (!heightTouched.value) selections.value[4] = body.height
-			if (!weightTouched.value) selections.value[5] = body.weight
-		}
 		selectOption(options[index])
 	}
 	const onDatePickerChange = (event: any) => {
@@ -338,6 +347,9 @@
 	}
 
 	const nextStep = async () => {
+		const stepBeforeWait = step.value
+		await waitWheelSettled()
+		if (step.value != stepBeforeWait) return
 		if (selectedValue.value.length === 0) {
 			uni.showToast({ title: '请选择一项后继续', icon: 'none' })
 			return
@@ -368,7 +380,10 @@
 		}, 500)
 	}
 
-	const handleBack = () => {
+	const handleBack = async () => {
+		const stepBeforeWait = step.value
+		await waitWheelSettled()
+		if (step.value != stepBeforeWait) return
 		if (step.value > 0) {
 			step.value = step.value - 1
 		} else {

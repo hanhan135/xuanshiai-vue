@@ -111,6 +111,9 @@
 		--accent2: #006052;
 		--soft: #669C92;
 
+		/* 收藏爱心（低饱和红，与 uni.scss / DESIGN.md 同源） */
+		--heart-red: #F08282;
+
 		/* 功能色 */
 		--brown: #2C807C;
 		--navy: #18415D;
