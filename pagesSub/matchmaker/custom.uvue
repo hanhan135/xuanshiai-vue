@@ -214,9 +214,9 @@
 <script setup lang="uts">
 import { getCustomPlans } from '@/api'
 
-const matchmakerCaseImageA = '/static/cases/wuhan-zhou-zheng.jpg'
-const matchmakerCaseImageB = '/static/cases/shenzhen-zhang-liu.jpg'
-const customMatchmakerHeroImage = '/static/portraits/custom-matchmaker-hero.jpg'
+const matchmakerCaseImageA = '/pagesSub/matchmaker/static/cases/wuhan-zhou-zheng.webp'
+const matchmakerCaseImageB = '/pagesSub/matchmaker/static/cases/shenzhen-zhang-liu.webp'
+const customMatchmakerHeroImage = '/static/portraits/custom-matchmaker-hero.webp'
 
 interface PlanItem {
 	id: number

@@ -1,0 +1,312 @@
+<!--
+  Phase 1 Contract v1.1 P1-D：墨相师真实进度面板
+  0..100 真实进度来自后端，前端不做累加，仅展示。
+  六维覆盖率与有效高置信候选数由 journey_progress/state 给出。
+-->
+<template>
+	<view class="mx-progress">
+		<view class="mx-progress-toggle" @tap="toggleCollapsed">
+			<view class="mx-progress-toggle-copy">
+				<text class="mx-progress-toggle-title">知遇对你的理解</text>
+				<text class="mx-progress-toggle-value">{{ displayOverallPercent }}%</text>
+			</view>
+			<text class="mx-progress-toggle-action">{{ collapsed ? '展开' : '收起' }}</text>
+		</view>
+		<view v-if="collapsed" class="mx-progress-collapsed-track">
+			<view class="mx-progress-fill" :style="'width:' + displayOverallPercent + '%'" ></view>
+		</view>
+		<view v-if="!collapsed" class="mx-progress-details">
+			<view class="mx-progress-heading">
+				<text class="mx-progress-title">正在一起整理你的墨相</text>
+				<text class="mx-progress-note">每一次聊天都会让它更清晰，只有你确认过的内容才会保留。</text>
+			</view>
+			<view class="mx-progress-top">
+				<view class="mx-progress-block">
+					<text class="mx-progress-num">{{ displayOverallPercent }}</text>
+					<text class="mx-progress-unit">%</text>
+					<text class="mx-progress-label">理解</text>
+				</view>
+			</view>
+			<view class="mx-progress-track">
+				<view class="mx-progress-fill" :style="'width:' + displayOverallPercent + '%'" ></view>
+			</view>
+			<text v-if="extractionLabel != ''" class="mx-progress-live">{{ extractionLabel }}</text>
+			<view class="mx-progress-dims">
+				<view v-for="dim in dimensionItems" :key="dim.key" class="mx-progress-dim">
+					<view class="mx-progress-dim-row">
+						<text class="mx-progress-dim-name">{{ dim.label }}</text>
+						<text class="mx-progress-dim-num">{{ dim.percent }}%</text>
+					</view>
+					<view class="mx-progress-dim-track">
+						<view class="mx-progress-dim-fill" :style="'width:' + dim.percent + '%'" ></view>
+					</view>
+					<text class="mx-progress-dim-meta">已理解 {{ dim.evidenceCount }} 条</text>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import type { MoxiangSubjectSummary, MoxiangDimensionMetric } from '@/api/ai-moxiang.uts'
+import { dimensionLabel } from '@/utils/moxiang-dimension.uts'
+
+const props = defineProps<{
+	metrics: MoxiangSubjectSummary
+	livePercent?: number
+	extractionStatus?: 'queued' | 'processing' | 'completed' | 'failed' | ''
+}>()
+
+// 对话优先：进度面板默认收起，用户需要时再展开查看六维明细。
+const collapsed = ref(true)
+
+function toggleCollapsed() {
+	collapsed.value = !collapsed.value
+}
+
+// #17 抽取等待分档文案：进入 queued/processing 起计时，超 30s / 2min 换更安抚的提示。
+const extractionStartedAt = ref(0)
+const extractionTick = ref(0)
+let extractionTimer = -1
+
+function startExtractionTimer() {
+	if (extractionTimer != -1) return
+	extractionTimer = setInterval(() => {
+		extractionTick.value = extractionTick.value + 1
+	}, 1000)
+}
+
+function stopExtractionTimer() {
+	if (extractionTimer != -1) {
+		clearInterval(extractionTimer)
+		extractionTimer = -1
+	}
+}
+
+watch((): string => props.extractionStatus ?? '', (status: string) => {
+	if (status == 'queued' || status == 'processing') {
+		if (extractionStartedAt.value == 0) {
+			extractionStartedAt.value = Date.now()
+		}
+		startExtractionTimer()
+	} else {
+		extractionStartedAt.value = 0
+		stopExtractionTimer()
+	}
+}, { immediate: true })
+
+onUnmounted(() => {
+	stopExtractionTimer()
+})
+
+interface MoxiangDimensionView {
+	key: string
+	label: string
+	percent: number
+	evidenceCount: number
+}
+
+function dimensionView(key: string, metric: MoxiangDimensionMetric): MoxiangDimensionView {
+	return {
+		key: key,
+		label: dimensionLabel(key),
+		percent: Math.max(0, Math.min(100, Math.round(Number(metric.percent)))),
+		evidenceCount: Math.max(0, Math.round(Number(metric.evidenceCount)))
+	}
+}
+
+// 微信端对对象 v-for 的 key/value 形状存在差异，先转成固定数组再渲染，避免出现 [object Object]。
+const dimensionItems = computed((): MoxiangDimensionView[] => {
+	const dims = props.metrics.dimensions
+	return [
+		dimensionView('personality_social', dims.personality_social),
+		dimensionView('intimacy_pattern', dims.intimacy_pattern),
+		dimensionView('lifestyle', dims.lifestyle),
+		dimensionView('emotional_expression', dims.emotional_expression),
+		dimensionView('relationship_boundaries', dims.relationship_boundaries),
+		dimensionView('future_expectations', dims.future_expectations)
+	]
+})
+
+const displayOverallPercent = computed((): number => {
+	const live = props.livePercent
+	if (live != null) return Math.max(0, Math.min(100, Math.round(Number(live))))
+	return Math.max(0, Math.min(100, Math.round(Number(props.metrics.overallPercent))))
+})
+
+const extractionLabel = computed((): string => {
+	const status = props.extractionStatus
+	if (status == 'queued' || status == 'processing') {
+		const tick = extractionTick.value
+		const started = extractionStartedAt.value
+		const elapsedMs = started > 0 && tick >= 0 ? Date.now() - started : 0
+		if (elapsedMs >= 120000) return '知遇还在认真理解，你可以先继续聊，或稍后回来查看进度'
+		if (elapsedMs >= 30000) return '这次理解得慢了些，先继续聊，进度稍后同步'
+		return '正在理解…'
+	}
+	if (status == 'completed') return '已更新理解进度'
+	if (status == 'failed') return '本次理解未完成，可继续聊聊'
+	return ''
+})
+</script>
+
+<style scoped>
+.mx-progress {
+	margin: 0 12px;
+	background: var(--surface);
+	border: 1px solid var(--line);
+	border-radius: 14px;
+	padding: 10px 14px;
+}
+.mx-progress-toggle {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 28px;
+}
+.mx-progress-toggle-copy {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 8px;
+}
+.mx-progress-toggle-title {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--ink);
+}
+.mx-progress-toggle-value {
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--accent2);
+}
+.mx-progress-toggle-action {
+	font-size: 11px;
+	color: var(--accent2);
+	padding: 4px 0 4px 12px;
+}
+.mx-progress-collapsed-track {
+	height: 4px;
+	border-radius: 999px;
+	background: rgba(211, 217, 216, 0.45);
+	margin-top: 5px;
+	overflow: hidden;
+}
+.mx-progress-details {
+	margin-top: 4px;
+}
+.mx-progress-heading {
+	display: flex;
+	flex-direction: column;
+}
+.mx-progress-title {
+	font-size: 14px;
+	font-weight: 700;
+	color: var(--ink);
+}
+.mx-progress-note {
+	margin-top: 4px;
+	font-size: 10px;
+	line-height: 1.5;
+	color: var(--muted);
+}
+.mx-progress-top {
+	display: flex;
+	flex-direction: row;
+	gap: 6px;
+	margin-top: 10px;
+}
+.mx-progress-block {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.mx-progress-num {
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--accent2);
+	font-family: var(--serif, serif);
+}
+.mx-progress-unit {
+	font-size: 11px;
+	color: var(--muted);
+}
+.mx-progress-label {
+	font-size: 11px;
+	color: var(--ink2);
+	margin-top: 2px;
+}
+.mx-progress-track {
+	height: 6px;
+	border-radius: 999px;
+	background: rgba(211, 217, 216, 0.45);
+	margin-top: 8px;
+	overflow: hidden;
+}
+.mx-progress-fill {
+	height: 6px;
+	border-radius: 999px;
+	background: var(--accent2);
+	transition-property: width;
+	transition-duration: 0.2s;
+}
+.mx-progress-collapsed-track .mx-progress-fill {
+	height: 4px;
+}
+.mx-progress-live {
+	display: block;
+	margin-top: 5px;
+	font-size: 10px;
+	color: var(--muted);
+	text-align: center;
+}
+.mx-progress-dims {
+	margin-top: 14px;
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+.mx-progress-dim {
+	display: flex;
+	flex-direction: column;
+	width: 50%;
+	box-sizing: border-box;
+	padding: 5px 6px 5px 0;
+}
+.mx-progress-dim:nth-child(even) { padding-left: 6px; padding-right: 0; }
+.mx-progress-dim-row {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+}
+.mx-progress-dim-name {
+	font-size: 12px;
+	color: var(--ink2);
+}
+.mx-progress-dim-num {
+	font-size: 12px;
+	color: var(--accent2);
+	font-weight: 700;
+}
+.mx-progress-dim-track {
+	height: 4px;
+	border-radius: 999px;
+	background: rgba(211, 217, 216, 0.45);
+	margin-top: 3px;
+	overflow: hidden;
+}
+.mx-progress-dim-fill {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--accent2);
+	transition-property: width;
+	transition-duration: 0.2s;
+}
+.mx-progress-dim-meta {
+	font-size: 10px;
+	color: var(--muted);
+	margin-top: 2px;
+}
+</style>

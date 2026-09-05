@@ -3,6 +3,9 @@
 		<!-- 导航栏 -->
 		<view class="nav-bar" :style="{ paddingTop: (statusBarHeight + 12) + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
 			<view class="nav-right">
+				<view class="nav-icon-btn role-switch-btn" @tap="onSwitchToParent" aria-label="切换到父母端" title="切换到父母端">
+					<text class="ic ic-sys ic-shuaxin nav-icon role-switch-icon"></text>
+				</view>
 				<view class="nav-icon-btn" @tap="onMessages">
 					<text class="ic ic-social ic-tongzhi nav-icon"></text>
 				</view>
@@ -40,13 +43,13 @@
 
 			<!-- 统计数据行 -->
 			<view class="stats-card">
-				<view class="stat-item" v-for="stat in stats" :key="stat.label" @click="openStatPage(stat.route)">
+				<view class="stat-item" v-for="stat in stats" :key="stat.label" @tap="openStatPage(stat.route)">
 					<text class="stat-value">{{ stat.value }}</text>
 					<text class="stat-label">{{ stat.label }}</text>
 				</view>
 			</view>
 
-				<!-- AI 专区（画像 / 我的AI分身，位于开通会员上方） -->
+			<!-- AI 专区（墨相师为唯一画像建构入口） -->
 			<view class="ai-zone">
 				<view class="ai-zone-head">
 					<view class="ai-zone-spark">
@@ -54,14 +57,8 @@
 					</view>
 					<text class="ai-zone-title">宣誓爱 AI</text>
 				</view>
+				<text class="ai-zone-sub">用对话认识自己与期待的关系，也可以管理你的 AI 分身。</text>
 				<view class="ai-zone-actions">
-					<view class="zone-btn" @tap="onPortrait">
-						<text class="ic ic-social ic-touxiang zone-btn-icon zone-btn-icon-green"></text>
-						<view class="zone-btn-text">
-							<text class="zone-btn-name">画像</text>
-							<text class="zone-btn-desc">AI 对话建构理想型</text>
-						</view>
-					</view>
 					<view class="zone-btn" @tap="onAiAvatar">
 						<text class="ic ic-social ic-huati zone-btn-icon zone-btn-icon-rose"></text>
 						<view class="zone-btn-text">
@@ -69,6 +66,28 @@
 							<text class="zone-btn-desc">管理你的数字分身</text>
 						</view>
 					</view>
+				</view>
+				<!-- 墨相师·主入口(继续聊) -->
+				<view class="zone-master" @tap="onMoxiangMaster">
+					<view class="zone-master-figure">
+						<text class="zone-master-seal">墨</text>
+					</view>
+					<view class="zone-master-text">
+						<text class="zone-master-name">墨相师 · 聊出你的两幅像</text>
+						<text class="zone-master-desc">先认识自己，再聊你期待的关系</text>
+					</view>
+					<text class="zone-master-arrow">›</text>
+				</view>
+				<!-- P3-04 我的墨相档案·双入口(看成稿/历史/撤回授权) -->
+				<view class="zone-master zone-master-archive" @tap="onMoxiangArchive">
+					<view class="zone-master-figure zone-master-figure-archive">
+						<text class="zone-master-seal">档</text>
+					</view>
+					<view class="zone-master-text">
+						<text class="zone-master-name">我的墨相档案</text>
+						<text class="zone-master-desc">看成稿、历史版本、撤回授权</text>
+					</view>
+					<text class="zone-master-arrow">›</text>
 				</view>
 			</view>
 
@@ -215,6 +234,20 @@ const onSettings = () => {
 	uni.navigateTo({ url: '/pagesSub/profileExtra/settings' })
 }
 
+const onSwitchToParent = () => {
+	uni.showModal({
+		title: '切换至父母端',
+		content: '父母端将使用独立的身份和授权视图。',
+		cancelText: '暂不切换',
+		confirmText: '确认切换',
+		success: (result) => {
+			if (result.confirm != true) return
+			uni.setStorageSync('xsa_onboarding_mode', 'parent')
+			uni.reLaunch({ url: '/pages/parent/parent' })
+		}
+	})
+}
+
 const onViewMyProfile = () => {
 	uni.navigateTo({ url: '/pagesSub/userExtra/user/edit' })
 }
@@ -223,17 +256,24 @@ const onOpenVIP = () => {
 	uni.navigateTo({ url: '/pagesSub/profileExtra/vip', fail: () => { uni.showToast({ title: '会员页面打开失败，请重试', icon: 'none' }) } })
 }
 
-const onPortrait = () => {
-	uni.navigateTo({
-		url: '/pagesSub/profileExtra/my-portrait',
-		fail: () => { uni.showToast({ title: '画像页面打开失败，请重试', icon: 'none' }) }
-	})
-}
-
 const onAiAvatar = () => {
 	uni.navigateTo({
 		url: '/pagesSub/profileExtra/my-ai-avatar',
 		fail: () => { uni.showToast({ title: '页面打开失败，请重试', icon: 'none' }) }
+	})
+}
+
+const onMoxiangMaster = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait-master',
+		fail: () => { uni.showToast({ title: '墨相师页面打开失败，请重试', icon: 'none' }) }
+	})
+}
+
+const onMoxiangArchive = () => {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait-archive',
+		fail: () => { uni.showToast({ title: '档案页面打开失败，请重试', icon: 'none' }) }
 	})
 }
 
@@ -339,6 +379,10 @@ const handleMenuItem = (item: any) => {
 	}
 }
 
+const onEmotionLab = () => {
+	uni.navigateTo({ url: '/pages/emotion-lab/emotion-lab' })
+}
+
 const mainMenuItems = [
 	{ iconClass: 'ic ic-vip ic-renwu', iconBg: '#EDE4F0', label: '我的任务', badge: 'NEW', action: onMyTasks },
 	{ iconClass: 'ic ic-me ic-dongtai', iconBg: '#E4EDE8', label: '我的动态', action: onMyMoments },
@@ -347,6 +391,7 @@ const mainMenuItems = [
 	{ iconClass: 'ic ic-sys ic-shiming', iconBg: '#FEF3E4', label: '诚信认证', action: onCertification },
 	{ iconClass: 'ic ic-sys ic-fenxiang', iconBg: '#FEF3E4', label: '推荐给好友', action: onInviteFriend },
 	{ iconClass: 'ic ic-me ic-shezhi', iconBg: '#FEF3E4', label: '设置', action: onMenuSettings },
+	{ iconClass: 'ic ic-home ic-star', iconBg: '#E4EDE8', label: '情感实验室', action: onEmotionLab },
 ]
 
 const bottomMenuItems = [
@@ -421,6 +466,14 @@ page {
 
 .nav-icon {
 	font-size: 16px;
+}
+
+.role-switch-btn {
+	background-color: #E4EDE8;
+}
+
+.role-switch-icon {
+	color: var(--profile-accent);
 }
 
 /* ==================== 滚动内容区 ==================== */
@@ -653,6 +706,68 @@ page {
 .zone-btn-desc {
 	font-size: 11px;
 	color: var(--profile-text-secondary);
+}
+
+/* ===== 墨相师·建构入口(直指 my-portrait-master) ===== */
+.zone-master {
+	margin-top: 10px;
+	height: 72px;
+	border-radius: 18px;
+	background-color: rgba(255, 255, 255, 0.85);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 0 16px;
+	gap: 12px;
+}
+
+/* P3-04 我的墨相档案·双入口(次级卡) */
+.zone-master-archive {
+	margin-top: 8px;
+	background-color: rgba(255, 255, 255, 0.6);
+}
+.zone-master-figure-archive {
+	background-color: #8c7860;
+}
+
+.zone-master-figure {
+	width: 44px;
+	height: 44px;
+	border-radius: 22px;
+	background-color: var(--profile-dark);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.zone-master-seal {
+	font-size: 20px;
+	font-weight: 700;
+	color: var(--profile-rose);
+}
+
+.zone-master-text {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.zone-master-name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--profile-text);
+}
+
+.zone-master-desc {
+	font-size: 11px;
+	color: var(--profile-text-secondary);
+}
+
+.zone-master-arrow {
+	font-size: 20px;
+	color: var(--profile-text-muted);
 }
 
 /* ==================== VIP 会员卡 ==================== */

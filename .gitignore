@@ -27,4 +27,3 @@ open-wechat-devtools.bat
 # local worktrees
 .worktrees/
 .config.uts
-api/config.uts

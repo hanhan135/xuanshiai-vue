@@ -322,6 +322,7 @@ const submitApplication = async () => {
 		submitting.value = false
 	}
 }
+
 </script>
 
 <style scoped>

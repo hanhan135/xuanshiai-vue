@@ -8,6 +8,7 @@
  */
 
 import { request } from './request.uts'
+import { getMyLikedProfiles as getMyLikedProfilesFromUser, getMeProfile } from './user.uts'
 import { USE_MOCK, PAPER_PLANE_CHANCE_USE_MOCK, API_BASE_URL, API_PREFIX, getAccessToken, clearAuthTokens, buildApiUrl, resolveMediaUrl } from './config.uts'
 import {
   mockDynamicList,
@@ -28,6 +29,8 @@ import {
 
 
 const PAPER_PLANE_STORAGE_KEY = 'xsa_paper_plane_state_v1'
+const PAPER_PLANE_PROFILE_UNLOCK_STORAGE_KEY = 'xsa_paper_plane_profile_unlocks_v1'
+export const PAPER_PLANE_PROFILE_UNLOCK_COST = 80
 export const PAPER_PLANE_CHANCE_COST = 50
 const PAPER_PLANE_FREE_TIMES = 3
 let paperPlaneStateLoaded = false
@@ -811,25 +814,56 @@ function mapPaperPlane(row: any): any {
   }
 }
 
-function mapNotification(row: any): any {
+const OFFICIAL_ACTIVITY_TYPES: string[] = ['official_activity', 'activity_registration', 'activity_review', 'activity_update', 'activity_cancel', 'activity_reminder', 'activity_check_in']
+const OFFICIAL_ACTIVITY_QUERY = { official_only: true }
+
+export function isOfficialActivity(row: any): boolean {
+  if (row == null) return false
+  const payload = row.payload != null && typeof row.payload === 'object' ? row.payload : {}
+  const type = row.notification_type != null ? '' + row.notification_type : (row.type != null ? '' + row.type : '')
+  const action = row.action != null ? '' + row.action : ''
+  return row.is_official == true || row.isOfficial == true || row.isOfficialActivity == true || payload.is_official == true || OFFICIAL_ACTIVITY_TYPES.indexOf(type) >= 0 || OFFICIAL_ACTIVITY_TYPES.indexOf(action) >= 0
+}
+
+/** 用户级私有“我的喜欢”列表；帖子卡片不使用收藏/喜欢计数替代它。 */
+export async function getMyLikedProfiles(page: number = 1, pageSize: number = 20) {
+  return await getMyLikedProfilesFromUser(page, pageSize)
+}
+
+export function normalizeCommunityNotification(row: any): any {
   if (row == null) return null
   const payload = row.payload != null && typeof row.payload === 'object' ? row.payload : {}
-  const targetType = row.target_type != null ? ('' + row.target_type) : (payload.target_type != null ? ('' + payload.target_type) : '')
-  const targetId = row.target_id != null ? row.target_id : (payload.target_id != null ? payload.target_id : (row.related_id != null ? row.related_id : 0))
+  const targetType = row.target_type != null ? ('' + row.target_type) : (row.targetType != null ? ('' + row.targetType) : (payload.target_type != null ? ('' + payload.target_type) : ''))
+  const targetId = row.target_id != null ? row.target_id : (row.targetId != null ? row.targetId : (payload.target_id != null ? payload.target_id : (row.related_id != null ? row.related_id : 0)))
+  const rawType = row.notification_type != null ? '' + row.notification_type : (row.type != null ? '' + row.type : '')
+  const rawAction = row.action != null ? '' + row.action : ''
+  const commentLike = rawType == 'comment' || rawType == 'reply' || rawType == 'comment_reply' || rawAction == 'comment' || rawAction == 'reply'
+  const likeLike = rawType == 'like' || rawType == 'post_like' || rawAction == 'like'
+  const normalizedType = commentLike ? 'comment' : (likeLike ? 'like' : (isOfficialActivity(row) ? 'activity' : 'other'))
+  const postId = row.post_id != null ? Number(row.post_id) : (row.postId != null ? Number(row.postId) : (payload.post_id != null ? Number(payload.post_id) : (targetType == 'post' ? Number(targetId) : 0)))
+  const commentId = row.comment_id != null ? Number(row.comment_id) : (row.commentId != null ? Number(row.commentId) : (payload.comment_id != null ? Number(payload.comment_id) : (targetType == 'comment' ? Number(targetId) : 0)))
   return {
     id: row.id,
-    type: row.notification_type != null ? row.notification_type : 'system',
+    type: normalizedType,
+    rawType,
     title: row.title != null ? row.title : '',
     content: row.content != null ? row.content : '',
-    timeText: timeTextFrom(row.created_at),
-    read: row.is_read == true,
+    timeText: row.timeText != null ? '' + row.timeText : timeTextFrom(row.created_at),
+    read: row.is_read == true || row.read == true,
     targetType,
     targetId,
     payload,
     relatedUserId: row.related_user_id != null ? row.related_user_id : 0,
     actorUserId: row.actor_user_id != null ? row.actor_user_id : (row.related_user_id != null ? row.related_user_id : 0),
-    action: row.action != null ? row.action : (row.notification_type != null ? row.notification_type : 'system')
+    action: row.action != null ? row.action : (row.notification_type != null ? row.notification_type : 'system'),
+    postId,
+    commentId,
+    isOfficialActivity: isOfficialActivity(row)
   }
+}
+
+function mapNotification(row: any): any {
+  return normalizeCommunityNotification(row)
 }
 
 function feedModeFromTab(tab: string, filter: string): any {
@@ -848,7 +882,7 @@ function feedModeFromTab(tab: string, filter: string): any {
   }
   // discover
   let f: any = null
-  if (filter == 'mbti' || filter == 'alumni') f = filter
+  if (filter == 'mbti' || filter == 'alumni' || filter == 'hometown') f = filter
   return { mode: 'latest', filter: f, sort: 'latest', mergeLiked: false }
 }
 
@@ -1778,12 +1812,15 @@ export async function getCommunityBanners() {
 
 export async function getCommunityNotifications() {
   if (USE_MOCK) {
+    const raw = cloneList(mockCommunityNotifications as any[])
+    const list: any[] = []
+    for (let i = 0; i < raw.length; i++) list.push(mapNotification(raw[i]))
     return request({
       url: '/community/notifications',
       cloudFunctionName: 'community',
       action: 'getNotifications',
       method: 'GET',
-      mockData: cloneList(mockCommunityNotifications as any[])
+      mockData: list
     })
   }
 
@@ -1799,6 +1836,11 @@ export async function getCommunityNotifications() {
     list.push(mapNotification(items[i]))
   }
   return okRes(list)
+}
+
+/** 服务端官方活动筛选契约；普通通知页仍获取全量后按标准分类。 */
+export async function getOfficialCommunityActivities() {
+  return await request({ url: '/notifications', method: 'GET', data: { page: 1, page_size: 50, ...OFFICIAL_ACTIVITY_QUERY } })
 }
 
 export async function getUnreadNotificationCount() {
@@ -2056,7 +2098,7 @@ export async function publishDynamic(
       id: dynamicId,
       user: {
         id: 9001,
-        avatar: '/static/portraits/profile-man-light.jpg',
+        avatar: '/static/portraits/profile-man-light.webp',
         name: '顾言澄',
         age: 29,
         gender: '男',
@@ -2221,6 +2263,34 @@ export async function likeDynamic(dynamicId: number) {
   })
 }
 
+/** 生成帖子分享内容；分享本身不改变帖子互动计数。 */
+export async function shareDynamic(dynamicId: number) {
+  if (dynamicId <= 0) return failRes('动态不存在', 404)
+  if (USE_MOCK) {
+    const item = findDynamic(dynamicId)
+    if (item == null) return failRes('动态不存在', 404)
+    return request({
+      url: '/community/dynamic/share',
+      cloudFunctionName: 'community',
+      action: 'shareDynamic',
+      method: 'POST',
+      data: { dynamicId },
+      mockData: { success: true, dynamicId, sharePath: '/pagesSub/community/post-detail?id=' + dynamicId }
+    })
+  }
+  const res = await request({
+    url: '/community/posts/' + dynamicId + '/share',
+    method: 'POST',
+    data: {}
+  })
+  if (!res.success) return res
+  return okRes({
+    success: true,
+    dynamicId,
+    sharePath: res.data != null && res.data.share_path != null ? res.data.share_path : '/pagesSub/community/post-detail?id=' + dynamicId
+  })
+}
+
 export async function likeComment(commentId: number, currentlyLiked: boolean = false) {
   if (USE_MOCK) {
     const all = mockDynamicList as any[]
@@ -2273,31 +2343,26 @@ export async function likeComment(commentId: number, currentlyLiked: boolean = f
   })
 }
 
+/** 收藏动态；真实 API 先读取当前状态，避免重复写入导致计数漂移。 */
 export async function collectDynamic(dynamicId: number) {
+  if (dynamicId <= 0) return failRes('动态不存在', 404)
   if (USE_MOCK) {
     const item = findDynamic(dynamicId)
-    if (item != null) {
-      item.collected = !item.collected
-      item.collectCount = (item.collectCount as number) + (item.collected ? 1 : -1)
-    }
+    if (item == null) return failRes('动态不存在', 404)
+    item.collected = item.collected !== true
+    const previous = item.collectCount != null ? Number(item.collectCount) : 0
+    item.collectCount = Math.max(0, previous + (item.collected ? 1 : -1))
     return request({
       url: '/community/dynamic/collect',
       cloudFunctionName: 'community',
       action: 'collectDynamic',
       method: 'POST',
       data: { dynamicId },
-      mockData: {
-        success: true,
-        collected: item != null ? item.collected : true,
-        collectCount: item != null ? item.collectCount : 0
-      }
+      mockData: { success: true, collected: item.collected, collectCount: item.collectCount }
     })
   }
 
-  const detail = await request({
-    url: '/community/posts/' + dynamicId,
-    method: 'GET'
-  })
+  const detail = await request({ url: '/community/posts/' + dynamicId, method: 'GET' })
   if (!detail.success || detail.data == null) {
     return failRes(extractHttpMessage(detail, '动态加载失败，无法收藏'), detail.code)
   }
@@ -2305,7 +2370,7 @@ export async function collectDynamic(dynamicId: number) {
   const method = currentlyCollected ? 'DELETE' : 'PUT'
   const res = await request({
     url: '/community/posts/' + dynamicId + '/collect',
-    method: method,
+    method,
     data: {}
   })
   if (!res.success) return res
@@ -2507,7 +2572,7 @@ export async function commentDynamic(
       user: {
         id: 9001,
         name: '顾言澄',
-        avatar: '/static/portraits/profile-man-light.jpg',
+        avatar: '/static/portraits/profile-man-light.webp',
         realNameStatus: 'passed'
       },
       content,
@@ -2859,7 +2924,7 @@ function upsertPaperPlaneConversation(plane: any, content: string, conversationI
       planeId: plane.id,
       userId: plane.userId != null ? plane.userId : 0,
       name: getPaperPlanePeerName(plane),
-      avatar: '/static/portraits/profile-woman-alt.jpg',
+      avatar: '/static/portraits/profile-woman-alt.webp',
       planeType: plane.type == 'voice' || plane.voiceUrl != null ? '语音纸飞机' : '文字纸飞机',
       lastMessage: '',
       time: Date.now(),
@@ -2881,6 +2946,8 @@ function mapPlaneConversation(row: any): any {
   return {
     id: row.id,
     planeId: row.plane_id != null ? row.plane_id : row.planeId,
+    ownerId: row.owner_id != null ? row.owner_id : row.ownerId,
+    replierId: row.replier_id != null ? row.replier_id : row.replierId,
     status: row.status != null ? row.status : 1,
     lastMessage: row.last_message != null ? row.last_message : (row.lastMessage != null ? row.lastMessage : ''),
     lastMessageAt: row.last_message_at != null ? row.last_message_at : null,
@@ -3146,6 +3213,7 @@ export async function getPaperPlaneConversations() {
   for (let i = 0; i < arr.length; i++) {
     upsertRemotePaperPlaneConversation(uniqueRows, arr[i])
   }
+  const viewerId = await readPaperPlaneViewerId()
   const list: any[] = []
   for (let i = 0; i < uniqueRows.length; i++) {
     const mapped = mapPlaneConversation(uniqueRows[i])
@@ -3153,9 +3221,9 @@ export async function getPaperPlaneConversations() {
     list.push({
       id: mapped.id,
       planeId: mapped.planeId,
-      userId: 0,
+      userId: resolvePaperPlaneTargetUserId(mapped, viewerId),
       name: mapped.peerLabel != null ? mapped.peerLabel : '匿名用户',
-      avatar: '/static/portraits/profile-woman-alt.jpg',
+      avatar: '/static/portraits/profile-woman-alt.webp',
       planeType: '文字纸飞机',
       lastMessage: mapped.lastMessage,
       time: Date.now(),
@@ -3318,6 +3386,47 @@ export async function sendPaperPlaneMessage(conversationId: number, content: str
   return okRes(mapPlaneMessage(res.data))
 }
 
+export async function sendPaperPlaneMediaMessage(conversationId: number, media: any, suppliedCreateKey: string = '') {
+  const mediaId = media != null && media.id != null ? Number(media.id) : 0
+  const mediaUrl = media != null && media.url != null ? ('' + media.url) : (typeof media == 'string' ? media : '')
+  if (conversationId <= 0 || (mediaId <= 0 && mediaUrl.trim() == '')) return failRes('图片媒体无效', 'INVALID_MEDIA')
+  if (USE_MOCK) {
+    const key = '' + conversationId
+    if (mockPlaneMessages[key] == null) mockPlaneMessages[key] = []
+    const msg = { id: Date.now(), conversationId, fromUserId: mockMeProfile.id, content: '', type: 2, mediaUrl, voiceDurationSec: 0, mine: true, timeText: '刚刚' }
+    ;(mockPlaneMessages[key] as any[]).push(msg)
+    for (let i = 0; i < mockPlaneConversations.length; i++) {
+      if (mockPlaneConversations[i].id == conversationId) mockPlaneConversations[i].lastMessage = '[图片]'
+    }
+    return request({ url: '/paper-plane-conversations/' + conversationId + '/messages', method: 'POST', data: { type: 2, media_id: mediaId, media_url: mediaUrl }, mockData: msg })
+  }
+  const key = idempotencyKey('paper-plane-image-message', suppliedCreateKey)
+  const payload: any = { content: '', type: 2 }
+  if (mediaId > 0) payload.media_id = mediaId
+  else if (mediaUrl.trim() != '') payload.media_url = mediaUrl
+  const res = await request({ url: '/paper-plane-conversations/' + conversationId + '/messages', method: 'POST', data: payload, headers: { 'Idempotency-Key': key } })
+  if (!res.success) return res
+  return okRes(mapPlaneMessage(res.data))
+}
+
+export async function createPaperPlaneContactExchange(conversationId: number, kind: string, suppliedIdempotencyKey: string = '') {
+  if (conversationId <= 0 || (kind != 'wechat' && kind != 'phone')) return failRes('交换类型无效', 'INVALID_CONTACT_KIND')
+  if (USE_MOCK) {
+    return request({ url: '/paper-plane-conversations/' + conversationId + '/contact-exchanges', method: 'POST', data: { kind }, mockData: { id: Date.now(), conversation_id: conversationId, kind, status: 'PENDING', requester_user_id: mockMeProfile.id, target_user_id: 0, requester_consented_at: new Date().toISOString(), target_consented_at: null, responded_at: null, created_at: new Date().toISOString() } })
+  }
+  const key = idempotencyKey('paper-plane-contact-exchange', suppliedIdempotencyKey)
+  return await request({ url: '/paper-plane-conversations/' + conversationId + '/contact-exchanges', method: 'POST', data: { kind }, headers: { 'Idempotency-Key': key } })
+}
+
+export async function respondPaperPlaneContactExchange(exchangeId: number, decision: string, suppliedIdempotencyKey: string = '') {
+  if (exchangeId <= 0 || (decision != 'accept' && decision != 'reject' && decision != 'withdraw')) return failRes('交换申请操作无效', 'INVALID_CONTACT_DECISION')
+  if (USE_MOCK) {
+    return request({ url: '/paper-plane-contact-exchanges/' + exchangeId + '/respond', method: 'POST', data: { decision }, mockData: { id: exchangeId, status: decision == 'accept' ? 'APPROVED' : (decision == 'reject' ? 'REJECTED' : 'REVOKED') } })
+  }
+  const key = idempotencyKey('paper-plane-contact-response', suppliedIdempotencyKey)
+  return await request({ url: '/paper-plane-contact-exchanges/' + exchangeId + '/respond', method: 'POST', data: { decision }, headers: { 'Idempotency-Key': key } })
+}
+
 export async function readPaperPlaneConversation(conversationId: number) {
   if (USE_MOCK) {
     for (let i = 0; i < mockPlaneConversations.length; i++) {
@@ -3329,6 +3438,120 @@ export async function readPaperPlaneConversation(conversationId: number) {
     url: '/paper-plane-conversations/' + conversationId + '/read',
     method: 'POST',
     data: {}
+  })
+}
+
+function readPaperPlaneProfileUnlockState(): any {
+  try {
+    const saved = uni.getStorageSync(PAPER_PLANE_PROFILE_UNLOCK_STORAGE_KEY) as any
+    return saved != null && typeof saved == 'object' ? saved : { entitlements: {}, idempotency: {} }
+  } catch (e) {
+    return { entitlements: {}, idempotency: {} }
+  }
+}
+
+function resolvePaperPlaneTargetUserId(conversation: any, viewerId: number): number {
+  if (conversation == null || viewerId <= 0) return 0
+  const ownerId = Number(conversation.ownerId != null ? conversation.ownerId : 0)
+  const replierId = Number(conversation.replierId != null ? conversation.replierId : 0)
+  if (ownerId == viewerId && replierId > 0) return replierId
+  if (replierId == viewerId && ownerId > 0) return ownerId
+  return 0
+}
+
+async function readPaperPlaneViewerId(): Promise<number> {
+  if (USE_MOCK) {
+    return mockMeProfile != null && mockMeProfile.id != null ? Number(mockMeProfile.id) : 0
+  }
+  try {
+    const res = await getMeProfile()
+    if (res != null && res.success && res.data != null) {
+      const raw = res.data as any
+      const candidate = raw.id != null ? raw.id : raw.user_id
+      const parsed = Number(candidate)
+      return Number.isNaN(parsed) ? 0 : parsed
+    }
+  } catch (e) {}
+  return 0
+}
+
+function savePaperPlaneProfileUnlockState(state: any): void {
+  try { uni.setStorageSync(PAPER_PLANE_PROFILE_UNLOCK_STORAGE_KEY, state) } catch (e) {}
+}
+
+function paperPlaneUnlockResult(targetUserId: number, unlocked: boolean): any {
+  return {
+    target_user_id: targetUserId,
+    unlocked,
+    points_cost: PAPER_PLANE_PROFILE_UNLOCK_COST,
+    balance: Number(mockMeProfile.points || 0)
+  }
+}
+
+/** 查询当前查看者针对某一目标用户的纸飞机资料解锁权益。 */
+export async function getPaperPlaneProfileUnlock(targetUserId: number) {
+  if (targetUserId <= 0) return failRes('缺少目标用户', 400)
+  if (USE_MOCK) {
+    const state = readPaperPlaneProfileUnlockState()
+    const key = mockMeProfile.id + ':' + targetUserId
+    const entry = state.entitlements != null ? state.entitlements[key] : null
+    return okRes(paperPlaneUnlockResult(targetUserId, entry != null && entry.unlocked == true))
+  }
+  const res = await request({
+    url: '/paper-plane/profile-unlocks/' + targetUserId,
+    method: 'GET'
+  })
+  if (!res.success) return res
+  const raw = res.data != null ? res.data : {}
+  return okRes({
+    target_user_id: raw.target_user_id != null ? Number(raw.target_user_id) : targetUserId,
+    unlocked: raw.unlocked == true,
+    points_cost: raw.points_cost != null ? Number(raw.points_cost) : PAPER_PLANE_PROFILE_UNLOCK_COST,
+    balance: raw.balance != null ? Number(raw.balance) : 0
+  })
+}
+
+/** 按查看者+目标用户原子解锁；客户端只缓存服务端确认的状态。 */
+export async function unlockPaperPlaneProfile(targetUserId: number, suppliedIdempotencyKey: string = '') {
+  if (targetUserId <= 0) return failRes('缺少目标用户', 400)
+  const key = suppliedIdempotencyKey != null && suppliedIdempotencyKey != ''
+    ? suppliedIdempotencyKey
+    : createCommunityCreateKey('paper-plane-profile-unlock')
+  if (USE_MOCK) {
+    if (targetUserId == mockMeProfile.id) return failRes('不能解锁自己的资料', 403)
+    const state = readPaperPlaneProfileUnlockState()
+    if (state.idempotency == null) state.idempotency = {}
+    if (state.entitlements == null) state.entitlements = {}
+    const priorTarget = state.idempotency[key]
+    if (priorTarget != null && Number(priorTarget) != targetUserId) return failRes('幂等键已用于其他目标', 409)
+    const entitlementKey = mockMeProfile.id + ':' + targetUserId
+    const existing = state.entitlements[entitlementKey]
+    if (existing != null && existing.unlocked == true) {
+      state.idempotency[key] = targetUserId
+      savePaperPlaneProfileUnlockState(state)
+      return okRes(paperPlaneUnlockResult(targetUserId, true))
+    }
+    if (Number(mockMeProfile.points || 0) < PAPER_PLANE_PROFILE_UNLOCK_COST) return failRes('积分不足', 402, paperPlaneUnlockResult(targetUserId, false))
+    mockMeProfile.points = Number(mockMeProfile.points || 0) - PAPER_PLANE_PROFILE_UNLOCK_COST
+    state.entitlements[entitlementKey] = { unlocked: true, pointsCost: PAPER_PLANE_PROFILE_UNLOCK_COST, unlockedAt: Date.now() }
+    state.idempotency[key] = targetUserId
+    savePaperPlaneProfileUnlockState(state)
+    syncPaperPlanePoints()
+    return okRes(paperPlaneUnlockResult(targetUserId, true))
+  }
+  const res = await request({
+    url: '/paper-plane/profile-unlocks/' + targetUserId,
+    method: 'POST',
+    headers: { 'Idempotency-Key': key },
+    data: {}
+  })
+  if (!res.success) return res
+  const raw = res.data != null ? res.data : {}
+  return okRes({
+    target_user_id: raw.target_user_id != null ? Number(raw.target_user_id) : targetUserId,
+    unlocked: raw.unlocked == true,
+    points_cost: raw.points_cost != null ? Number(raw.points_cost) : PAPER_PLANE_PROFILE_UNLOCK_COST,
+    balance: raw.balance != null ? Number(raw.balance) : 0
   })
 }
 

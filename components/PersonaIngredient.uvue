@@ -85,6 +85,8 @@
 </template>
 
 <script setup lang="uts">
+import { displayFieldValue } from '@/utils/profile-field-display.uts'
+
 interface Props {
 	field: any
 	fieldLabel: string
@@ -106,12 +108,12 @@ const field = computed(() => props.field != null ? props.field : ({} as any))
 const status = computed(() => String(field.value.confirmation_status != null ? field.value.confirmation_status : 'suggested'))
 
 const displayValue = computed(() => {
-	const v = field.value.display_value
-	if (v != null && v != '') return String(v)
 	const raw = field.value.value
-	if (raw == null) return '未填写'
-	if (Array.isArray(raw)) return raw.join('、')
-	return String(raw)
+	const dv = field.value.display_value != null ? String(field.value.display_value) : ''
+	const key = field.value.field_key != null ? String(field.value.field_key) : ''
+	if (raw == null && dv == '') return '未填写'
+	const shown = displayFieldValue(key, raw, dv)
+	return shown != '' ? shown : '未填写'
 })
 
 const confidence = computed(() => Number(field.value.confidence != null ? field.value.confidence : 0))

@@ -12,7 +12,7 @@
 			<text class="page-desc">写下真实的你，也写下你想遇见的人。</text>
 
 			<view class="form-card">
-				<text class="field-label">自我介绍</text>
+				<view class="field-head"><text class="field-label">自我介绍</text><button class="polish-button" :disabled="polishing || selfIntroduction.trim().length == 0" @click="reviewPaperPlanePolish('selfIntroduction')">AI 润色</button></view>
 				<textarea
 					class="field-input"
 					:value="selfIntroduction"
@@ -22,7 +22,7 @@
 				></textarea>
 				<text class="field-count">{{ selfIntroduction.length }}/52</text>
 
-				<text class="field-label ideal-label">理想的 TA</text>
+				<view class="field-head ideal-label"><text class="field-label">理想的 TA</text><button class="polish-button" :disabled="polishing || idealPartner.trim().length == 0" @click="reviewPaperPlanePolish('idealPartner')">AI 润色</button></view>
 				<textarea
 					class="field-input"
 					:value="idealPartner"
@@ -34,6 +34,22 @@
 			</view>
 		</view>
 
+		<view class="polish-overlay" v-if="polishVisible" @click="closePolishReview">
+			<view class="polish-sheet" @click.stop>
+				<text class="polish-title">AI 润色预览</text>
+				<text class="polish-note">AI 润色仅替换待发送草稿，绝不自动发送</text>
+				<text class="polish-label">原文</text>
+				<text class="polish-copy">{{ polishOriginal }}</text>
+				<text class="polish-label">润色后</text>
+				<text class="polish-copy proposed">{{ polishProposed }}</text>
+				<view class="polish-actions">
+					<button class="polish-secondary" @click="continuePolishEditing">继续编辑</button>
+					<button class="polish-secondary" @click="copyPolishResult">复制润色结果</button>
+					<button class="polish-primary" @click="confirmPolishReplace">确认替换</button>
+				</view>
+			</view>
+		</view>
+
 		<view class="send-area">
 			<button class="send-button" :disabled="sending" @click="sendDatingPlane">{{ sending ? '正在扔出...' : '扔出去' }}</button>
 		</view>
@@ -41,7 +57,7 @@
 </template>
 
 <script setup lang="uts">
-	import { getCommunityQuotas, sendPaperPlane } from '@/api'
+	import { getCommunityQuotas, sendPaperPlane, polishPaperPlaneText } from '@/api'
 	import { guardRealName } from '@/utils/realNameGate.uts'
 
 	const systemInfo = uni.getSystemInfoSync()
@@ -50,6 +66,11 @@
 	const idealPartner = ref('')
 	const sending = ref(false)
 	const remain = ref(0)
+	const polishVisible = ref(false)
+	const polishing = ref(false)
+	const polishField = ref('')
+	const polishOriginal = ref('')
+	const polishProposed = ref('')
 
 	onMounted(() => {
 		loadQuota()
@@ -72,6 +93,48 @@
 
 	const onIdealPartnerInput = (e: any) => {
 		idealPartner.value = e.detail.value
+	}
+
+	const reviewPaperPlanePolish = async (field: string) => {
+		const original = field == 'idealPartner' ? idealPartner.value.trim() : selfIntroduction.value.trim()
+		if (original == '' || polishing.value) return
+		polishing.value = true
+		try {
+			const res = await polishPaperPlaneText(original, field, 'natural')
+			if (res != null && res.success && res.data != null) {
+				polishField.value = field
+				polishOriginal.value = original
+				polishProposed.value = res.data.polished != null ? '' + res.data.polished : original
+				polishVisible.value = true
+			} else {
+				uni.showToast({ title: res != null && res.message != null ? '' + res.message : 'AI 润色失败，请稍后再试', icon: 'none' })
+			}
+		} catch (e) {
+			uni.showToast({ title: '网络异常，AI 润色失败，请稍后再试', icon: 'none' })
+		} finally {
+			polishing.value = false
+		}
+	}
+
+	const confirmPolishReplace = () => {
+		if (!polishVisible.value || polishProposed.value.trim() == '') return
+		if (polishField.value == 'idealPartner') idealPartner.value = polishProposed.value
+		else selfIntroduction.value = polishProposed.value
+		polishVisible.value = false
+		uni.showToast({ title: '已替换待发送草稿', icon: 'success' })
+	}
+
+	const copyPolishResult = () => {
+		if (polishProposed.value.trim() == '') return
+		uni.setClipboardData({ data: polishProposed.value, success: () => uni.showToast({ title: '已复制润色结果', icon: 'none' }) })
+	}
+
+	const continuePolishEditing = () => {
+		polishVisible.value = false
+	}
+
+	const closePolishReview = () => {
+		if (!polishing.value) polishVisible.value = false
 	}
 
 	const sendDatingPlane = async () => {
@@ -134,4 +197,21 @@
 	.send-button { width: 100%; height: 47px; border-radius: 14px; background: #7450C8; color: #FFFFFF; font-size: 15px; font-weight: 800; }
 	.send-button::after { border: none; }
 	.send-button:disabled { opacity: 0.5; }
+	.field-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+	.field-head.ideal-label { margin-top: 17px; }
+	.polish-button { min-width: 68px; height: 28px; margin: 0; padding: 0 9px; border: 1px solid #D8C8F3; border-radius: 14px; background: #F5F0FF; color: #7450C8; font-size: 11px; line-height: 28px; }
+	.polish-button::after { border: none; }
+	.polish-button:disabled { opacity: 0.45; }
+	.polish-overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; background: rgba(28, 16, 52, 0.45); }
+	.polish-sheet { padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; background: #FFFFFF; }
+	.polish-title { display: block; font-size: 18px; font-weight: 800; color: #21153A; }
+	.polish-note { display: block; margin-top: 6px; color: #8B8298; font-size: 11px; }
+	.polish-label { display: block; margin-top: 16px; color: #7450C8; font-size: 11px; font-weight: 800; }
+	.polish-copy { display: block; margin-top: 6px; padding: 10px; border-radius: 10px; background: #F8F5FC; color: #4A3B5E; font-size: 13px; line-height: 1.5; }
+	.polish-copy.proposed { background: #F2ECFF; color: #2D1A4A; }
+	.polish-actions { display: flex; flex-direction: row; gap: 8px; margin-top: 18px; }
+	.polish-actions button { flex: 1; height: 40px; margin: 0; padding: 0 8px; border-radius: 10px; font-size: 11px; }
+	.polish-actions button::after { border: none; }
+	.polish-secondary { border: 1px solid #E0D6EE; background: #FFFFFF; color: #5D4D70; }
+	.polish-primary { background: #7450C8; color: #FFFFFF; }
 </style>

@@ -2,20 +2,103 @@
  * 墨相师·AI 引路人 对话 WebSocket 封装
  * 支持语音(半双工实时 ASR)和文字(直接发送文本)双模式
  * 流式回复:ai_content 增量推送
+ * 墨相师旅程:session_start 固定携带 mode=moxiang_journey,
+ *   接收 journey_ready / extraction_status / journey_progress /
+ *   build_invite / build_invite_resolved 推送,
+ *   客户端可调用 acceptBuildInvite / snoozeBuildInvite 终结邀请
  */
 
 import { buildWsUrl, getAccessToken } from './config.uts'
+import { ProfileSubject } from './ai-profile.uts'
+
+/** 用户可见的对话角色名；供应商/模型名只存在于服务端调用与审计层。 */
+export const MASTER_ROLE_NAME = '知遇'
+
+/** 旅程阶段枚举(Contract v1.1 §1.2) */
+export type JourneyStage = 'chatting' | 'building' | 'ready' | 'published'
+
+/** 构建邀请单条摘要项 */
+export interface BuildInviteSummaryItem {
+	profile_dimension: string
+	content: string
+}
+
+/** 构建邀请载荷(build_invite) */
+export interface BuildInvitePayload {
+	subject: ProfileSubject
+	invite_id: string
+	summary_items: BuildInviteSummaryItem[]
+	effective_turn_count: number
+	dimension_count: number
+	candidate_count: number
+	journey_stage: JourneyStage
+}
+
+/** 构建邀请终结回执(build_invite_resolved) */
+export interface BuildInviteResolution {
+	subject: ProfileSubject
+	invite_id: string
+	resolution: 'accepted' | 'snoozed'
+	journey_stage: JourneyStage
+}
+
+/** 单个六维进度项(journey_progress.dimensions.*) */
+export interface JourneyDimensionProgress {
+	percent: number
+	evidenceCount: number
+}
+
+/** 自然对话旅程的实时六维进度推送(journey_progress) */
+export interface JourneyProgress {
+	subject: ProfileSubject
+	overallPercent: number
+	dimensions: { [key: string]: JourneyDimensionProgress }
+}
+
+/** 单轮候选抽取状态(extraction_status)。不包含候选内容。 */
+export interface ExtractionStatus {
+	subject: ProfileSubject
+	taskId: string
+	status: 'queued' | 'processing' | 'completed' | 'failed'
+}
+
+/** 确认卡片单条待确认字段(confirm_card.items) */
+export interface ConfirmCardItem {
+	fieldKey: string
+	kind: string
+	category: string
+	content: string
+	displayValue: string
+}
+
+/** 确认卡片载荷(confirm_card) */
+export interface ConfirmCardPayload {
+	subject: ProfileSubject
+	cardId: string
+	draftId: string
+	expectedRevision: number
+	items: ConfirmCardItem[]
+}
 
 export interface MasterWSCallbacks {
-	onSessionReady?: () => void
+	onSessionReady?: (sessionId?: string, subject?: ProfileSubject, resumed?: boolean, newSession?: boolean) => void
+	onSubjectChanged?: (subject: ProfileSubject, sessionId?: string, resumed?: boolean, newSession?: boolean) => void
 	onPartialTranscript?: (text: string) => void
 	onFinalTranscript?: (text: string) => void
 	onAIThinking?: () => void
 	onAIContent?: (text: string) => void
-	onAIReply?: (text: string) => void
+	onAIReply?: (text: string, isOpening?: boolean) => void
 	onTTSAudio?: (audioUrl: string, durationMs: number) => void
+	onConfirmCard?: (card: ConfirmCardPayload) => void
+	onPublishReady?: (subject: ProfileSubject, summary: string) => void
 	onError?: (code: string, message: string) => void
 	onClose?: () => void
+	// ===== Phase 1 Contract v1.1 P1-D =====
+	onJourneyReady?: (subject: ProfileSubject, sessionId: string, journeyStage: JourneyStage, resumed: boolean) => void
+	onExtractionStatus?: (status: ExtractionStatus) => void
+	onJourneyProgress?: (progress: JourneyProgress) => void
+	onBuildInvite?: (invite: BuildInvitePayload) => void
+	onBuildInviteResolved?: (resolution: BuildInviteResolution) => void
 }
 
 export class MasterWS {
@@ -25,9 +108,26 @@ export class MasterWS {
 	private reconnectAttempts = 0
 	private maxReconnect = 3
 	private manuallyClosed = false
+	// 旅程参数:非空时 session_start 固定携带 moxiang_journey。
+	private journeySubject: ProfileSubject | null = null
+	private journeyConsentVersion = ''
 
 	constructor(callbacks: MasterWSCallbacks) {
 		this.callbacks = callbacks
+	}
+
+	/**
+	 * ProfileSubject is a compile-time union, but WebSocket payloads and calls
+	 * crossing the UTS/JS boundary are runtime values. Keep the wire contract
+	 * fail-closed so an unknown subject can never be assigned to either portrait.
+	 */
+	private isSupportedSubject(raw: any): boolean {
+		const value = String(raw != null ? raw : '')
+		return value == 'personal' || value == 'ideal_partner'
+	}
+
+	private reportInvalidSubject() {
+		this.callbacks.onError?.('AI_INPUT_INVALID', '画像主体非法')
 	}
 
 	connect(): boolean {
@@ -57,7 +157,7 @@ export class MasterWS {
 			console.log('✅ [MasterWS] connected')
 			this.connected = true
 			this.reconnectAttempts = 0
-			this.send({ type: 'session_start' })
+			this.sendSessionStart()
 		})
 		this.socketTask.onMessage((res: any) => {
 			this.handleMessage(res.data)
@@ -83,6 +183,62 @@ export class MasterWS {
 		})
 	}
 
+// 进入墨相师新旅程;onOpen 与重连会自动重放同一主体。
+startJourneyMode(subject: ProfileSubject, consentVersion: string) {
+	if (!this.isSupportedSubject(subject)) {
+		this.reportInvalidSubject()
+		return
+	}
+	this.journeySubject = subject
+	this.journeyConsentVersion = consentVersion
+	if (this.connected) {
+		this.sendSessionStart()
+	}
+}
+
+switchSubject(subject: ProfileSubject) {
+	if (!this.isSupportedSubject(subject)) {
+		this.reportInvalidSubject()
+		return
+	}
+	if (!this.connected || this.journeySubject == null) return
+	this.send({ type: 'subject_switch', subject: subject })
+}
+
+private sendSessionStart() {
+	if (this.journeySubject != null) {
+		this.send({
+			type: 'session_start',
+			mode: 'moxiang_journey',
+			subject: this.journeySubject,
+			consentVersion: this.journeyConsentVersion
+		})
+	} else {
+		this.send({ type: 'session_start' })
+	}
+}
+
+// ===== Phase 1 Contract v1.1 P1-D:构建邀请 =====
+// 接受邀请:服务端回执前不卸载邀请卡(契约 §8);相同 invite 重复 accept 回放同一成功结果
+acceptBuildInvite(subject: ProfileSubject, inviteId: string) {
+	if (!this.isSupportedSubject(subject)) {
+		this.reportInvalidSubject()
+		return
+	}
+	if (inviteId == '') return
+	this.send({ type: 'build_invite_accept', subject: subject, invite_id: inviteId })
+}
+
+// 暂缓邀请:服务端以"snooze 处理 时"的有效轮次计数 +3 作为再次邀请的阈值
+snoozeBuildInvite(subject: ProfileSubject, inviteId: string) {
+	if (!this.isSupportedSubject(subject)) {
+		this.reportInvalidSubject()
+		return
+	}
+	if (inviteId == '') return
+	this.send({ type: 'build_invite_snooze', subject: subject, invite_id: inviteId })
+}
+
 	private handleMessage(data: any) {
 		let msg: any = null
 		try {
@@ -99,8 +255,32 @@ export class MasterWS {
 		const type = String(msg.type)
 		switch (type) {
 			case 'session_ready':
-				this.callbacks.onSessionReady?.()
+				{
+					const sessionId = String(msg.session_id != null ? msg.session_id : '')
+					const subject = this.parseSubject(msg.subject)
+					this.callbacks.onSessionReady?.(
+						sessionId,
+						subject == null ? undefined : subject,
+						msg.resumed === true,
+						msg.new_session === true
+					)
+				}
 				break
+			case 'subject_changed': {
+				const subject = this.parseSubject(msg.subject)
+				if (subject == null) {
+					this.reportInvalidSubject()
+					break
+				}
+				this.journeySubject = subject
+				this.callbacks.onSubjectChanged?.(
+					subject,
+					String(msg.session_id != null ? msg.session_id : ''),
+					msg.resumed === true,
+					msg.new_session === true
+				)
+				break
+			}
 			case 'partial_transcript':
 				this.callbacks.onPartialTranscript?.(String(msg.text != null ? msg.text : ''))
 				break
@@ -114,7 +294,10 @@ export class MasterWS {
 				this.callbacks.onAIContent?.(String(msg.text != null ? msg.text : ''))
 				break
 			case 'ai_reply':
-				this.callbacks.onAIReply?.(String(msg.text != null ? msg.text : ''))
+				this.callbacks.onAIReply?.(
+					String(msg.text != null ? msg.text : ''),
+					msg.opening === true
+				)
 				break
 			case 'tts_audio':
 				this.callbacks.onTTSAudio?.(
@@ -125,15 +308,191 @@ export class MasterWS {
 			case 'error':
 				this.callbacks.onError?.(
 					String(msg.code != null ? msg.code : 'UNKNOWN'),
-					String(msg.message != null ? msg.message : '墨相师对话出错')
+					String(msg.message != null ? msg.message : MASTER_ROLE_NAME + '对话出错')
 				)
+				break
+			case 'extraction_status':
+				this.handleExtractionStatus(msg)
+				break
+			case 'journey_progress':
+				this.handleJourneyProgress(msg)
+				break
+			case 'confirm_card':
+				this.handleConfirmCard(msg)
+				break
+			case 'publish_ready':
+				{
+					const subject = this.parseSubject(msg.subject)
+					if (subject == null) {
+						this.reportInvalidSubject()
+						break
+					}
+					this.callbacks.onPublishReady?.(
+						subject,
+						String(msg.summary != null ? msg.summary : '')
+					)
+				}
+				break
+			// ===== Phase 1 Contract v1.1 P1-D:墨相师新旅程事件 =====
+			case 'journey_ready':
+				this.handleJourneyReady(msg)
+				break
+			case 'build_invite':
+				this.handleBuildInvite(msg)
+				break
+			case 'build_invite_resolved':
+				this.handleBuildInviteResolved(msg)
 				break
 		}
 	}
 
+	private parseSubject(raw: any): ProfileSubject | null {
+		const value = String(raw != null ? raw : '')
+		if (value == 'ideal_partner') return 'ideal_partner'
+		if (value == 'personal') return 'personal'
+		return null
+	}
+
+	private parseJourneyStage(raw: any): JourneyStage {
+		const value = String(raw != null ? raw : '')
+		if (value == 'building' || value == 'ready' || value == 'published') return value
+		return 'chatting'
+	}
+
+	// {"type":"journey_ready","subject":"personal","session_id":"s-...","journey_stage":"chatting","resumed":true}
+	private handleJourneyReady(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const sessionId = String(msg.session_id != null ? msg.session_id : '')
+		const stage = this.parseJourneyStage(msg.journey_stage)
+		const resumed = msg.resumed === true
+		this.callbacks.onJourneyReady?.(subject, sessionId, stage, resumed)
+	}
+
+	// {"type":"build_invite","subject":"personal","invite_id":"invite-...","summary_items":[...],"effective_turn_count":4,"dimension_count":3,"candidate_count":3}
+	private handleBuildInvite(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const rawItems: any[] = msg.summary_items != null ? (msg.summary_items as any[]) : []
+		const items: BuildInviteSummaryItem[] = []
+		for (let i = 0; i < rawItems.length; i++) {
+			const it = rawItems[i]
+			items.push({
+				profile_dimension: String(it.profile_dimension != null ? it.profile_dimension : ''),
+				content: String(it.content != null ? it.content : '')
+			})
+		}
+		const payload: BuildInvitePayload = {
+			subject: subject,
+			invite_id: String(msg.invite_id != null ? msg.invite_id : ''),
+			summary_items: items,
+			effective_turn_count: Number(msg.effective_turn_count != null ? msg.effective_turn_count : 0),
+			dimension_count: Number(msg.dimension_count != null ? msg.dimension_count : 0),
+			candidate_count: Number(msg.candidate_count != null ? msg.candidate_count : 0),
+			journey_stage: this.parseJourneyStage(msg.journey_stage)
+		}
+		this.callbacks.onBuildInvite?.(payload)
+	}
+
+	// {"type":"build_invite_resolved","subject":"personal","invite_id":"invite-...","resolution":"accepted","journey_stage":"building"}
+	private handleBuildInviteResolved(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const value = String(msg.resolution != null ? msg.resolution : '')
+		const resolution: 'accepted' | 'snoozed' = value == 'snoozed' ? 'snoozed' : 'accepted'
+		const resolved: BuildInviteResolution = {
+			subject: subject,
+			invite_id: String(msg.invite_id != null ? msg.invite_id : ''),
+			resolution: resolution,
+			journey_stage: this.parseJourneyStage(msg.journey_stage)
+		}
+		this.callbacks.onBuildInviteResolved?.(resolved)
+	}
+
+	private handleExtractionStatus(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const rawStatus = String(msg.status != null ? msg.status : '')
+		const status: 'queued' | 'processing' | 'completed' | 'failed' =
+			rawStatus == 'processing' || rawStatus == 'completed' || rawStatus == 'failed'
+				? rawStatus as 'processing' | 'completed' | 'failed'
+				: 'queued'
+		this.callbacks.onExtractionStatus?.({
+			subject: subject,
+			taskId: String(msg.task_id != null ? msg.task_id : ''),
+			status: status,
+		})
+	}
+
+	private handleJourneyProgress(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const rawDimensions: any = msg.dimensions != null ? msg.dimensions : {}
+		const dimensions: { [key: string]: JourneyDimensionProgress } = {}
+		for (const key in rawDimensions) {
+			const item = rawDimensions[key]
+			dimensions[key] = {
+				percent: Number(item?.percent != null ? item.percent : 0),
+				evidenceCount: Number(item?.evidence_count != null ? item.evidence_count : 0),
+			}
+		}
+		this.callbacks.onJourneyProgress?.({
+			subject: subject,
+			overallPercent: Number(msg.overall_percent != null ? msg.overall_percent : 0),
+			dimensions: dimensions,
+		})
+	}
+
+	// 确认卡片推送:{"type":"confirm_card","card_id":"c-...","draft_id":"d-...","expected_revision":3,"items":[...]}
+	private handleConfirmCard(msg: any) {
+		const subject = this.parseSubject(msg.subject)
+		if (subject == null) {
+			this.reportInvalidSubject()
+			return
+		}
+		const rawItems: any[] = msg.items != null ? (msg.items as any[]) : []
+		const items: ConfirmCardItem[] = []
+		for (let i = 0; i < rawItems.length; i++) {
+			const it = rawItems[i]
+			const item: ConfirmCardItem = {
+				fieldKey: String(it.field_key != null ? it.field_key : ''),
+				kind: String(it.kind != null ? it.kind : ''),
+				category: String(it.category != null ? it.category : ''),
+				content: String(it.content != null ? it.content : ''),
+				displayValue: String(it.display_value != null ? it.display_value : '')
+			}
+			items.push(item)
+		}
+		const card: ConfirmCardPayload = {
+			subject: subject,
+			cardId: String(msg.card_id != null ? msg.card_id : ''),
+			draftId: String(msg.draft_id != null ? msg.draft_id : ''),
+			expectedRevision: Number(msg.expected_revision != null ? msg.expected_revision : 0),
+			items: items
+		}
+		this.callbacks.onConfirmCard?.(card)
+	}
+
 	// ===== 文字模式 =====
 	sendTextMessage(text: string) {
-		this.send({ type: 'text_message', text: text })
+		// clientTurnId 供后端识别/对账同一轮次(时间戳+随机数)
+		const clientTurnId = '' + Date.now() + '-' + Math.floor(Math.random() * 1000000)
+		this.send({ type: 'text_message', text: text, clientTurnId: clientTurnId })
 	}
 
 	// ===== 语音模式 =====

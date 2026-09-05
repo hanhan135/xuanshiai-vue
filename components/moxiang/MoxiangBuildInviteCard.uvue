@@ -1,0 +1,153 @@
+<!--
+  Phase 1 Contract v1.1 P1-D：墨相师构建邀请卡片
+  接受/暂缓必须通过 MasterWS.acceptBuildInvite / snoozeBuildInvite,
+  同一 invite 重复接受回放同一结果;失败(BUILD_INVITE_CONFLICT)前不卸载卡片。
+-->
+<template>
+	<view class="mx-invite">
+		<view class="mx-invite-head">
+			<text class="mx-invite-title">这次聊下来，我记住了这些</text>
+			<text class="mx-invite-sub">已经记下 {{ invite.candidateCount }} 条有意思的细节，覆盖 {{ invite.dimensionCount }} 个面向。要不要一起整理成画像？</text>
+		</view>
+		<view class="mx-invite-list">
+			<view v-for="(item, idx) in invite.summaryItems" :key="idx" class="mx-invite-item">
+				<text class="mx-invite-dim">{{ dimensionLabel(item.profileDimension) }}</text>
+				<text class="mx-invite-content">{{ item.content }}</text>
+			</view>
+		</view>
+		<view class="mx-invite-meta">
+			<text class="mx-invite-meta-label">有效轮次 {{ invite.effectiveTurnCount }} · 维度 {{ invite.dimensionCount }} · 候选 {{ invite.candidateCount }}</text>
+		</view>
+		<view class="mx-invite-actions">
+			<view class="mx-invite-btn" @tap="onSnooze">
+				<text class="mx-invite-btn-text">稍后再说</text>
+			</view>
+			<view class="mx-invite-btn mx-invite-btn-primary" @tap="onAccept">
+				<text class="mx-invite-btn-text mx-invite-btn-text-primary">现在构建</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import type { ProfileSubject } from '@/api/ai-profile.uts'
+import type { JourneyStage } from '@/api/voice-master-ws.uts'
+import { dimensionLabel } from '@/utils/moxiang-dimension.uts'
+
+/** 组件层 camelCase 视图(由 master page 适配 WS payload 后传入) */
+export interface InviteViewItem {
+	profileDimension: string
+	content: string
+	confidence: number
+}
+export interface InviteView {
+	inviteId: string
+	subject: ProfileSubject
+	journeyStage: JourneyStage
+	candidateCount: number
+	dimensionCount: number
+	effectiveTurnCount: number
+	summaryItems: InviteViewItem[]
+}
+
+const props = defineProps<{
+	invite: InviteView
+	busy?: boolean
+}>()
+
+const emit = defineEmits<{
+	(e: 'accept', inviteId: string): void
+	(e: 'snooze', inviteId: string): void
+}>()
+
+function onAccept() {
+	if (props.busy == true) return
+	emit('accept', props.invite.inviteId)
+}
+function onSnooze() {
+	if (props.busy == true) return
+	emit('snooze', props.invite.inviteId)
+}
+</script>
+
+<style scoped>
+.mx-invite {
+	background: #FFFCF5;
+	border: 1px solid rgba(180, 118, 43, 0.4);
+	border-radius: 12px;
+	padding: 14px;
+}
+.mx-invite-head {
+	display: flex;
+	flex-direction: column;
+}
+.mx-invite-title {
+	font-size: 14px;
+	font-weight: 700;
+	color: #2E2418;
+}
+.mx-invite-sub {
+	font-size: 12px;
+	color: #5C4F3D;
+	margin-top: 4px;
+}
+.mx-invite-list {
+	margin-top: 10px;
+}
+.mx-invite-item {
+	padding: 8px 0;
+	border-top: 1px solid rgba(180, 118, 43, 0.18);
+}
+.mx-invite-item:first-child {
+	border-top: 0;
+}
+.mx-invite-dim {
+	font-size: 11px;
+	color: #B4762B;
+	background: rgba(180, 118, 43, 0.12);
+	padding: 2px 8px;
+	border-radius: 999px;
+}
+.mx-invite-content {
+	display: block;
+	font-size: 13px;
+	color: #2E2418;
+	line-height: 1.55;
+	margin-top: 4px;
+}
+.mx-invite-meta {
+	margin-top: 8px;
+}
+.mx-invite-meta-label {
+	font-size: 11px;
+	color: #9A8C77;
+}
+.mx-invite-actions {
+	display: flex;
+	flex-direction: row;
+	gap: 8px;
+	margin-top: 12px;
+}
+.mx-invite-btn {
+	flex: 1;
+	height: 36px;
+	border-radius: 8px;
+	background: #FFFCF5;
+	border: 1px solid rgba(180, 118, 43, 0.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mx-invite-btn-primary {
+	background: #B4762B;
+	border-color: none;
+}
+.mx-invite-btn-text {
+	font-size: 13px;
+	color: #B4762B;
+	font-weight: 700;
+}
+.mx-invite-btn-text-primary {
+	color: #FFFCF5;
+}
+</style>

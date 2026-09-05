@@ -35,6 +35,7 @@
 					@like="onLike"
 					@comment="goPost"
 					@collect="onCollect"
+					@share="onShare"
 					@follow="onFollow"
 					@unfollow="onUnfollow"
 					@apply="onApply"
@@ -79,6 +80,7 @@ import {
 			leaveTopic,
 			likeDynamic,
 			collectDynamic,
+			shareDynamic,
 			followUserFromCommunity,
 			unfollowUserFromCommunity
 		} from '@/api'
@@ -351,20 +353,24 @@ const applyParticipation = (joined: boolean, participantCount: any) => {
 		}
 	}
 
+	const onShare = async (id: number) => {
+		const res = await shareDynamic(id)
+		uni.showToast({ title: res.success ? '已生成分享内容，请使用右上角分享' : '分享暂不可用，请稍后重试', icon: 'none' })
+	}
+
 	const onCollect = async (id: number) => {
 		const ok = await guardRealName('collect')
 		if (!ok) return
 		const res = await collectDynamic(id)
-		if (res.success) {
+		if (res.success && res.data != null) {
 			const p = posts.value.find((d: any) => d.id == id)
 			if (p != null) {
-				p.collected = res.data.collected
-				if (res.data.collectCount != null) {
-					p.collectCount = res.data.collectCount
-				}
+				p.collected = res.data.collected == true
+				if (res.data.collectCount != null) p.collectCount = Number(res.data.collectCount)
 			}
 		} else {
-			uni.showToast({ title: '收藏失败，请重试', icon: 'none' })
+			const msg = res.message != null && res.message != '' ? '' + res.message : '收藏失败，请重试'
+			uni.showToast({ title: msg, icon: 'none' })
 		}
 	}
 

@@ -14,7 +14,7 @@
 				<view class="error-cancel" @tap="onBack"><text>返回</text></view>
 			</view>
 		</view>
-		<scroll-view v-else scroll-y class="detail-scroll" enhanced show-scrollbar="false">
+		<scroll-view v-else scroll-y class="detail-scroll" :scroll-into-view="scrollAnchor" enhanced show-scrollbar="false">
 			<view v-if="!isLockedView" class="vip-detail-page">
 				<view class="vip-cover-area">
 					<image class="vip-cover-img" :src="user.cover != '' ? user.cover : user.avatar" mode="aspectFill"></image>
@@ -26,7 +26,7 @@
 						<view class="vip-name-group"><text class="vip-name">{{ user.name }}</text><text class="vip-age">{{ user.age }}岁</text></view>
 						<view v-if="user.isVIP" class="vip-badge vip-badge-large"><text class="vip-crown">♛</text><text class="vip-badge-text">VIP会员</text></view>
 					</view>
-					<text class="vip-meta">{{ user.job }} · {{ user.edu }}　{{ user.city }}　<text class="online-text">{{ user.online }}</text></text>
+					<text class="vip-meta">{{ user.job }} · {{ user.edu }}　{{ user.city }}　<text :class="['online-text', ('' + user.online).indexOf('离线') >= 0 ? 'online-text-off' : '']">{{ user.online }}</text><text v-if="user.distance != ''"> · {{ user.distance }}</text></text>
 					<text v-if="visitorCount != null" class="visitor-count-text">已有 {{ visitorCount }} 人看过 Ta</text>
 					<view v-if="user.tags.length > 0" class="tag-row"><view v-for="tag in user.tags" :key="tag" class="profile-tag"><text class="profile-tag-text">{{ tag }}</text></view></view>
 					<text v-if="user.bio != ''" class="vip-bio">{{ user.bio }}</text>
@@ -47,7 +47,7 @@
 						<view v-for="cert in certs" :key="cert.label" class="cert-item"><view class="cert-icon-wrap"><text class="cert-icon">{{ cert.icon }}</text></view><view class="cert-copy"><text class="cert-label">{{ cert.label }}</text><text class="cert-desc">{{ cert.desc }}</text></view><text class="cert-check">✓</text></view>
 					</view>
 
-					<view v-if="user.lifePhotos.length > 0" class="vip-section-card">
+					<view v-if="user.lifePhotos.length > 0" id="anchor-moments" class="vip-section-card">
 						<text class="vip-section-title">Ta的瞬间</text>
 						<image v-for="(photo, index) in user.lifePhotos" :key="index" class="moment-hero" :src="photo" mode="aspectFill"></image>
 					</view>
@@ -57,7 +57,7 @@
 						<view v-for="(item, index) in user.expect" :key="index" class="qa-card"><text class="qa-answer">{{ item }}</text></view>
 					</view>
 
-					<view v-if="dynamics.length > 0" class="vip-section-card">
+					<view v-if="dynamics.length > 0" id="anchor-dynamics" class="vip-section-card">
 						<view class="section-heading-row"><text class="vip-section-title">Ta的动态</text><text class="section-more">查看全部 ›</text></view>
 						<view v-for="item in dynamics" :key="item.id" class="dynamic-card"><view class="dynamic-user-row"><image class="dynamic-avatar" :src="user.avatar" mode="aspectFill"></image><view class="dynamic-user-copy"><text class="dynamic-name">{{ user.name }}</text><text class="dynamic-time">{{ item.time }}</text></view></view><text class="dynamic-content">{{ item.content }}</text><image v-if="item.photo != ''" class="dynamic-photo" :src="item.photo" mode="aspectFill"></image><view class="dynamic-footer"><text class="dynamic-topic">{{ item.topic }}</text><text class="dynamic-count">♡ {{ item.likes }}　◌ {{ item.comments }}</text></view></view>
 					</view>
@@ -128,29 +128,58 @@
 			<view class="scroll-bottom-spacer"></view>
 		</scroll-view>
 
-			<view v-if="!isLockedView && isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar bottom-bar-own">
+			<!-- AI分身悬浮按钮：与首页同款液态玻璃·气泡低语图标，右下悬浮位（原合拍度悬浮球位置） -->
+			<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="detail-ai-float" @tap="openAiAvatar">
+				<view class="detail-ai-float-glass">
+					<view class="detail-ai-float-halo"></view>
+					<view class="detail-ai-float-bubble">
+						<view class="detail-ai-float-dot detail-ai-float-dot1"></view>
+						<view class="detail-ai-float-dot detail-ai-float-dot2"></view>
+						<view class="detail-ai-float-dot detail-ai-float-dot3"></view>
+					</view>
+				</view>
+			</view>
+			<view v-if="showAiGuide" class="ai-guide-bubble" @tap="dismissAiGuide"><text class="ai-guide-text">与对方的AI分身聊天获取更多信息</text></view>
+
+			<view v-if="isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar bottom-bar-own">
 				<view class="primary-action edit-only-btn" @tap="goEdit"><text class="primary-action-text">编辑资料</text></view>
 			</view>
-		<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="bottom-bar">
-			<view class="ai-avatar-action" @tap="openAiAvatar"><text class="ai-avatar-icon">✦</text><text class="ai-avatar-text">AI 分身</text></view>
-			<view class="primary-action" @tap="onMatch"><text class="primary-action-text">♥　申请认识</text></view>
-			<view class="like-action" @tap="onLike"><text class="like-action-text">♥</text></view>
-		</view>
+			<!-- 底部操作栏：与首页推荐页同款（分享 + 申请认识 + 收藏爱心） -->
+			<view v-if="!isOwnProfile && !isPreview && !detailLoading && detailError == ''" class="float-bar">
+				<view class="share-btn" @tap="onShare"><text class="ic ic-sys ic-fenxiang share-icon"></text></view>
+				<view class="chat-btn" @tap="onMatch"><text class="ic ic-home ic-hello chat-icon"></text><text class="chat-text">申请认识</text></view>
+				<view class="like-btn" @tap="onLike">
+					<text v-if="isLikedUser" class="heart-icon heart-font heart-solid"></text>
+					<text v-else class="heart-icon heart-font heart-outline"></text>
+				</view>
+			</view>
 
 		<XsaApplySheet :visible="applyVisible" :user-id="applyUserId" @close="applyVisible = false" @success="onApplySuccess" />
 		<XsaPaymentSheet :visible="spotlightPaymentVisible" :amount="SPOTLIGHT_AMOUNT" :loading="spotlightPaying" confirm-text="确认支付爆灯" notice="爆灯 9.9 元/次：确认后展示爆灯成功状态。" @close="closeSpotlightPayment" @confirm="confirmSpotlightPayment" />
 		<XsaSpotlightSuccessSheet :visible="spotlightSuccessVisible" :target="spotlightTarget" @close="closeSpotlightSuccess" />
+
+		<XsaSheet :visible="matchVisible" title="AI 合拍度解读" @close="matchVisible = false">
+			<view class="match-sheet">
+				<view class="match-sheet-score"><text>{{ user.match > 0 ? user.match + '%' : '暂无评分' }}</text></view>
+				<view class="match-interpret">
+					<view class="match-interpret-head"><text class="match-interpret-mark">✦</text><text class="match-interpret-title">AI 解读</text></view>
+					<text class="match-interpret-text">{{ detailInterpretation }}</text>
+				</view>
+				<view class="match-sheet-tip"><text>基于公开资料与兴趣交集生成，不代表平台承诺结果。建议从共同兴趣或城市周末安排开始聊。</text></view>
+			</view>
+		</XsaSheet>
 	</view>
 </template>
 
 <script setup lang="uts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 import XsaPaymentSheet from '@/components/XsaPaymentSheet.uvue'
 import XsaSpotlightSuccessSheet from '@/components/XsaSpotlightSuccessSheet.uvue'
-import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, getUserVisitorCount, saveAiAvatarProfileSnapshot } from '@/api'
+import XsaSheet from '@/components/XsaSheet.uvue'
+import { getUserDetail, likeUser, getOwnProfile, getMyPosts, getMembershipStatus, getUserVisitorCount, saveAiAvatarProfileSnapshot, getDynamicList } from '@/api'
 import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
-import locationJson from '@/static/location.json'
+import locationJson from '@/data/location.json'
 import { SPOTLIGHT_AMOUNT, paySpotlight } from '@/api/spotlight.uts'
 import { guardRealName } from '@/utils/realNameGate.uts'
 
@@ -158,6 +187,10 @@ const isLockedView = ref(false)
 const viewerIsVip = ref(false)
 const isOwnProfile = ref(false)
 const isPreview = ref(false)
+const isLikedUser = ref(false)
+const showAiGuide = ref(false)
+const scrollAnchor = ref('')
+const matchVisible = ref(false)
 const detailLoading = ref(true)
 const detailError = ref('')
 const detailQuotaExhausted = ref(false)
@@ -173,7 +206,7 @@ const user = ref({
 	id: 0,
 	detailLocked: false,
 	name: '', age: '', avatar: '', isVIP: false, job: '', edu: '', city: '',
-	online: '', distance: '', recentActivity: '', match: 0, tags: [], bio: '',
+	online: '', distance: '', recentActivity: '', match: 0, mbti: '', tags: [], bio: '',
 	cover: '', photos: [], lifePhotos: [], expect: [], basicInfo: []
 })
 
@@ -184,11 +217,7 @@ const certs = ref([
 	{ icon: '房', shortLabel: '房产', label: '房产认证', desc: '房产信息已认证' }
 ])
 
-const dynamics = ref([
-	{ id: 1, time: '2小时前 · 大理', content: '周末和朋友去了趟大理，洱海边的风真的好舒服。停下来拍照的时候，感觉整个世界都慢下来了。', photo: '/static/portraits/profile-woman-community.jpg', topic: '#旅行', likes: 89, comments: 12 },
-	{ id: 2, time: '昨天 18:30 · 奥体中心', content: '完成了人生第一个半马！虽然很累，但冲线的那一刻，一切都值得。', photo: '/static/portraits/profile-woman-alt.jpg', topic: '#健身', likes: 156, comments: 28 },
-	{ id: 3, time: '3天前 · 蜂巢剧场', content: '新年第一场脱口秀。笑到腹肌疼，才发现快乐原来这么简单。', photo: '/static/portraits/profile-woman-main.jpg', topic: '#生活', likes: 203, comments: 8 }
-])
+const dynamics = ref([] as any[])
 
 const textValue = (value: any, fallback: string): string => {
 	return value != null && value != '' ? '' + value : fallback
@@ -334,6 +363,7 @@ const mapDetailUser = (raw: any, id: number) => {
 		: []
 	const lifePhotos = photos
 	const tags = Array.isArray(card.interest_tags) ? card.interest_tags as string[] : Array.isArray(card.tags) ? card.tags as string[] : Array.isArray(profile.interest_tags) ? profile.interest_tags as string[] : []
+	const tagWithMbti = mbti != '' && mbti != '未填写' ? [mbti].concat(tags) : tags
 	const expectations = profile.tag_selections != null && Array.isArray(profile.tag_selections.relationship_expectation)
 		? profile.tag_selections.relationship_expectation as string[]
 		: Array.isArray(card.expect) && card.expect.length > 0 ? card.expect as string[] : []
@@ -358,7 +388,8 @@ const mapDetailUser = (raw: any, id: number) => {
 		distance: value(card.distance, card.distance_km != null ? '距你 ' + card.distance_km + 'km' : null, ''),
 		recentActivity: value(card.recentActivity, card.activeStatus, ''),
 		match: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : 0),
-		tags,
+		mbti,
+		tags: tagWithMbti,
 		bio: value(card.intro, profile.self_intro, value(card.introduction, profile.introduction, '')),
 		cover: background != '' ? background : (photos.length > 0 ? photos[0] : avatar),
 		photos,
@@ -391,7 +422,7 @@ const load = async () => {
 				}
 			}
 			if (isOwnProfile.value) {
-				const postsRes = await getMyPosts({ page: 1, pageSize: 3 })
+				const postsRes = await getMyPosts({ page: 1, pageSize: 50 })
 				if (postsRes.success && postsRes.data != null) {
 					const rawPosts = postsRes.data.list != null ? postsRes.data.list as any[] : []
 					dynamics.value = rawPosts.map((post: any) => ({
@@ -404,6 +435,8 @@ const load = async () => {
 						comments: post.commentCount != null ? Number(post.commentCount) : 0
 					}))
 				}
+			} else if (!isPreview.value && user.value.id > 0) {
+				await loadUserDynamics(user.value.id)
 			}
 		} else {
 			const message = res != null && res.message != null ? '' + res.message : '请稍后重试'
@@ -416,6 +449,36 @@ const load = async () => {
 		detailLoading.value = false
 		refreshLockedView()
 	}
+}
+
+const loadUserDynamics = async (targetUserId: number) => {
+	if (targetUserId <= 0) return
+	const collected: any[] = []
+	for (let page = 1; page <= 5; page++) {
+		const res = await getDynamicList({ tab: 'discover', page: page, pageSize: 20 })
+		if (!res.success || res.data == null) break
+		const data = res.data as any
+		const rows = data.list != null && Array.isArray(data.list) ? data.list as any[] : []
+		for (let i = 0; i < rows.length; i++) {
+			const row = rows[i]
+			const author = row.user != null ? row.user : {}
+			const authorId = Number(author.id != null ? author.id : (author.userId != null ? author.userId : 0))
+			if (authorId != targetUserId) continue
+			const rowPhotos = row.photos != null && Array.isArray(row.photos) ? row.photos as any[] : []
+			const rowTags = row.tags != null && Array.isArray(row.tags) ? row.tags as any[] : []
+			collected.push({
+				id: Number(row.id || 0),
+				time: row.timeText != null ? '' + row.timeText : '',
+				content: row.content != null ? '' + row.content : '',
+				photo: rowPhotos.length > 0 ? resolveMediaUrl(rowPhotos[0]) : '',
+				topic: rowTags.length > 0 ? '' + rowTags[0] : '',
+				likes: Number(row.likeCount || 0),
+				comments: Number(row.commentCount || 0)
+			})
+		}
+		if (data.hasMore != true) break
+	}
+	dynamics.value = collected
 }
 
 const refreshLockedView = () => {
@@ -432,7 +495,16 @@ const loadViewerMembership = async () => {
 	if (res.success && res.data != null) viewerIsVip.value = (res.data as any).is_vip == true
 }
 
+const redirectParentRoute = (): boolean => {
+	let storedMode: any = null
+	try { storedMode = uni.getStorageSync('xsa_onboarding_mode') } catch (e) {}
+	if (storedMode == null || String(storedMode) != 'parent') return false
+	uni.reLaunch({ url: '/pages/parent/parent' })
+	return true
+}
+
 onMounted(async () => {
+	if (redirectParentRoute()) return
 	const pages = getCurrentPages()
 	const currentPage = pages[pages.length - 1]
 	const options = currentPage.options
@@ -456,9 +528,15 @@ onMounted(async () => {
 	applyUserId.value = parsed
 	await loadViewerMembership()
 	await load()
+	if (!isOwnProfile.value && !isPreview.value && uni.getStorageSync('xsa_ai_avatar_guide_shown') != true) showAiGuide.value = true
+	if (options.anchor != null && ('' + options.anchor) != '') {
+		const anchorId = '' + options.anchor
+		setTimeout(() => { scrollAnchor.value = anchorId }, 400)
+	}
 })
 
 onShow(async () => {
+	if (redirectParentRoute()) return
 	await loadViewerMembership()
 	refreshLockedView()
 })
@@ -468,7 +546,24 @@ const openQuotaMembership = () => { uni.navigateTo({ url: '/pagesSub/profileExtr
 const handleDetailErrorAction = () => { if (detailQuotaExhausted.value) openQuotaMembership(); else load() }
 const onShare = () => { uni.showToast({ title: '分享给朋友', icon: 'none' }) }
 const goEdit = () => { uni.navigateTo({ url: '/pagesSub/userExtra/user/edit' }) }
+const dismissAiGuide = () => {
+	if (!showAiGuide.value) return
+	showAiGuide.value = false
+	uni.setStorageSync('xsa_ai_avatar_guide_shown', true)
+}
+
+const detailInterpretation = computed((): string => {
+	const score = Number(user.value.match || 0)
+	const tagList = user.value.tags as any[]
+	const interests = tagList != null && tagList.length > 0 ? tagList.join('、') : ''
+	const parts: string[] = []
+	if (interests != '') parts.push('在' + interests + '上你们交集明显，很适合作为第一次聊天的切入点')
+	if (score >= 80) parts.push('整体契合度较高，建议先从共同话题开始慢慢了解')
+	else parts.push('契合度还有上升空间，多聊聊彼此的生活节奏会更清楚')
+	return parts.join('。') + '。'
+})
 const openAiAvatar = () => {
+	dismissAiGuide()
 	if (isOwnProfile.value) return
 	if (getAccessToken() == '') {
 		uni.showToast({ title: '请先登录后使用 AI 分身', icon: 'none' })
@@ -560,7 +655,8 @@ const onLike = async () => {
 		const res = await likeUser(id)
 		if (res.success && res.data != null) {
 			const liked = res.data.liked == true
-			uni.showToast({ title: liked ? '已喜欢，仅你自己可见' : '已取消喜欢', icon: 'none' })
+			isLikedUser.value = liked
+			uni.showToast({ title: liked ? '已收藏，仅你自己可见' : '已取消收藏', icon: 'none' })
 		} else {
 			uni.showToast({ title: '操作失败，请重试', icon: 'none' })
 		}
@@ -571,7 +667,12 @@ const onLike = async () => {
 </script>
 
 <style scoped>
-.detail-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; background-color: var(--canvas); color: var(--ink); }
+.detail-page { position: relative; width: 100%; max-width: 750rpx; height: 100vh; margin: 0 auto; background-color: var(--canvas); color: var(--ink);
+	/* 底部操作栏/悬浮球专用：与首页 .page 作用域同源的暖绿 token（非页面全局青瓷绿） */
+	--warm-accent: #7EC8A0;
+	--warm-accent-dark: #5BAF80;
+	--warm-text-secondary: #5A6B5C;
+}
 .state-block { padding: 72px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .error-state { min-height: 100vh; padding: 120px 32px 180px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, var(--canvas), var(--paper)); }
 .error-mark { width: 82px; height: 82px; margin-bottom: 26px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 26px; background: var(--surface); box-shadow: var(--shadow-md); }
@@ -671,6 +772,7 @@ const onLike = async () => {
 .locked-age { color: var(--ink2); font-size: 28rpx; }
 .locked-meta { color: var(--ink2); font-size: 24rpx; }
 .online-text { color: var(--accent2); font-weight: 600; }
+.online-text-off { color: var(--muted); }
 .locked-detail-content { display: flex; flex-direction: column; gap: 24rpx; padding: 24rpx 32rpx; }
 .locked-section-card { display: flex; flex-direction: column; gap: 24rpx; padding: 32rpx; border-radius: 20rpx; background-color: var(--surface); box-shadow: var(--shadow-sm); }
 .vip-exclusive-card { display: flex; flex-direction: column; align-items: center; gap: 12rpx; padding: 28rpx 20rpx; border-radius: 16rpx; background-color: var(--canvas); }
@@ -705,7 +807,7 @@ const onLike = async () => {
 .spot-price-value { color: var(--ink); font-family: var(--serif); font-size: 40rpx; font-weight: 800; }
 .spotlight-button { display: flex; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--plane-yellow); }
 .spotlight-button-text { color: var(--ink); font-size: 28rpx; font-weight: 700; }
-.scroll-bottom-spacer { height: 180rpx; }
+.scroll-bottom-spacer { height: 420rpx; }
 .bottom-bar { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: flex; flex-direction: row; align-items: center; gap: 12rpx; padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom)); background-color: var(--surface); box-shadow: var(--shadow-md); }
 .bottom-bar-own { justify-content: center; }
 .bottom-back { display: flex; flex-direction: column; align-items: center; gap: 2rpx; }
@@ -714,9 +816,56 @@ const onLike = async () => {
 .primary-action { display: flex; flex: 1; min-width: 0; align-items: center; justify-content: center; height: 88rpx; border-radius: 44rpx; background-color: var(--accent); box-shadow: var(--shadow-sm); }
 .edit-only-btn { flex: 0 0 480rpx; width: 480rpx; }
 .primary-action-text { color: var(--text-invert); font-size: 28rpx; font-weight: 700; }
-.ai-avatar-action { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6rpx; width: 154rpx; height: 88rpx; border: 1px solid var(--accent2); border-radius: 44rpx; background-color: var(--paper); box-sizing: border-box; }
-.ai-avatar-icon { color: var(--accent2); font-size: 28rpx; font-weight: 700; }
-.ai-avatar-text { color: var(--accent2); font-size: 24rpx; font-weight: 700; }
-.like-action { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; border-radius: 50%; background-color: var(--accent-bg); }
-.like-action-text { color: var(--accent2); font-size: 40rpx; }
+.ai-guide-bubble { position: fixed; right: 32rpx; bottom: calc(340rpx + env(safe-area-inset-bottom)); max-width: 440rpx; padding: 16rpx 24rpx; border-radius: 20rpx 20rpx 6rpx 20rpx; background: var(--warm-accent-dark); color: var(--text-invert); font-size: 24rpx; line-height: 1.5; box-shadow: var(--shadow-md); z-index: 60; }
+.ai-guide-text { color: var(--text-invert); font-size: 24rpx; }
+
+/* ==================== 底部操作栏（与首页推荐页同源；首页底栏 190rpx 含自绘 tabbar 区，本页无 tabbar，按 tabbar 高度换算下沉） ==================== */
+.float-bar { position: fixed; z-index: 55; bottom: calc(30rpx + env(safe-area-inset-bottom)); left: 0; right: 0; display: flex; flex-direction: row; align-items: center; gap: 24rpx; padding: 24rpx 40rpx; }
+.share-btn { width: 88rpx; height: 88rpx; border-radius: 44rpx; background-color: var(--surface); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04); }
+.share-icon { font-size: 40rpx; font-weight: 700; color: var(--warm-text-secondary); transform: rotate(-45deg); }
+.chat-btn { flex: 1; height: 96rpx; border-radius: 48rpx; background-color: var(--warm-accent); display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 16rpx; box-shadow: 0 8rpx 24rpx rgba(126, 200, 160, 0.28); }
+.chat-icon { font-size: 36rpx; color: var(--text-invert); }
+.chat-text { font-size: 30rpx; font-weight: 700; color: var(--text-invert); }
+.like-btn { width: 112rpx; height: 112rpx; border-radius: 56rpx; background-color: var(--surface); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04); }
+/* 用户提供的收藏爱心字体：空心=未收藏，实心染红=已收藏；同字号保证形状大小一致 */
+.heart-icon { font-size: 52rpx; line-height: 1; }
+.heart-outline { color: var(--muted); }
+.heart-solid { color: var(--heart-red); }
+
+/* ==================== AI 分身悬浮按钮（与首页同款液态玻璃·气泡低语：右下悬浮位） ==================== */
+.detail-ai-float { position: fixed; right: 28rpx; bottom: calc(200rpx + env(safe-area-inset-bottom)); width: 112rpx; height: 112rpx; border-radius: 56rpx; z-index: 56; }
+.detail-ai-float-glass { position: relative; width: 112rpx; height: 112rpx; border-radius: 56rpx; background: radial-gradient(circle at 24% 16%, rgba(255,255,255,0.95), rgba(255,255,255,0.22) 48%), rgba(255,255,255,0.30); border: 1px solid rgba(255,255,255,0.78); -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%); box-shadow: inset 0 2rpx 0 rgba(255,255,255,0.95), inset 0 -14rpx 28rpx rgba(232,155,164,0.12), 0 21rpx 46rpx rgba(30, 90, 82, 0.24), 0 5rpx 14rpx rgba(0, 0, 0, 0.08); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.detail-ai-float-halo { position: absolute; left: 16%; right: 16%; bottom: 9%; height: 20%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(232,155,164,0.38), rgba(232,155,164,0)); }
+.detail-ai-float-bubble { position: relative; width: 50rpx; height: 38rpx; border-radius: 19rpx 19rpx 19rpx 5rpx; background: linear-gradient(140deg, #2D7C72 0%, #5FA99A 55%, #E89BA4 115%); box-shadow: 0 5rpx 14rpx rgba(30, 90, 82, 0.30), inset 0 2rpx 0 rgba(255,255,255,0.35); display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.detail-ai-float-dot { width: 7rpx; height: 7rpx; border-radius: 4rpx; background: rgba(255,255,255,0.95); margin: 0 3rpx; animation: detail-ai-float-blink 1.6s ease-in-out infinite; }
+.detail-ai-float-dot1 { animation-delay: 0s; }
+.detail-ai-float-dot2 { animation-delay: 0.25s; }
+.detail-ai-float-dot3 { animation-delay: 0.5s; }
+@keyframes detail-ai-float-blink { 0%, 70%, 100% { opacity: 0.45; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-3rpx); } }
+
+/* ==================== 详情页图标字体（与首页同源） ==================== */
+@font-face { font-family: "iconfont-home"; src: url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/首页推荐与匹配/iconfont.woff') format('woff'); }
+@font-face { font-family: "iconfont-sys"; src: url('/static/婚恋小程序图标/系统通用/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/系统通用/iconfont.woff') format('woff'); }
+/* 收藏爱心字体（用户提供）：e608=空心，e85c=实心 */
+@font-face { font-family: "iconfont-heart"; src: url('/static/婚恋小程序图标/收藏爱心/iconfont.ttf') format('truetype'); }
+.ic { font-style: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.ic-home { font-family: "iconfont-home" !important; }
+.ic-sys { font-family: "iconfont-sys" !important; }
+.ic-hello:before { content: "\e601"; }
+.ic-fenxiang:before { content: "\e636"; }
+.heart-font { font-family: "iconfont-heart" !important; font-style: normal; }
+.heart-outline:before { content: "\e608"; }
+.heart-solid:before { content: "\e85c"; }
+
+/* ==================== 合拍度弹层 ==================== */
+.match-sheet { display: flex; flex-direction: column; gap: 24rpx; }
+.match-sheet-score { display: flex; align-items: center; justify-content: center; padding: 12rpx 0; }
+.match-sheet-score text { font-size: 72rpx; font-weight: 800; color: var(--accent2); font-family: var(--serif); }
+.match-interpret { display: flex; flex-direction: column; gap: 12rpx; padding: 24rpx; border-radius: 16rpx; background-color: var(--accent-bg); }
+.match-interpret-head { display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.match-interpret-mark { font-size: 26rpx; color: var(--accent2); font-weight: 700; }
+.match-interpret-title { font-size: 26rpx; font-weight: 800; color: var(--accent2); }
+.match-interpret-text { font-size: 25rpx; color: var(--ink2); line-height: 1.7; }
+.match-sheet-tip { padding: 20rpx 24rpx; border-radius: 14rpx; background-color: var(--accent-bg); }
+.match-sheet-tip text { font-size: 22rpx; color: var(--accent2); line-height: 1.6; }
 </style>

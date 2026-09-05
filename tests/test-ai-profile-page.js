@@ -6,11 +6,11 @@ const root = path.join(__dirname, '..')
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8')
 
 const api = read('api/ai-profile.uts')
+const moxiangApi = read('api/ai-moxiang.uts')
 const apiIndex = read('api/index.uts')
 const page = read('pagesSub/profileExtra/my-portrait.uvue')
 const recorder = read('components/VoiceRecorder.uvue')
 const ingredient = read('components/PersonaIngredient.uvue')
-const bottle = read('components/PersonaBottle.uvue')
 const batchSheet = read('components/PersonaBatchSheet.uvue')
 
 // ===== api/ai-profile.uts:纯真实 API、幂等、任务轮询、错误码 =====
@@ -71,18 +71,17 @@ assert.strictEqual(labelKeys.size, expected.length, 'FIELD_KEY_LABELS must not c
 // ===== api/index.uts:画像模块整体导出 =====
 assert.match(apiIndex, /from '\.\/ai-profile\.uts'/, 'api barrel must re-export the ai-profile module')
 assert.match(apiIndex, /grantProfileTextConsent/, 'api barrel must re-export consent functions')
+assert.match(apiIndex, /ai-moxiang\.uts/, 'api barrel must expose the unified moxiang journey module')
+assert.match(apiIndex, /getMoxiangState/, 'api barrel must expose moxiang state/history services')
 
-// ===== my-portrait.uvue(墨相):组件导入、发布门槛、判空、双模式 =====
+// ===== my-portrait.uvue(备用落笔页):组件导入、发布门槛、判空、双模式 =====
 assert.match(page, /import PersonaIngredient from '@\/components\/PersonaIngredient\.uvue'/, 'atelier page must import the ingredient card it renders')
 assert.match(page, /import VoiceRecorder from '@\/components\/VoiceRecorder\.uvue'/, 'atelier page must import the voice recorder')
-assert.match(page, /import PersonaBottle from '@\/components\/PersonaBottle\.uvue'/, 'atelier page must import the persona bottle')
-assert.match(
-	page,
-	/class="at-bottle-hit"[\s\S]{0,80}@tap="enterSubject\('personal'\)"/,
-	'atelier shelf must expose a page-level tap target for 我的墨相 so custom-component events cannot swallow the enter path'
-)
+// 2026-09-02 冗余下线:墨案货架/成稿副本/实时对话沉浸层只保留结果页与墨相师一份实现
+assert.doesNotMatch(page, /PersonaBottle|VoiceConversation/, 'atelier page must not keep the retired shelf or realtime-conversation components')
+assert.doesNotMatch(page, /viewMode|subjectPane|at-shelf|at-letter|conversationMode/, 'atelier page must not keep shelf/letter-pane/conversation-layer state')
 assert.match(page, /import PortraitBatchSheetComponent from '@\/components\/PersonaBatchSheet\.uvue'/, 'atelier page must import the batch sheet')
-assert.match(page, /至少确认[\s\S]{0,40}笔后才能写下成稿/, 'atelier page must block publishing without confirmed fields')
+assert.match(page, /已确认字段不足半数[\s\S]{0,20}暂不能写下成稿/, 'atelier page must block publishing without confirmed fields')
 assert.match(page, /墨相/, 'page must name the module 墨相')
 assert.match(page, /我的墨相/, 'page must name the personal subject 我的墨相')
 assert.match(page, /愿遇之相/, 'page must name the ideal subject 愿遇之相')
@@ -91,9 +90,18 @@ assert.match(api, /skipProfileQuestion/, 'ai-profile api must expose skipProfile
 assert.match(api, /\/skip-question/, 'skip path must POST to /profile-sessions/{id}/skip-question')
 assert.match(page, /不想答/, 'atelier question bubble must offer 不想答')
 assert.match(page, /skipCurrentQuestion/, 'atelier page must skip the current interview question')
-assert.match(page, /at-ic-love|at-ic-biaoqing|at-ic-canyuhuati|at-ic-xianxiahuodong/, 'letter dimensions must use iconfont glyph classes, not raw emoji')
-assert.doesNotMatch(page, /relationship:\s*'♡'/, 'letter dimension fallback must not keep emoji icons')
-assert.match(page, /iconClass/, 'letter dimensions must expose iconClass for iconfont binding')
+assert.match(
+	api,
+	/publishProfileDraft\(draftId: string, expectedRevision: number, previewId: string = ''\)/,
+	'publish client must accept the preview id used to approve the exact preview'
+)
+assert.match(
+	api,
+	/data:\s*previewId\s*!=\s*''\s*\?\s*\{\s*preview_id:\s*previewId\s*\}\s*:\s*\{\}/,
+	'publish client must send preview_id in the request body when present'
+)
+assert.match(api, /confirmPortraitNarrative/, 'ai-profile api must expose narrative confirmation')
+assert.match(api, /\/profiles\/.*\/narrative\/confirm/, 'narrative confirmation must call the backend confirm endpoint')
 assert.match(page, /删除画像/, 'danger path must use literal 删除画像')
 assert.match(page, /if \(session\.value != null\)/, 'revision restore must guard against a missing session')
 const restoreBlock = page.slice(page.indexOf('restoreProfileRevision(revisionId)'))
@@ -104,6 +112,10 @@ assert.ok(
 assert.match(page, /switchToText/, 'atelier page must support switching to text mode')
 assert.match(page, /switchToVoice/, 'atelier page must support switching to voice mode')
 assert.match(page, /restoreProfileRevision/, 'atelier page must support restoring a history revision')
+
+// ===== 墨相师 REST 响应适配：request 返回 { success, data }，后端 turn 使用 answer_text =====
+assert.match(moxiangApi, /function unwrapMoxiangResponse\(/, 'moxiang REST adapter must unwrap request success/data envelope')
+assert.match(moxiangApi, /answer_text[^\n]*content|content[^\n]*answer_text/, 'moxiang turn adapter must map backend answer_text to frontend content')
 
 // ===== 自定义导航:必须避开微信胶囊,不能被 statusBar padding 压进 44px 盒高 =====
 assert.match(page, /getMenuButtonBoundingClientRect/, 'atelier custom nav must read the WeChat capsule rect')
@@ -135,22 +147,16 @@ assert.match(
 	'atelier subject nav may keep a compact ⋯ control that opens the manage sheet'
 )
 
-// ===== 发布流程:轮询真实任务与 narrative,不播假进度 =====
+// ===== 发布流程:轮询真实任务,成稿展示统一交给结果页 =====
 assert.match(page, /pollTaskUntilTerminal/, 'publish must poll the real publish task to a terminal state')
 assert.doesNotMatch(page, /性格倾向.*情感需求/, 'publish transition must not fake narrative generation steps')
-assert.match(page, /正在写下理解/, 'publish flow must surface the real narrative pending state')
-
-// ===== 实时语音:最终转写必须经用户确认,不自动写画像 =====
-const convHandler = page.slice(page.indexOf('onConversationTranscribed'), page.indexOf('onConversationAIReply'))
-assert.ok(convHandler.length > 0, 'atelier page must define onConversationTranscribed')
-assert.doesNotMatch(convHandler, /submitAnswer|submitProfileTurn/, 'final transcript must NOT auto-submit to the profile session')
-assert.match(page, /confirmConvReview/, 'atelier page must require explicit review confirmation before submitting')
-assert.match(page, /不会自动写入画像/, 'realtime overlay must tell users it does not auto-write the profile')
+assert.match(page, /my-portrait-result\?subject=/, 'publish success must hand the finished draft to the canonical result page')
+assert.match(page, /if \(!legacyFallback && masterHandoffSubject != sub\)/, 'the atelier page must stay a fallback: empty portraits route to 墨相师')
 
 // ===== 删除/授权:真实入口与清理反馈 =====
 assert.match(page, /deleteAiProfile/, 'atelier page must expose real subject-profile deletion')
 assert.match(page, /revokeProfileTextConsent/, 'atelier page must expose real consent revocation')
-assert.match(page, /cleanupPending/, 'deletion must surface a cleanup-pending state instead of stale data')
+assert.match(page, /已删除,正在清理/, 'deletion must surface cleanup feedback instead of stale data')
 
 // ===== 版本冲突:409 后重新拉草稿 =====
 const patchBlock = page.slice(page.indexOf('const patchField'))
@@ -182,14 +188,6 @@ assert.match(ingredient, /确认这一笔/, 'ingredient card must confirm with �
 assert.match(ingredient, /把握/, 'ingredient card must label confidence as 把握, not 纯度')
 assert.doesNotMatch(ingredient, /border-left/, 'ingredient card must not decorate with a colored border-left')
 
-// ===== PersonaBottle.uvue:不伪造填充 =====
-assert.match(bottle, /Math\.min\(Math\.max\(f, 0\.06\), 1\)/, 'bottle fill must be clamped, never fabricated')
-for (const st of ['empty', 'mixing', 'curing', 'bottled', 'cleanup']) {
-  assert.match(bottle, new RegExp(`pb-${st}`), `bottle must style the ${st} state`)
-}
-assert.match(bottle, /pb-seal-text">成</, 'published scroll must stamp 成, not 封')
-assert.doesNotMatch(bottle, /pb-neck|pb-shoulder|pb-wave|pb-bubble/, 'paper scroll must not keep perfume-bottle neck, shoulder, waves, or bubbles')
-
 // ===== PersonaBatchSheet.uvue:诚实的历史版本展示 =====
 assert.match(batchSheet, /不保留该稿的完整字段明细/, 'batch sheet must disclose that per-revision field details do not exist')
 assert.match(batchSheet, /从这稿再写一版/, 'batch sheet must expose the restore action')
@@ -199,7 +197,6 @@ assert.match(batchSheet, /往稿/, 'batch sheet title must be 往稿')
 const copySurfaces = [
   ['my-portrait', page],
   ['PersonaIngredient', ingredient],
-  ['PersonaBottle', bottle],
   ['PersonaBatchSheet', batchSheet]
 ]
 const forbidden = ['调香室', '定香', '封瓶', '香笺', '配方', '熟成', '香料', '纯度', '调香师', '香评', '香氛', '那瓶香']
@@ -225,9 +222,11 @@ assert.match(page, /staleRetryCount > MAX_STALE_RETRIES/, 'ensureSession must st
 assert.match(api, /shouldContinue/, 'poll functions must accept shouldContinue callback for abort-on-unmount')
 assert.match(page, /\(\) => alive\)/, 'polling call sites must pass alive callback')
 
-// ===== init 并行拉取:Promise.all 而非顺序 await =====
-	const initBlock = page.slice(page.indexOf('const init = async'))
-	assert.match(initBlock.slice(0, 200), /Promise\.all/, 'init must use Promise.all for parallel narrative fetch, not sequential await')
+// ===== 叙事层按需拉取:进页不再预取,打开往稿时才读 =====
+const initBlock = page.slice(page.indexOf('const init = async'), page.indexOf('onLoad((options: any)'))
+assert.doesNotMatch(initBlock, /loadNarrative/, 'init must not pre-fetch narratives for the retired shelf')
+const batchBlock = page.slice(page.indexOf('const openBatch'))
+assert.match(batchBlock, /loadNarrative\(subject\.value\)/, '往稿 must load the narrative on demand')
 
 	assert.doesNotMatch(page, /const pendingCount = computed/, 'unused pendingCount must stay deleted')
 

@@ -31,17 +31,17 @@ ENOENT: no such file or directory, open '<项目目录>\\src\\manifest.json'
 
 ## 3. uniCloud 服务空间提示
 
-当前社区 1.0 本地验收使用 FastAPI HTTP；只有结构预览或尚未接入后端的模块才临时使用 Mock：
+当前全局请求使用 FastAPI HTTP；社区 1.0 验收保持 HTTP，只有结构预览或尚未接入后端的模块才临时使用 Mock：
 
 ```uts
 // api/config.uts
 export const USE_MOCK = false
 ```
 
-`manifest.json` 当前包含 `"uniCloud": false`，但工程中仍保留受保护的 `uniCloud-aliyun/` 目录。若 HBuilderX 仍提示关联服务空间：
+消息、父母端和情感实验室仍使用显式模块 Mock。`manifest.json` 当前包含 `"uniCloud": false`，但工程中仍保留受保护的 `uniCloud-aliyun/` 目录。若 HBuilderX 仍提示关联服务空间：
 
 1. 先取消或跳过关联提示并重新编译。
-2. 若要排查 Mock 分支，临时确认开关为 `true`；社区 1.0 真实接口排查则保持为 `false`。
+2. 确认目标模块 Mock 开关符合本次验证场景；社区 1.0 真实接口排查保持为 `false`。
 3. 清理构建缓存后重试。
 4. 记录 HBuilderX 版本和完整错误信息。
 
@@ -108,7 +108,7 @@ unpackage/dist/dev/mp-weixin
 1. 打开的是 `xuanshiai-vue` 目录本身，而不是上一级 `宣誓爱`，也不是 `unpackage/`。
 2. 根目录必须有 `App.uvue`、`main.uts`、`manifest.json`、`pages.json`。
 3. `static/logo.png` 应存在；缺失时 App 图标配置会报警。业务肖像在 `static/portraits/`。
-4. 开发期 `uniCloud: false`；社区 1.0 联调使用 `USE_MOCK = false` + `http://127.0.0.1:8000`。若提示关联云服务空间，可取消/跳过，不要删 `uniCloud-aliyun/`。
+4. 开发期 `uniCloud: false`；当前全局走 HTTP，社区 1.0 联调使用 `USE_MOCK = false`，部分模块走显式 Mock。若提示关联云服务空间，可取消/跳过，不要删 `uniCloud-aliyun/`。
 5. 本工程是 **uni-app x（`.uvue` / `.uts`）**，需使用支持 uni-app x 的 HBuilderX 版本；旧版只认 `.vue` 时会识别异常。
 6. 项目路径含中文（如 `宣誓爱`）在多数新版本可用；若工具链报路径编码错误，可临时复制到纯英文路径做对照验证，但不要把对照副本当唯一主仓库。
 7. 导入后先清一次运行缓存，再“运行到微信开发者工具”，避免沿用旧 `unpackage` 产物误判。
@@ -126,7 +126,7 @@ unpackage/dist/dev/mp-weixin
 Node/npm/HBuilderX 版本：
 第一条完整错误：
 相关页面：
-是否 USE_MOCK=true：
+全局及模块 Mock 开关：
 复现步骤：
 ```
 

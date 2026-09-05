@@ -1,0 +1,379 @@
+/**
+ * Phase 1 Contract v1.1 P1-D：墨相师专属 REST 客户端
+ *
+ * 集中定义：
+ *   - /ai/moxiang/state 状态查询（首次/恢复页用）
+ *   - /ai/profile-sessions/{session_id}/turns 历史分页（升序 before_turn_no 游标）
+ *
+ * 不重复声明 WS 客户端，也不修改 api/config.uts。WS 仍由 voice-master-ws.uts
+ * 单独负责（§8 客户端契约）；这里只放 REST 类型与请求。
+ *
+ * REST 字段统一使用 camelCase；序列化层会把后端 snake_case 字段映射到本模块导出
+ * 的类型上，避免组件中混入 snake 命名。getMoxiangState 内部做一次轻量适配。
+ */
+
+import { request } from './request.uts'
+import { buildApiUrl } from './config.uts'
+import type { ProfileSubject } from './ai-profile.uts'
+
+/** 旅程阶段枚举（Contract v1.1 §1.2）。 */
+export type JourneyStage = 'chatting' | 'building' | 'ready' | 'published'
+
+/** 单一主体的状态摘要（state.subjects.<subject>）。 */
+export interface MoxiangSubjectSummary {
+	sessionId: string | null
+	journeyStage: JourneyStage | null
+	lastTurnAt: string | null
+	lastTopicExcerpt: string
+	overallPercent: number
+	dimensions: MoxiangDimensionMap
+	pendingBuildInviteId: string | null
+	pendingConfirmCard: boolean
+	publishedRevisionId: string | null
+	/** Phase 2 P2-01/P2-04 —— ideal_partner 主体专用:
+	 *   true 表示用户当前已具备开启/恢复愿遇之相的条件。
+	 *   personal 主体该字段恒为 false(它本身不能自己"开启自己")。 */
+	canStartIdealPartner: boolean
+}
+
+/** 六维理解覆盖度 + 有效高置信候选数。 */
+export interface MoxiangDimensionMetric {
+	percent: number
+	evidenceCount: number
+}
+
+export type MoxiangDimensionMap = {
+	[key in
+		| 'personality_social'
+		| 'intimacy_pattern'
+		| 'lifestyle'
+		| 'emotional_expression'
+		| 'relationship_boundaries'
+		| 'future_expectations']: MoxiangDimensionMetric
+}
+
+/** GET /ai/moxiang/state 响应（对齐 Contract v1.1 §6.1）。 */
+export interface MoxiangStateResponse {
+	consentGranted: boolean
+	activeSubject: ProfileSubject
+	personal: MoxiangSubjectSummary
+	idealPartner: MoxiangSubjectSummary
+	/** Phase 2 P2-01/P2-04 —— 顶层冗余字段,恒等于 idealPartner.canStartIdealPartner。 */
+	canStartIdealPartner: boolean
+}
+
+/** 历史单条 turn（与 ai_profile_turn 行对应）。 */
+export interface MoxiangTurn {
+	turnId: string
+	turnNo: number
+	role: 'user' | 'assistant'
+	content: string
+	clientTurnId: string
+	createdAt: string
+}
+
+/** GET /ai/profile-sessions/{session_id}/turns 响应。 */
+export interface MoxiangTurnsResponse {
+	sessionId: string
+	subject: ProfileSubject
+	nextBeforeTurnNo: number | null
+	turns: MoxiangTurn[]
+}
+
+/**
+ * request.uts always returns a transport envelope: { success, data, message }.
+ * Keep the envelope handling in this module so state/history callers only see
+ * the business payload and failed responses cannot overwrite valid local state.
+ */
+function unwrapMoxiangResponse(raw: any): any {
+	if (raw != null && typeof raw == 'object' && raw.success === false) {
+		const message = raw.message != null ? String(raw.message) : '墨相师数据加载失败'
+		throw new Error(message)
+	}
+	if (raw != null && typeof raw == 'object' && raw.success === true) {
+		return raw.data != null ? raw.data : {}
+	}
+	// Keep compatibility with callers/tests that provide the raw backend shape.
+	return raw?.data != null && raw.success == null ? raw.data : (raw ?? {})
+}
+
+/** snake_case -> camelCase 适配（仅契约字段，不递归深映射）。 */
+function adaptSubjectSummary(raw: any, subjectKind: ProfileSubject): MoxiangSubjectSummary {
+	const dims: any = raw?.dimensions || {}
+	const camelDims: MoxiangDimensionMap = {
+		personality_social: { percent: Number(dims.personality_social?.percent ?? 0), evidenceCount: Number(dims.personality_social?.evidence_count ?? 0) },
+		intimacy_pattern: { percent: Number(dims.intimacy_pattern?.percent ?? 0), evidenceCount: Number(dims.intimacy_pattern?.evidence_count ?? 0) },
+		lifestyle: { percent: Number(dims.lifestyle?.percent ?? 0), evidenceCount: Number(dims.lifestyle?.evidence_count ?? 0) },
+		emotional_expression: { percent: Number(dims.emotional_expression?.percent ?? 0), evidenceCount: Number(dims.emotional_expression?.evidence_count ?? 0) },
+		relationship_boundaries: { percent: Number(dims.relationship_boundaries?.percent ?? 0), evidenceCount: Number(dims.relationship_boundaries?.evidence_count ?? 0) },
+		future_expectations: { percent: Number(dims.future_expectations?.percent ?? 0), evidenceCount: Number(dims.future_expectations?.evidence_count ?? 0) }
+	}
+	// personal 主体本身不能"自己开启自己" —— 强制 false;
+	// ideal_partner 读后端字段;老后端没有该字段时降级为 false(避免误开放)。
+	const canStart = subjectKind == 'ideal_partner' ? (raw?.can_start_ideal_partner === true) : false
+	return {
+		sessionId: raw?.session_id ?? null,
+		journeyStage: (raw?.journey_stage ?? null) as JourneyStage | null,
+		lastTurnAt: raw?.last_turn_at ?? null,
+		lastTopicExcerpt: String(raw?.last_topic_excerpt ?? ''),
+		overallPercent: Number(raw?.overall_percent ?? 0),
+		dimensions: camelDims,
+		pendingBuildInviteId: raw?.pending_build_invite_id ?? null,
+		pendingConfirmCard: raw?.pending_confirm_card === true,
+		publishedRevisionId: raw?.published_revision_id ?? null,
+		canStartIdealPartner: canStart
+	}
+}
+
+function adaptState(raw: any): MoxiangStateResponse {
+	const subjectValue = String(raw?.active_subject ?? 'personal')
+	const idealRaw = raw?.ideal_partner ?? {}
+	const canStartTop = raw?.can_start_ideal_partner === true
+	return {
+		consentGranted: raw?.consent_granted === true,
+		activeSubject: subjectValue === 'ideal_partner' ? 'ideal_partner' : 'personal',
+		personal: adaptSubjectSummary(raw?.personal ?? {}, 'personal'),
+		idealPartner: adaptSubjectSummary(idealRaw, 'ideal_partner'),
+		canStartIdealPartner: canStartTop || (idealRaw?.can_start_ideal_partner === true)
+	}
+}
+
+function adaptTurns(raw: any): MoxiangTurnsResponse {
+	const turns: any[] = Array.isArray(raw?.turns) ? raw.turns : []
+	return {
+		sessionId: String(raw?.session_id ?? ''),
+		subject: String(raw?.subject ?? 'personal') === 'ideal_partner' ? 'ideal_partner' : 'personal',
+		nextBeforeTurnNo: typeof raw?.next_before_turn_no === 'number' ? raw.next_before_turn_no : null,
+		turns: turns.map((t: any) => ({
+			turnId: String(t?.turn_id ?? ''),
+			turnNo: Number(t?.turn_no ?? 0),
+			role: t?.role === 'assistant' ? 'assistant' : 'user',
+			// Backend persistence uses answer_text; content is accepted for
+			// forward-compatible payloads and older mock fixtures.
+			content: String(t?.answer_text ?? t?.content ?? ''),
+			clientTurnId: String(t?.client_turn_id ?? ''),
+			createdAt: String(t?.created_at ?? '')
+		}))
+	}
+}
+
+/** 拉取墨相师全局 state（含未授权场景：仍 200 + consentGranted=false）。 */
+export function getMoxiangState(): Promise<MoxiangStateResponse> {
+	return request({
+		url: buildApiUrl('/ai/moxiang/state'),
+		method: 'GET'
+	}).then((raw: any) => adaptState(unwrapMoxiangResponse(raw)))
+}
+
+/**
+ * 拉取会话 turn 历史，按 turn_no 升序返回。
+ * @param sessionId 会话 ID
+ * @param beforeTurnNo 拉取该值之前的 turn（exclusive）；首次拉取传 null
+ * @param limit 页大小，1..100，默认 50
+ */
+export function getSessionTurns(
+	sessionId: string,
+	beforeTurnNo: number | null = null,
+	limit: number = 50
+): Promise<MoxiangTurnsResponse> {
+	const clampedLimit = Math.max(1, Math.min(100, Math.floor(limit) || 50))
+	const query: string[] = [`limit=${clampedLimit}`]
+	if (beforeTurnNo != null && Number.isFinite(beforeTurnNo)) {
+		query.push(`before_turn_no=${Math.max(0, Math.floor(beforeTurnNo))}`)
+	}
+	return request({
+		url: buildApiUrl(`/ai/profile-sessions/${sessionId}/turns?${query.join('&')}`),
+		method: 'GET'
+	}).then((raw: any) => adaptTurns(unwrapMoxiangResponse(raw)))
+}
+
+/**
+ * 主动开启/恢复 ideal_partner 主体(Phase 2 P2-04)。
+ * 返回值:服务端回放的会话元数据;失败抛错由调用方 toast 处理。
+ */
+export interface IdealPartnerStartResponse {
+	subject: 'ideal_partner'
+	sessionId: string
+	journeyStage: 'chatting'
+	alreadyExisted: boolean
+}
+
+export function startIdealPartnerJourney(): Promise<IdealPartnerStartResponse> {
+	return request({
+		url: buildApiUrl('/ai/moxiang/journey/start?subject=ideal_partner'),
+		method: 'POST',
+		headers: {
+			'Idempotency-Key': 'mo-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36)
+		}
+	}).then((raw: any) => {
+		const r = raw?.data ?? raw ?? {}
+		return {
+			subject: 'ideal_partner' as const,
+			sessionId: String(r?.session_id ?? ''),
+			journeyStage: 'chatting' as const,
+			alreadyExisted: r?.already_existed === true
+		}
+	})
+}
+
+// ======================================================================
+// Phase 3 P3-01 / P3-03 —— 草稿预览 + 档案聚合
+// ======================================================================
+
+/** 后端 ai_profile_preview 状态机(契约外加注,前端只读 'active')。 */
+export type PreviewStatus = 'active' | 'confirmed' | 'stale' | 'failed'
+
+/** GET /ai/profile-previews/{preview_id} 响应(只读,后端 snake_case → camelCase)。 */
+export interface ProfilePreviewRecord {
+	previewId: string
+	draftId: string
+	expectedRevision: number
+	subject: ProfileSubject
+	status: PreviewStatus
+	content: string
+	taskId: string | null
+	lastError: string | null
+	createdAt: string | null
+	updatedAt: string | null
+}
+
+function adaptPreview(raw: any): ProfilePreviewRecord {
+	return {
+		previewId: String(raw?.preview_id ?? ''),
+		draftId: String(raw?.draft_id ?? ''),
+		expectedRevision: Number(raw?.expected_revision ?? 0),
+		subject: raw?.subject === 'ideal_partner' ? 'ideal_partner' : 'personal',
+		status: (raw?.status ?? 'active') as PreviewStatus,
+		content: String(raw?.content ?? ''),
+		taskId: raw?.task_id ?? null,
+		lastError: raw?.last_error ?? null,
+		createdAt: raw?.created_at ?? null,
+		updatedAt: raw?.updated_at ?? null
+	}
+}
+
+/** POST /ai/profile-drafts/{draft_id}/preview —— 生成/复用预览(202)。 */
+export function createProfilePreview(
+	draftId: string,
+	expectedRevision: number
+): Promise<ProfilePreviewRecord> {
+	return request({
+		url: buildApiUrl('/ai/profile-drafts/' + draftId + '/preview'),
+		method: 'POST',
+		header: { 'Content-Type': 'application/json' },
+		data: { expected_revision: expectedRevision }
+	}).then((raw: any) => adaptPreview(raw?.data ?? raw ?? {}))
+}
+
+/** GET /ai/profile-previews/{preview_id} —— 读取本人预览;越权/不存在由路由 404。 */
+export function getProfilePreview(previewId: string): Promise<ProfilePreviewRecord> {
+	return request({
+		url: buildApiUrl('/ai/profile-previews/' + previewId),
+		method: 'GET'
+	}).then((raw: any) => adaptPreview(raw?.data ?? raw ?? {}))
+}
+
+// ----- 档案聚合 -----
+
+export interface ArchiveCurrentRevision {
+	revisionId: number
+	revisionNo: number
+	publishedAt: string | null
+	policyRevision: string | null
+}
+
+export interface ArchiveActiveDraft {
+	draftId: string
+	status: string
+	expectedRevision: number
+	updatedAt: string | null
+}
+
+export interface ArchiveHistoryItem {
+	revisionId: number
+	revisionNo: number
+	publishedAt: string | null
+	fieldCount: number
+}
+
+export interface ArchivePreviewBrief {
+	previewId: string
+	expectedRevision: number
+	status: PreviewStatus
+	createdAt: string | null
+	updatedAt: string | null
+}
+
+export interface ArchiveSubject {
+	subject: ProfileSubject
+	consentActive: boolean
+	currentRevision: ArchiveCurrentRevision | null
+	activeDraft: ArchiveActiveDraft | null
+	summaryExcerpt: string | null
+	history: ArchiveHistoryItem[]
+	preview: ArchivePreviewBrief | null
+}
+
+export interface MoxiangArchiveResponse {
+	personal: ArchiveSubject
+	idealPartner: ArchiveSubject
+	fallbackAvailable: boolean
+}
+
+function adaptHistoryItem(raw: any): ArchiveHistoryItem {
+	return {
+		revisionId: Number(raw?.revision_id ?? 0),
+		revisionNo: Number(raw?.revision_no ?? 0),
+		publishedAt: raw?.published_at ?? null,
+		fieldCount: Number(raw?.field_count ?? 0)
+	}
+}
+
+function adaptArchiveSubject(raw: any): ArchiveSubject {
+	const subject: ProfileSubject = raw?.subject === 'ideal_partner' ? 'ideal_partner' : 'personal'
+	const cur = raw?.current_revision
+	const draft = raw?.active_draft
+	const pv = raw?.preview
+	const historyArr: any[] = Array.isArray(raw?.history) ? raw.history : []
+	return {
+		subject,
+		consentActive: raw?.consent_active === true,
+		currentRevision: cur ? {
+			revisionId: Number(cur.revision_id ?? 0),
+			revisionNo: Number(cur.revision_no ?? 0),
+			publishedAt: cur.published_at ?? null,
+			policyRevision: cur.policy_revision ?? null
+		} : null,
+		activeDraft: draft ? {
+			draftId: String(draft.draft_id ?? ''),
+			status: String(draft.status ?? ''),
+			expectedRevision: Number(draft.expected_revision ?? 0),
+			updatedAt: draft.updated_at ?? null
+		} : null,
+		summaryExcerpt: raw?.summary_excerpt ?? null,
+		history: historyArr.map(adaptHistoryItem),
+		preview: pv ? {
+			previewId: String(pv.preview_id ?? ''),
+			expectedRevision: Number(pv.expected_revision ?? 0),
+			status: (pv.status ?? 'active') as PreviewStatus,
+			createdAt: pv.created_at ?? null,
+			updatedAt: pv.updated_at ?? null
+		} : null
+	}
+}
+
+function adaptArchive(raw: any): MoxiangArchiveResponse {
+	return {
+		personal: adaptArchiveSubject(raw?.personal ?? {}),
+		idealPartner: adaptArchiveSubject(raw?.ideal_partner ?? {}),
+		fallbackAvailable: raw?.fallback_available === true
+	}
+}
+
+/** GET /ai/moxiang/archive —— 永远 200(只要登录)。 */
+export function getMoxiangArchive(): Promise<MoxiangArchiveResponse> {
+	return request({
+		url: buildApiUrl('/ai/moxiang/archive'),
+		method: 'GET'
+	}).then((raw: any) => adaptArchive(raw?.data ?? raw ?? {}))
+}

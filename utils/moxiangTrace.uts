@@ -1,0 +1,62 @@
+/**
+ * 墨相师·dev-only trace 加载器。
+ *
+ * 仅在 __DEV__ 编译宏开启时由前端组件调用,生产构建自动剔除。
+ * 读取脚本侧导出的 ``static/dev/moxiang-trace.json``,展示最近一次回放的
+ * 逐轮对话 / 评分。
+ */
+
+export interface MoxiangTraceTurn {
+	turn: number
+	user: string
+	ai: string
+	extraction_status: string | null
+	task_id: string | null
+	journey_percent: number | null
+	dimensions: Record<string, any>
+	build_invite_id: string | null
+	publish_ready: boolean
+	ai_reply_time_ms: number
+	error: any
+}
+
+export interface MoxiangTraceSummary {
+	score_total: number
+	score_breakdown: Record<string, number>
+}
+
+export interface MoxiangTrace {
+	run_id: string
+	subject: string
+	journey_stage: string | null
+	session_id: string | null
+	elapsed_seconds: number
+	turns: MoxiangTraceTurn[]
+	summary: MoxiangTraceSummary
+}
+
+/**
+ * 在 H5 / mp-weixin 中通过相对路径 ``/static/dev/moxiang-trace.json`` 加载。
+ * 加载失败(404 / 生产构建)返回 null。
+ */
+export function loadMoxiangTrace(): Promise<MoxiangTrace | null> {
+	// @ts-ignore 编译宏,生产构建会被静态替换为 false
+	if ((typeof __DEV__ !== 'undefined' && __DEV__ !== true)) {
+		return Promise.resolve(null)
+	}
+	return new Promise((resolve) => {
+		// #ifdef H5
+		fetch('/static/dev/moxiang-trace.json', { cache: 'no-cache' })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((data) => resolve(data as MoxiangTrace | null))
+			.catch(() => resolve(null))
+		// #endif
+		// #ifdef MP-WEIXIN
+		// mp-weixin 静态资源通过 uni.getStorage / 读取 _doc 替代;此处省略
+		resolve(null)
+		// #endif
+		// #ifndef H5 || MP-WEIXIN
+		resolve(null)
+		// #endif
+	})
+}

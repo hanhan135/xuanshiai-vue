@@ -2,7 +2,7 @@
 	<view class="page-shell">
 		<!-- 欢迎页 -->
 		<view v-if="welcomeVisible" class="welcome-screen">
-			<image class="welcome-image" src="/static/portraits/profile-woman-main.jpg" mode="aspectFill"></image>
+			<image class="welcome-image" src="/static/portraits/profile-woman-main.webp" mode="aspectFill"></image>
 			<view class="welcome-scrim"></view>
 			<view class="welcome-service" @click="showWelcomeService">联系客服</view>
 			<view class="welcome-copy">
@@ -57,23 +57,27 @@
 			</view>
 			<!-- 推荐 Tab -->
 			<scroll-view v-if="currentTab === 0" scroll-y class="content-scroll" enhanced show-scrollbar="false" @touchstart="onTouchStart" @touchend="onTouchEnd">
-				<view v-if="profileCompletionError != ''" class="completion-gate">
-					<text class="completion-gate-title">资料状态暂时无法读取</text>
-					<text class="completion-gate-copy">{{ profileCompletionError }}</text>
+				<view v-if="discoveryError != ''" class="completion-reminder completion-reminder-error">
+					<text class="completion-reminder-title">推荐暂时无法加载</text>
+					<text class="completion-reminder-copy">{{ discoveryError }}</text>
 					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
 				</view>
-				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-gate">
-					<view class="completion-gate-mark"><text>{{ profileCompletion }}%</text></view>
-					<text class="completion-gate-title">完善资料后，遇见更合适的人</text>
-					<text class="completion-gate-copy">请先将个人资料完善至 100%，完成后即可查看平台上的真实用户。</text>
+				<view v-else-if="profileCompletionError != ''" class="completion-reminder completion-reminder-error">
+					<text class="completion-reminder-title">资料状态暂时无法读取</text>
+					<text class="completion-reminder-copy">{{ profileCompletionError }}，仍可浏览公开推荐。</text>
+					<view class="completion-gate-button" @tap="loadHomeDiscovery"><text>重新加载</text></view>
+				</view>
+				<view v-else-if="profileCompletionLoaded && profileCompletion < 100" class="completion-reminder">
+					<text class="completion-reminder-title">资料完善度 {{ profileCompletion }}%</text>
+					<text class="completion-reminder-copy">完善资料后能获得更有参考价值的推荐；现在也可继续浏览。</text>
 					<view class="completion-gate-progress"><view class="completion-gate-fill" :style="{ width: profileCompletion + '%' }"></view></view>
 					<navigator class="completion-gate-button" url="/pagesSub/userExtra/user/edit" hover-class="none"><text>去完善资料</text></navigator>
 				</view>
-				<view v-else-if="profileCompletionLoaded && recommendUsers.length === 0" class="completion-gate">
+				<view v-if="recommendUsers.length === 0 && discoveryError == ''" class="completion-gate">
 					<text class="completion-gate-title">暂时没有新的推荐</text>
-					<text class="completion-gate-copy">你的资料已完整，我们正在为你寻找合适的真实用户，请稍后再来看看。</text>
+					<text class="completion-gate-copy">我们正在更新公开推荐资料，请稍后再来看看。</text>
 				</view>
-				<view v-else-if="profileCompletionLoaded" class="profile-card">
+				<view v-else-if="recommendUsers.length > 0" class="profile-card">
 					<view class="cover-wrap">
 						<image class="cover-img" :src="recommendBackground != '' ? recommendBackground : currentRecommendUser.avatar" mode="aspectFill"></image>
 					</view>
@@ -98,7 +102,7 @@
 								<view class="dot-sep"></view>
 								<text class="basic-text">{{ locationTextByCityCode(currentRecommendUser.city) }}</text>
 							</view>
-							<view class="online-row">
+							<view class="online-row" :class="{ offline: currentRecommendUser.online !== true }">
 								<view class="online-dot"></view>
 											<text class="online-text">{{ currentRecommendUser.online === true ? '在线' : '离线' }}</text>
 								<text class="distance-text">· 距你 {{ currentRecommendUser.distance }}km · 近期活跃</text>
@@ -172,8 +176,11 @@
 						<view class="divider"></view>
 
 						<view class="photos-section">
-							<text class="section-title">Ta的瞬间</text>
-							<image v-for="photo in currentRecommendUser.photos" :key="photo" class="photo-large" :src="photo" mode="aspectFill"></image>
+							<view class="feed-section-header">
+								<text class="section-title">Ta的瞬间</text>
+								<text v-if="firstMomentPhoto != ''" class="feed-more" @click="viewAllMoments">查看全部 ›</text>
+							</view>
+							<image v-if="firstMomentPhoto != ''" class="photo-large" :src="firstMomentPhoto" mode="aspectFill"></image>
 						</view>
 
 						<view class="divider"></view>
@@ -194,7 +201,7 @@
 
 <view class="feed-list">
 
-<view class="feed-card" v-for="(feed, fi) in feedDynamics" :key="fi" @tap="goPostDetail(feed.id)">
+<view class="feed-card" v-for="(feed, fi) in feedDynamics.slice(0, 1)" :key="fi" @tap="goPostDetail(feed.id)">
 
 <view class="feed-card-header">
 
@@ -296,7 +303,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(0).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(0).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -318,7 +326,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(1).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(1).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -342,7 +351,7 @@
 										<text class="sq-vip-name">{{ vipSquareAt(0).name }}</text>
 										<text class="sq-vip-detail">{{ vipSquareAt(0).age }}岁 · {{ vipSquareAt(0).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(0).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(0).id)"><text v-if="isLiked(vipSquareAt(0).id)" class="sq-heart-sm heart-font heart-solid"></text><text v-else class="sq-heart-sm heart-font heart-outline"></text></view>
 									</view></view>
 							</view>
 							<view v-if="vipSquareUsers.length > 1" class="sq-vip-mini" @tap="goUserDetail(vipSquareAt(1).id)">
@@ -354,7 +363,7 @@
 										<text class="sq-vip-name">{{ vipSquareAt(1).name }}</text>
 										<text class="sq-vip-detail">{{ vipSquareAt(1).age }}岁 · {{ vipSquareAt(1).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(1).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(vipSquareAt(1).id)"><text v-if="isLiked(vipSquareAt(1).id)" class="sq-heart-sm heart-font heart-solid"></text><text v-else class="sq-heart-sm heart-font heart-outline"></text></view>
 									</view></view>
 							</view>
 						</view>
@@ -378,7 +387,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(4).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(4).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -400,7 +410,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(5).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(5).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -424,7 +435,7 @@
 											<text class="sq-vip-name">{{ squareAt(6).name }}</text>
 											<text class="sq-vip-detail">{{ squareAt(6).age }}岁 · {{ squareAt(6).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(squareAt(6).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(squareAt(6).id)"><text v-if="isLiked(squareAt(6).id)" class="sq-heart-sm heart-font heart-solid"></text><text v-else class="sq-heart-sm heart-font heart-outline"></text></view>
 									</view></view>
 							</view>
 							<view v-if="squareUsers.length > 7" class="sq-vip-mini" @tap="goUserDetail(squareAt(7).id)">
@@ -436,7 +447,7 @@
 											<text class="sq-vip-name">{{ squareAt(7).name }}</text>
 											<text class="sq-vip-detail">{{ squareAt(7).age }}岁 · {{ squareAt(7).height }}cm</text>
 										</view>
-										<view class="sq-vip-like" @tap.stop="onLike(squareAt(7).id)"><text class="ic ic-home ic-heart sq-heart-sm"></text></view>
+										<view class="sq-vip-like" @tap.stop="onLike(squareAt(7).id)"><text v-if="isLiked(squareAt(7).id)" class="sq-heart-sm heart-font heart-solid"></text><text v-else class="sq-heart-sm heart-font heart-outline"></text></view>
 									</view></view>
 							</view>
 						</view>
@@ -472,7 +483,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(8).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(8).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -494,7 +506,8 @@
 								</view>
 							</view>
 							<view class="sq-like-btn" @click.stop="onLike(squareAt(9).id)">
-								<text class="ic ic-home ic-heart sq-heart"></text>
+								<text v-if="isLiked(squareAt(9).id)" class="sq-heart heart-font heart-solid"></text>
+								<text v-else class="sq-heart heart-font heart-outline"></text>
 							</view>
 						</view>
 					</view>
@@ -565,29 +578,13 @@
 
 				<view class="vip-privilege-section">
 					<view class="vip-priv-header">
-						<text class="vip-priv-title">VIP会员专属特权</text>
+						<view class="vip-priv-title-group">
+							<text class="vip-priv-title">会员专属权益</text>
+							<text class="vip-priv-subtitle">优先曝光 · 深度资料解锁 · 申请认识 7次/日</text>
+						</view>
 						<view class="vip-upgrade-btn" @tap="openVipPage">
 							<text class="ic ic-vip ic-huiyuan vip-upgrade-icon"></text>
 							<text class="vip-upgrade-text">立即开通</text>
-						</view>
-					</view>
-					<view class="vip-priv-row">
-						<view class="vip-priv-card">
-							<view class="vip-priv-icon-circle">
-								<text class="ic ic-social ic-paishe vip-priv-icon-text"></text>
-							</view>
-							<text class="vip-priv-card-title">资料解锁</text>
-							<text class="vip-priv-card-desc">查看完整资料</text>
-						</view>
-						<view class="vip-priv-card">
-							<view class="vip-priv-icon-circle"><text class="ic ic-social ic-pinglun vip-priv-icon-text"></text></view>
-							<text class="vip-priv-card-title">深度了解</text>
-							<text class="vip-priv-card-desc">查看问答与期待</text>
-						</view>
-						<view class="vip-priv-card">
-							<view class="vip-priv-icon-circle"><text class="ic ic-home ic-star vip-priv-icon-text"></text></view>
-							<text class="vip-priv-card-title">优先匹配</text>
-							<text class="vip-priv-card-desc">获得更多推荐机会</text>
 						</view>
 					</view>
 				</view>
@@ -629,19 +626,30 @@
 						<text class="chat-text">申请认识</text>
 				</view>
 				<view class="like-btn" @click="onLike(recommendUserId)">
-					<text class="ic ic-home ic-heart heart-icon"></text>
+					<text v-if="isLiked(recommendUserId)" class="heart-icon heart-font heart-solid"></text>
+					<text v-else class="heart-icon heart-font heart-outline"></text>
 				</view>
 			</view>
 
-			<!-- AI悬浮按钮（仅推荐页显示） -->
-			<view v-if="currentTab === 0 && canShowRecommendUsers" class="ai-float-btn" @click="showAiScore">
-				<text class="ic ic-home ic-star ai-icon"></text>
+			<!-- AI分身悬浮按钮（仅推荐页显示）：与当前展示用户的AI分身聊天，液态玻璃·气泡低语 -->
+			<view v-if="currentTab === 0 && canShowRecommendUsers" class="ai-float-btn" @click="openAiAvatarForCurrentUser">
+				<view class="ai-float-glass">
+					<view class="ai-float-halo"></view>
+					<view class="ai-float-bubble">
+						<view class="ai-float-dot ai-float-dot1"></view>
+						<view class="ai-float-dot ai-float-dot2"></view>
+						<view class="ai-float-dot ai-float-dot3"></view>
+					</view>
+				</view>
 			</view>
 		</view>
 
 		<!-- ====== Sheets & Modals ====== -->
 		<XsaSheet :visible="aiVisible" title="AI 合拍度解读" @close="aiVisible = false">
 			<view class="ai-sheet">
+				<view class="ai-profile-note">
+					<text>完成情感实验室测试后，平台会结合双方已确认的资料生成更贴合的解读。</text>
+				</view>
 				<view class="ai-mbti-row">
 					<view class="ai-mbti-card"><text class="ai-mbti-label">你的 MBTI</text><text class="ai-mbti-type">INFP</text></view>
 					<text class="ai-mbti-x">×</text>
@@ -649,6 +657,10 @@
 				</view>
 				<view class="ai-score-big"><text>{{ currentRecommendUser.matchScore }}%</text></view>
 				<view class="ai-bars"><view v-for="b in aiBars" :key="b.label" class="ai-bar"><view class="ai-bar-head"><text>{{ b.label }}</text><text>{{ b.value }}%</text></view><view class="ai-bar-trk"><view class="ai-bar-fill" :style="{ width: b.value + '%' }"></view></view></view></view>
+				<view class="ai-interpret">
+					<view class="ai-interpret-head"><text class="ai-interpret-mark">✦</text><text class="ai-interpret-title">AI 解读</text></view>
+					<text class="ai-interpret-text">{{ aiInterpretation }}</text>
+				</view>
 				<view class="ai-tip"><text>基于公开资料与兴趣交集生成，不代表平台承诺结果。建议从共同兴趣或城市周末安排开始聊。</text></view>
 			</view>
 		</XsaSheet>
@@ -715,11 +727,11 @@
 	import XsaApplySheet from '@/components/XsaApplySheet.uvue'
 	import XsaTabBar from '@/components/XsaTabBar.uvue'
 	import { guardRealName } from '@/utils/realNameGate.uts'
-	import { likeUser, blockUser, unblockUser } from '@/api'
+	import { likeUser, blockUser, unblockUser, saveAiAvatarProfileSnapshot } from '@/api'
 	import { getDiscoveryRecommendations, getDiscoveryPlaza, getDynamicList, getDynamicDetail, getUserDetail, getOwnProfile, getProfileCompletion } from '@/api'
 	import { getMembershipPackages } from '@/api/discovery.uts'
-	import { resolveMediaUrl } from '@/api/config.uts'
-	import locationJson from '@/static/location.json'
+	import { resolveMediaUrl, getAccessToken } from '@/api/config.uts'
+	import locationJson from '@/data/location.json'
 	import {
 		recordProfileView,
 		resetDailyIfNeeded,
@@ -746,6 +758,13 @@
 		uni.removeStorageSync('xsa_skip_welcome_once')
 		welcomeAgreementVisible.value = false; welcomeVisible.value = false
 		uni.navigateTo({ url: '/pages/auth/login' })
+	}
+
+	const routeParentMode = (): boolean => {
+		const storedMode = uni.getStorageSync('xsa_onboarding_mode')
+		if (storedMode == null || String(storedMode) != 'parent') return false
+		uni.reLaunch({ url: '/pages/parent/parent' })
+		return true
 	}
 
 	// ========== 导航 ==========
@@ -844,6 +863,7 @@
 	const profileCompletion = ref(0)
 	const profileCompletionLoaded = ref(false)
 	const profileCompletionError = ref('')
+	const discoveryError = ref('')
 	const squareUsers = ref<any[]>([])
 	const squareTotal = ref(0)
 	const membershipPlans = ref<any[]>([])
@@ -867,7 +887,7 @@
 	})
 	const vipCardTotal = computed(() => vipUsersForCategory.value.length)
 	const filteredRecommendUsers = computed(() => recommendUsers.value)
-	const canShowRecommendUsers = computed(() => profileCompletionLoaded.value && profileCompletion.value >= 100 && recommendUsers.value.length > 0)
+	const canShowRecommendUsers = computed(() => recommendUsers.value.length > 0)
 	const currentRecommendIndex = ref(0)
 	const recommendBackground = ref('')
 	const currentRecommendUser = computed(() => {
@@ -937,19 +957,19 @@
 		return false
 	}
 	const loadHomeDiscovery = async () => {
-		const completionReady = await loadProfileCompletion()
-		if (!completionReady) return
-		if (profileCompletion.value < 100) {
-			recommendUsers.value = []
-			recommendBackground.value = ''
-			return
-		}
+		await loadProfileCompletion()
+		discoveryError.value = ''
 		const recommendRes = await getDiscoveryRecommendations({ page: 1, page_size: 20 })
-		if (recommendRes.success && recommendRes.data != null) {
+		if (recommendRes != null && recommendRes.success && recommendRes.data != null) {
 			recommendUsers.value = recommendRes.data.items as any[]
 			currentRecommendIndex.value = 0
 			loadRecommendBackground()
 			loadFeedDynamics(Number(currentRecommendUser.value.id || 0))
+		} else {
+			recommendUsers.value = []
+			recommendBackground.value = ''
+			const message = recommendRes != null && recommendRes.message != null ? String(recommendRes.message).trim() : ''
+			discoveryError.value = message != '' ? message : '请检查登录状态和网络后重试'
 		}
 		const plazaRes = await getDiscoveryPlaza({ page: 1, page_size: 20 })
 		if (plazaRes.success && plazaRes.data != null) {
@@ -1066,7 +1086,7 @@
 		}
 		feedDynamics.value = mapped
 	}
-		const viewAllFeed = () => { showToast('查看全部动态') }
+		const viewAllFeed = () => { goUserDetailAnchored(recommendUserId.value, 'anchor-dynamics') }
 		const goPostDetail = (postId: number) => {
 			uni.navigateTo({ url: '/pagesSub/community/post-detail?id=' + postId })
 		}
@@ -1079,6 +1099,63 @@
 	})
 
 	const showAiScore = () => { aiVisible.value = true }
+
+	const aiInterpretation = computed((): string => {
+		const user = currentRecommendUser.value as any
+		const score = Number(user.matchScore || 0)
+		const mbti = user.mbti != null && user.mbti != '' ? '' + user.mbti : ''
+		const tagList = user.interestTags != null ? user.interestTags as any[] : []
+		const interests = tagList.length > 0 ? tagList.join('、') : ''
+		const parts: string[] = []
+		if (mbti != '') {
+			if (score >= 80) parts.push('你们的MBTI组合沟通节奏容易同频，初次聊天不会尴尬')
+			else parts.push('你们的MBTI组合需要一点时间磨合节奏，别急着下结论')
+		}
+		if (interests != '') parts.push('在' + interests + '上你们交集明显，很适合作为第一次聊天的切入点')
+		if (score >= 80) parts.push('整体契合度较高，建议先从共同话题开始慢慢了解')
+		else parts.push('契合度还有上升空间，多聊聊彼此的生活节奏会更清楚')
+		return parts.join('。') + '。'
+	})
+
+	const openAiAvatarForCurrentUser = () => {
+		const user = currentRecommendUser.value as any
+		const id = Number(user.id || 0)
+		if (id <= 0) {
+			showToast('暂无可聊天的AI分身')
+			return
+		}
+		if (getAccessToken() == '') {
+			showToast('请先登录后使用 AI 分身')
+			setTimeout(() => { uni.navigateTo({ url: '/pages/auth/login' }) }, 350)
+			return
+		}
+		try {
+			const snapshotRes = saveAiAvatarProfileSnapshot(id, {
+				id: id,
+				name: user.name,
+				avatar: user.avatar,
+				age: user.age,
+				city: user.city,
+				job: user.job,
+				education: user.education,
+				tags: user.interestTags,
+				intro: user.bio,
+				expectations: [],
+				dynamicSummary: feedDynamics.value.map((item: any) => '' + item.content)
+			}, false)
+			if (!snapshotRes.success) {
+				showToast('公开资料读取失败')
+				return
+			}
+		} catch (e) {
+			showToast('公开资料读取失败')
+			return
+		}
+		uni.navigateTo({
+			url: '/pagesSub/chat/detail?mode=ai-avatar&userId=' + id + '&userName=' + encodeURIComponent(user.name != null ? '' + user.name : '') + '&locked=false',
+			fail: () => { showToast('AI 分身打开失败，请重试') }
+		})
+	}
 
 	// ========== 申请认识 ==========
 	const applyVisible = ref(false)
@@ -1117,7 +1194,20 @@
 		if (id <= 0) return
 		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id })
 	}
+	const goUserDetailAnchored = (userId: number = 0, anchor: string = '') => {
+		const id = Number(userId)
+		if (id <= 0) return
+		const suffix = anchor != '' ? '&anchor=' + anchor : ''
+		uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?userId=' + id + suffix })
+	}
+	const firstMomentPhoto = computed((): string => {
+		const photos = currentRecommendUser.value.photos as any[]
+		return photos != null && photos.length > 0 ? '' + photos[0] : ''
+	})
+	const viewAllMoments = () => { goUserDetailAnchored(recommendUserId.value, 'anchor-moments') }
 	const shareProfile = () => { showToast('已生成分享入口') }
+	const likedUserIds = ref([] as number[])
+	const isLiked = (userId: number): boolean => likedUserIds.value.indexOf(Number(userId)) >= 0
 	const onLike = async (userId: number = 0) => {
 		const id = userId > 0 ? userId : recommendUserId.value
 		const ok = await guardRealName('like')
@@ -1126,7 +1216,10 @@
 			const res = await likeUser(id)
 			if (res.success && res.data != null) {
 				const liked = res.data.liked == true
-				showToast(liked ? '已喜欢，仅你自己可见' : '已取消喜欢')
+				const idx = likedUserIds.value.indexOf(id)
+				if (liked && idx < 0) likedUserIds.value.push(id)
+				if (!liked && idx >= 0) likedUserIds.value.splice(idx, 1)
+				showToast(liked ? '已收藏，仅你自己可见' : '已取消收藏')
 			} else {
 				showToast('操作失败，请重试')
 			}
@@ -1137,6 +1230,7 @@
 
 	// ========== 生命周期 ==========
 	onMounted(() => {
+		if (routeParentMode()) return
 		const pages = getCurrentPages()
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
@@ -1267,6 +1361,8 @@
 .online-row { display: flex; flex-direction: row; align-items: center; gap: 12rpx; }
 .online-dot { width: 14rpx; height: 14rpx; border-radius: 50%; background-color: var(--accent); }
 .online-text { font-size: 24rpx; color: var(--accent-dark); }
+.online-row.offline .online-dot { background-color: var(--text-muted); }
+.online-row.offline .online-text { color: var(--text-muted); }
 .distance-text { font-size: 24rpx; color: var(--text-muted); }
 
 /* 标签行 */
@@ -1334,11 +1430,25 @@
 .chat-icon { font-size: 36rpx; }
 .chat-text { font-size: 30rpx; font-weight: 700; color: var(--text-inverse); }
 .like-btn { width: 112rpx; height: 112rpx; border-radius: 56rpx; background-color: var(--bg-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04); }
-.heart-icon { font-size: 52rpx; color: var(--heart-red); }
+.heart-icon { font-size: 52rpx; }
 
-/* ==================== AI悬浮按钮 ==================== */
-.ai-float-btn { position: fixed; right: 28rpx; bottom: 200rpx; width: 112rpx; height: 112rpx; border-radius: 56rpx; background-color: var(--accent); display: flex; align-items: center; justify-content: center; box-shadow: 0 8rpx 32rpx rgba(126, 200, 160, 0.25), 0 4rpx 16rpx rgba(0, 0, 0, 0.06); z-index: 10; }
-.ai-icon { font-size: 48rpx; color: var(--text-inverse); }
+/* ==================== AI悬浮按钮（液态玻璃·气泡低语，纯view+渐变绘制，不依赖clip-path/SVG） ==================== */
+.ai-float-btn { position: fixed; right: 28rpx; bottom: 200rpx; width: 112rpx; height: 112rpx; border-radius: 56rpx; z-index: 10; }
+.ai-float-glass { position: relative; width: 112rpx; height: 112rpx; border-radius: 56rpx; background: radial-gradient(circle at 24% 16%, rgba(255,255,255,0.95), rgba(255,255,255,0.22) 48%), rgba(255,255,255,0.30); border: 1px solid rgba(255,255,255,0.78); -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%); box-shadow: inset 0 2rpx 0 rgba(255,255,255,0.95), inset 0 -14rpx 28rpx rgba(232,155,164,0.12), 0 21rpx 46rpx rgba(30, 90, 82, 0.24), 0 5rpx 14rpx rgba(0, 0, 0, 0.08); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.ai-float-halo { position: absolute; left: 16%; right: 16%; bottom: 9%; height: 20%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(232,155,164,0.38), rgba(232,155,164,0)); }
+.ai-float-bubble { position: relative; width: 50rpx; height: 38rpx; border-radius: 19rpx 19rpx 19rpx 5rpx; background: linear-gradient(140deg, #2D7C72 0%, #5FA99A 55%, #E89BA4 115%); box-shadow: 0 5rpx 14rpx rgba(30, 90, 82, 0.30), inset 0 2rpx 0 rgba(255,255,255,0.35); display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.ai-float-dot { width: 7rpx; height: 7rpx; border-radius: 4rpx; background: rgba(255,255,255,0.95); margin: 0 3rpx; animation: ai-float-blink 1.6s ease-in-out infinite; }
+.ai-float-dot1 { animation-delay: 0s; }
+.ai-float-dot2 { animation-delay: 0.25s; }
+.ai-float-dot3 { animation-delay: 0.5s; }
+@keyframes ai-float-blink { 0%, 70%, 100% { opacity: 0.45; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-3rpx); } }
+
+/* ==================== AI解读文案 ==================== */
+.ai-interpret { display: flex; flex-direction: column; gap: 12rpx; padding: 24rpx; border-radius: var(--radius-md); background-color: var(--accent-soft); }
+.ai-interpret-head { display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.ai-interpret-mark { font-size: 26rpx; color: var(--accent-dark); font-weight: 700; }
+.ai-interpret-title { font-size: 26rpx; font-weight: 800; color: var(--accent-dark); }
+.ai-interpret-text { font-size: 25rpx; color: var(--text-secondary); line-height: 1.7; }
 
 /* ==================== 广场页面 ==================== */
 .pinned-bar { display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 32rpx 0 16rpx 0; }
@@ -1367,7 +1477,7 @@
 .sq-meta-text { font-size: 24rpx; color: var(--text-muted); }
 .sq-dot { width: 6rpx; height: 6rpx; border-radius: 50%; background-color: var(--text-muted); }
 .sq-like-btn { width: 80rpx; height: 80rpx; border-radius: 50%; background-color: #FFF0F0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.sq-heart { font-size: 40rpx; color: var(--heart-red); }
+.sq-heart { font-size: 40rpx; }
 
 .sq-section { display: flex; flex-direction: column; gap: 24rpx; }
 .sq-section-header { display: flex; flex-direction: row; justify-content: space-between; align-items: center; }
@@ -1386,7 +1496,7 @@
 .sq-vip-name { font-size: 28rpx; font-weight: 600; color: var(--text-primary); }
 .sq-vip-detail { font-size: 22rpx; color: var(--text-muted); }
 .sq-vip-like { position: relative; z-index: 5; width: 64rpx; height: 64rpx; border-radius: 50%; background-color: #FFF0F0; display: flex; align-items: center; justify-content: center; }
-.sq-heart-sm { font-size: 32rpx; color: var(--heart-red); }
+.sq-heart-sm { font-size: 32rpx; }
 
 /* ==================== 会员专区页面 ==================== */
 .vip-hero { display: flex; flex-direction: column; justify-content: center; gap: 16rpx; height: 320rpx; padding: 40rpx 48rpx; background: linear-gradient(135deg, #2D4A3E, #1A3328); border-radius: var(--radius-xl); margin-bottom: 24rpx; }
@@ -1440,6 +1550,8 @@
 .vip-upgrade-icon { font-size: 28rpx; }
 .vip-upgrade-text { font-size: 26rpx; font-weight: 600; color: var(--text-inverse); }
 .vip-priv-row { display: flex; flex-direction: row; gap: 20rpx; }
+.vip-priv-title-group { display: flex; flex-direction: column; gap: 6rpx; }
+.vip-priv-subtitle { font-size: 22rpx; color: var(--text-muted); }
 .vip-priv-card { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 16rpx; padding: 28rpx; border-radius: var(--radius-lg); background-color: var(--bg-card); box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); }
 .vip-priv-icon-circle { width: 88rpx; height: 88rpx; border-radius: 50%; background-color: #FEF9F0; display: flex; align-items: center; justify-content: center; }
 .vip-priv-icon-text { font-size: 44rpx; }
@@ -1481,12 +1593,7 @@
    AI Sheet
    ============================================================ */
 .ai-sheet { display: flex; flex-direction: column; gap: 16px; }
-.ai-mbti-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
-.ai-mbti-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 20px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
-.ai-mbti-card.you { background: var(--accent-bg); border-color: var(--accent); }
-.ai-mbti-label { font-size: 10px; color: var(--muted); }
-.ai-mbti-type { font-family: var(--serif); font-size: 22px; font-weight: 700; color: var(--accent2); }
-.ai-mbti-x { font-size: 18px; color: var(--ink2); }
+.ai-profile-note { padding: 14px; border-radius: 12px; background: var(--accent-bg); color: var(--ink2); font-size: 12px; line-height: 1.6; }
 .ai-score-big text { font-size: 48px; font-weight: 900; color: var(--accent2); font-family: var(--serif); }
 .ai-score-big { text-align: center; }
 .ai-bars { display: flex; flex-direction: column; gap: 10px; }
@@ -1508,6 +1615,11 @@
 /* 固定头部 */
 .sticky-header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; max-width: 750rpx; margin: 0 auto; background-color: var(--bg-primary); }
 .content-scroll { flex: 1; padding: 254rpx 32rpx 0 32rpx; }
+.completion-reminder { margin-top: 28rpx; padding: 28rpx; display: flex; flex-direction: column; border: 1rpx solid var(--line); border-radius: 24rpx; background-color: var(--bg-card-soft); }
+.completion-reminder-error { background-color: var(--warm); }
+.completion-reminder-title { color: var(--text-primary); font-size: 28rpx; font-weight: 700; }
+.completion-reminder-copy { margin-top: 10rpx; color: var(--text-secondary); font-size: 24rpx; line-height: 1.6; }
+.completion-reminder .completion-gate-button { margin-top: 22rpx; }
 .completion-gate { margin-top: 28rpx; padding: 64rpx 40rpx; display: flex; flex-direction: column; align-items: center; border-radius: 32rpx; background-color: var(--bg-card); box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.03); text-align: center; }
 .completion-gate-mark { width: 128rpx; height: 128rpx; display: flex; align-items: center; justify-content: center; border: 10rpx solid var(--accent); border-radius: 50%; color: var(--accent-dark); font-size: 30rpx; font-weight: 800; box-sizing: border-box; }
 .completion-gate-title { margin-top: 32rpx; color: var(--text-primary); font-size: 32rpx; font-weight: 700; }
@@ -1521,17 +1633,17 @@
 .block-text { display: block; flex-shrink: 0; white-space: nowrap; font-size: 24rpx; color: var(--text-muted); }
 .block-divider { margin: 0 12rpx; font-size: 22rpx; color: var(--line); }
 .block-mask { position: fixed; z-index: 80; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center; padding: 30px; background: rgba(0,0,0,.58); }
-.block-dialog { width: 100%; padding: 28px 22px 22px; border-radius: 24px; background: linear-gradient(135deg, #F8FBFF, #F4F0FF); box-sizing: border-box; }
+.block-dialog { width: 100%; padding: 28px 22px 22px; border-radius: 24px; background: linear-gradient(135deg, var(--paper), var(--accent-bg)); box-sizing: border-box; }
 .block-dialog-title { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; font-size: 20px; font-weight: 800; color: var(--ink); text-align: center; }
-.block-success-icon { width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: #7047F4; color: var(--text-invert); font-size: 18px; }
+.block-success-icon { width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--text-invert); font-size: 18px; }
 .block-dialog-card { margin-top: 26px; padding: 18px 14px; border-radius: 10px; background: rgba(255,255,255,.82); }
 .block-dialog-note { display: block; text-align: center; font-size: 13px; color: var(--muted); }
 .blocked-user-row { display: flex; flex-direction: row; align-items: center; gap: 10px; margin-top: 16px; }
 .blocked-user-row image { width: 48px; height: 48px; border-radius: 8px; flex-shrink: 0; }
 .blocked-user-info { flex: 1; display: flex; flex-direction: column; gap: 5px; font-size: 14px; color: var(--ink); }
 .blocked-user-info text:last-child { font-size: 12px; color: var(--muted); }
-.unblock-button { padding: 10px 8px; border: 2px solid #7957C9; border-radius: 6px; color: #7957C9; font-size: 12px; white-space: nowrap; }
-.block-back-button { height: 48px; margin-top: 22px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #8247F3, #4B45F4); color: var(--text-invert); font-size: 18px; font-weight: 800; }
+.unblock-button { padding: 10px 8px; border: 2px solid var(--accent2); border-radius: 6px; color: var(--accent2); font-size: 12px; white-space: nowrap; }
+.block-back-button { height: 48px; margin-top: 22px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--text-invert); font-size: 18px; font-weight: 800; }
 /* 底部操作栏 */
 
 .ai-float-btn { z-index: 55; bottom: 360rpx; }
@@ -1573,12 +1685,19 @@
 @font-face { font-family: "iconfont-social"; src: url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/社区互动与信息/iconfont.woff') format('woff'); }
 @font-face { font-family: "iconfont-vip"; src: url('/static/婚恋小程序图标/会员支付与任务/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/会员支付与任务/iconfont.woff') format('woff'); }
 @font-face { font-family: "iconfont-me"; src: url('/static/婚恋小程序图标/个人中心/iconfont.woff2') format('woff2'), url('/static/婚恋小程序图标/个人中心/iconfont.woff') format('woff'); }
+@font-face { font-family: "iconfont-heart"; src: url('/static/婚恋小程序图标/收藏爱心/iconfont.ttf') format('truetype'); }
 .ic { font-style: normal; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 .ic-home { font-family: "iconfont-home" !important; }
 .ic-sys { font-family: "iconfont-sys" !important; }
 .ic-social { font-family: "iconfont-social" !important; }
 .ic-vip { font-family: "iconfont-vip" !important; }
 .ic-me { font-family: "iconfont-me" !important; }
+/* 收藏爱心字体（用户提供）：e608=空心（未收藏），e85c=实心（已收藏） */
+.heart-font { font-family: "iconfont-heart" !important; font-style: normal; }
+.heart-outline:before { content: "\e608"; }
+.heart-solid:before { content: "\e85c"; }
+.heart-outline { color: var(--muted); }
+.heart-solid { color: var(--heart-red); }
 /* unicode 映射 */
 .ic-search:before { content: "\e600"; }
 .ic-hello:before { content: "\e601"; }

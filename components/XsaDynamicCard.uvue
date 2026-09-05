@@ -99,7 +99,7 @@
 		<view class="card-footer" @click.stop>
 			<view class="action-item" @click="handleLike">
 				<text class="ic ic-social action-icon" :class="{ liked: liked }">{{ likeIcon }}</text>
-				<text class="text text-muted" v-if="likeCount > 0">{{ likeCount }}</text>
+				<text class="text text-muted" :class="{ liked: liked }" v-if="likeCount > 0">{{ likeCount }}</text>
 			</view>
 			<view class="action-item" @click="handleComment">
 				<text class="ic ic-social action-icon">{{ commentIcon }}</text>
@@ -108,6 +108,10 @@
 			<view class="action-item" @click="handleCollect">
 				<text class="ic ic-home action-icon" :class="{ collected: collected }">{{ collectIcon }}</text>
 				<text class="text text-muted" v-if="collectCount > 0">{{ collectCount }}</text>
+			</view>
+			<view class="action-item" @click="handleShare">
+				<text class="icon">↗</text>
+				<text class="text text-muted">分享</text>
 			</view>
 			<button
 				class="apply-btn"
@@ -379,6 +383,10 @@ const handleLike = () => {
 
 const handleComment = () => {
 	emit('comment', props.dynamic.id)
+}
+
+const handleShare = () => {
+	emit('share', props.dynamic.id)
 }
 
 const handleCollect = () => {
@@ -764,6 +772,11 @@ const handleOpen = () => {
 	animation: heartBeat 0.3s ease;
 }
 
+.action-item .text.liked {
+	color: var(--accent2);
+	font-weight: 700;
+}
+
 .action-item .text {
 	font-size: 13px;
 }
@@ -788,7 +801,7 @@ const handleOpen = () => {
 	border: 1px solid var(--line);
 }
 
-@keyframes heartBeat {
+@keyframes thumbPulse {
 	0%,
 	100% {
 		transform: scale(1);

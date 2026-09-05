@@ -31,7 +31,10 @@ assert.deepEqual(mainPages, [
   'pages/message/message',
   'pages/profile/profile',
   'pages/auth/login',
-  'pages/auth/register'
+  'pages/auth/register',
+  'pages/parent/parent',
+  'pages/parent/user-detail',
+  'pages/emotion-lab/emotion-lab'
 ])
 
 const expectedSubpackages = {
@@ -47,6 +50,7 @@ const expectedSubpackages = {
     'dating-plane',
     'dating-plane-compose',
     'paper-plane-messages',
+    'paper-plane-chat',
     'paper-plane-sent',
     'notifications'
   ],
@@ -62,13 +66,38 @@ const expectedSubpackages = {
     'application-success',
     'custom'
   ],
-  'pagesSub/profileExtra': ['settings', 'certification', 'vip', 'my-moments'],
+  'pagesSub/profileExtra': [
+    'settings',
+    'help',
+    'security',
+    'certification',
+    'vip',
+    'my-moments',
+    'my-tasks',
+    'my-registration',
+    'my-posters',
+    'my-poster-preview',
+    'history',
+    'visitors',
+    'search',
+    'report',
+    'applications',
+    'favorites',
+    'spotlights',
+    'support',
+    'my-ai-avatar',
+    'my-portrait',
+    'my-portrait-master',
+    'my-portrait-result',
+    'my-portrait-archive'
+  ],
   'pagesSub/chat': ['detail'],
   'pagesSub/about': ['about', 'article'],
   'pagesSub/userExtra': [
     'onboarding/profile',
     'user/detail',
     'user/edit',
+    'user/preference',
     'mytags/edit',
     'index/top-placement'
   ]

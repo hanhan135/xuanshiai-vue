@@ -34,8 +34,12 @@ export {
   deleteUserProfilePhoto,
   applyToMeet,
   likeUser,
+  getMyLikedProfiles,
+  getLikedUsers,
   getChatFeatureUnlocks,
-  unlockChatFeature
+  unlockChatFeature,
+  getUserProfileUnlockStatus,
+  unlockUserProfile
 } from './user.uts'
 
 // 首页与我的页面的发现数据
@@ -71,9 +75,18 @@ export {
   getChatMessages,
   getChatSessionId,
   sendMessage,
+  uploadChatMedia,
+  revokeMessage,
   handleContactExchangeRequest,
+  getContactExchanges,
+  createContactExchange,
+  respondContactExchange,
   getApplications,
-  handleApplication
+  handleApplication,
+  getConversationPage,
+  getApplicationPage,
+  getChatPermission,
+  markAllMessagesRead
 } from './message.uts'
 export {
   ADVISOR_SCENARIOS,
@@ -87,6 +100,58 @@ export {
 } from './ai-advisor.uts'
 
 export { generateIdealPartner } from './ai-search.uts'
+
+export type {
+  MessageSubject
+} from './message.uts'
+
+// 父母端相关
+export {
+  getParentContext,
+  getParentAuthenticationGate,
+  updateParentChildProfile,
+  getParentAccessGate,
+  getParentCandidates,
+  getParentLikedCandidates,
+  getParentCandidateDetail,
+  getParentApplications,
+  getParentMessages,
+  getParentMatchmakers,
+  getParentCustomMatchmakers,
+  canParentViewClearPhoto,
+  toggleParentLike,
+  applyParentIntroduction,
+  reportParentCandidate,
+  blockParentCandidate
+} from './parent.uts'
+
+export type {
+  ParentContext
+} from './parent.uts'
+
+// 情感实验室相关
+export {
+  getEmotionLabSummary,
+  startMbtiAssessment,
+  saveMbtiAnswer,
+  submitMbtiAssessment,
+  setMyMbtiType,
+  discardMbtiDraft
+} from './emotionLab.uts'
+
+export type {
+  AssessmentDefinition,
+  AssessmentQuestionSnapshot,
+  AssessmentSessionSnapshot,
+  MbtiAnswer,
+  MbtiDimensionKey,
+  MbtiDimensions,
+  SessionSnapshot,
+  MbtiResult,
+  ResultCopy,
+  ProfileMbtiSource,
+  SetMyMbtiTypePayload
+} from './emotionLab.uts'
 
 // 社区相关
 export {
@@ -113,6 +178,9 @@ export {
   getFixedCommunityBanner,
   ensureCommunityBanners,
   getCommunityNotifications,
+  getOfficialCommunityActivities,
+  normalizeCommunityNotification,
+  isOfficialActivity,
   getUnreadNotificationCount,
   markNotificationRead,
   markAllNotificationsRead,
@@ -121,6 +189,7 @@ export {
   publishDynamic,
   likeDynamic,
   collectDynamic,
+  shareDynamic,
   followUserFromCommunity,
   unfollowUserFromCommunity,
   deleteDynamic,
@@ -140,7 +209,13 @@ export {
   deleteCommunityMedia,
   getPaperPlaneMessages,
   sendPaperPlaneMessage,
+  sendPaperPlaneMediaMessage,
+  createPaperPlaneContactExchange,
+  respondPaperPlaneContactExchange,
   readPaperPlaneConversation,
+  getPaperPlaneProfileUnlock,
+  unlockPaperPlaneProfile,
+  PAPER_PLANE_PROFILE_UNLOCK_COST,
   endPaperPlaneConversation,
   createCommunityCreateKey,
   discardCommunityCreateKey,
@@ -262,6 +337,7 @@ export {
   getAiConsents,
   grantProfileTextConsent,
   revokeProfileTextConsent,
+  polishPaperPlaneText,
   fieldLabel,
   fieldAction,
   genIdempotencyKey
@@ -276,7 +352,13 @@ export {
   type FieldConfirmationStatus,
   type FieldPatchAction
 } from './ai-profile.uts'
-
-
-
-
+// 墨相师统一旅程 REST 服务（state/history/archive/preview），供页面与后续
+// AI 搜索、匹配度调用方共享同一份响应适配契约。
+export {
+  getMoxiangState,
+  getSessionTurns,
+  startIdealPartnerJourney,
+  createProfilePreview,
+  getProfilePreview,
+  getMoxiangArchive
+} from './ai-moxiang.uts'

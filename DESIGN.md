@@ -41,13 +41,13 @@ typography:
     lineHeight: 1.35
     letterSpacing: "normal"
   body:
-    fontFamily: "Inter, PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+    fontFamily: "PingFang SC, Microsoft YaHei, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.6
     letterSpacing: "normal"
   label:
-    fontFamily: "Inter, PingFang SC, Microsoft YaHei, system-ui, sans-serif"
+    fontFamily: "PingFang SC, Microsoft YaHei, system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 700
     lineHeight: 1.45
@@ -141,6 +141,7 @@ components:
 | `--sage` | `#338D6B` | 在线、已认证、成功提示 |
 | `--sage-soft` | `#C2E0CF` | 安全提示、认证背景 |
 | `--security-hero` | `#E5F7E7` | 安全中心顶部渐变起始色，与 `--paper` 过渡 |
+| `--heart-red` | `#F08282` | 收藏爱心（已收藏实心态）；低饱和红，非婚庆红金，仅用于收藏语义 |
 | `--text-invert` | `#FCFCFC` | 深色表面上的反白文字 |
 | `--bg-hover` | `#E7ECEC` | 轻悬停 / 次级底 |
 | `--bg-subtle` | `#DCE3E2` | 更浅的分区底 |
@@ -191,6 +192,14 @@ components:
 
 标题可使用轻微负字距（建议不低于 `-0.04em`），禁止让中文笔画挤压或溢出。长标题使用自然换行，移动端不以强制单行换行换取“整齐”。
 
+### 父母端可访问性变体
+
+父母端在页面根节点启用局部可读性变体，不修改 `uni.scss` 或普通用户页面：页面标题 24px、卡片标题 20px、正文 16px、辅助文字 13—14px；父母端 UI 使用无衬线字体，不使用叙事 serif 标题。按钮、列表项、Tab 和图标操作的触控目标不小于 48px。行高保持至少 1.45，长文案允许自然换行，不能用缩小字号维持单行。
+
+父母 shell 使用安全区感知的固定头部、可滚动内容和固定底部导航，滚动内容必须预留 `112px + env(safe-area-inset-bottom)`。身份头部以“父母空间 / 当前协助子女 / 授权状态”形成单一层级，不能让标题贴近状态栏。卡片优先使用 `16—20px` 圆角、轻边界或 `shadow-sm`，不要同时叠加厚边框和重阴影。
+
+复用组件通过 `largeText` / `large-text` 变体放大内部标题、正文、状态、空态和反馈文案。父母端的消息、申请、Sheet、Toast、红娘卡片与底部导航必须完整传递该变体，不能只放大页面外层标题。所有颜色和字体仍使用现有 Token，不建立第二套父母端色板。
+
 ## Elevation
 
 阴影表达层级，不制造漂浮的营销感。全局工具类是首选：
@@ -229,6 +238,7 @@ components:
 ### Tabs / Navigation
 
 - 一级导航固定为 **首页、牵线、社区、消息、我的**（定版顺序）；路由由 `pages.json` 管理。修改顺序前须与决策层 / PRODUCT 一致并获确认。
+- 父母角色使用单页内的 **首页、牵线、消息、我的** 四面板和自定义底部导航；它不替换、不重排普通用户原生五 Tab，也不展示社区或情感实验室。
 - 页面内 Tab 使用胶囊或底部线条两种既有变体；选中态使用 `--accent`，未选中使用 `--muted`。
 - 底部 Tab、页面顶部栏和内容滚动区要有清晰层级，避免内容被固定栏遮挡。
 
@@ -249,6 +259,7 @@ components:
 ### Layout / Responsive / Motion
 
 - 小程序优先，覆盖 320px—428px；内容左右内边距通常 16px，页面底部为固定操作栏预留空间。
+- 父母端在 320px、375px、390px、428px 下必须保持 48px 触控目标、四栏底部导航和 16px 正文；空间不足时让信息与动作换行，不压缩字号或遮挡底部安全区。
 - 使用 `view` / `text` / `scroll-view` / `image` 和 UniApp API；不得依赖 `window`、`document` 或 DOM 操作。
 - 间距以 8px 为主网格，但允许 4px、6px、10px、12px、13px 等用于控件细调；先复用既有 Token，再局部调整。
 - 动效以 `0.18s—0.22s` 为主，采用 ease-out；按压可 `scale(0.98)`，悬浮仅用于 H5，不依赖 hover 完成功能。尊重减少动效偏好，不能让内容只在动画完成后才出现。

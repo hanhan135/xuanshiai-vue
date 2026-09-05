@@ -62,25 +62,25 @@
 					<button class="condition-toggle" :class="{ active: certificationOnly }" @tap="certificationOnly = !certificationOnly"><view class="toggle-knob"></view></button>
 				</view>
 
-				<view class="advanced-heading"><text class="condition-label">高级筛选</text><text class="vip-badge">VIP</text></view>
-				<view class="vip-line"><text class="vip-badge small">会员专享</text><text>开通会员后可使用更多筛选条件</text></view>
-				<view class="condition-group vip-condition-group">
+				<view class="advanced-heading"><text class="condition-label">更多筛选</text></view>
+				<view class="filter-hint"><text>可按需要补充筛选条件</text></view>
+				<view class="condition-group advanced-condition-group">
 					<text class="condition-label">身高偏好 {{ heightOptions[heightIndex] }}</text>
 					<picker class="condition-range-picker" mode="selector" :range="heightOptions" :value="heightIndex" @change="onHeightChange"><view class="range-control"><view class="range-track"></view><view class="range-active full-range"></view><view class="range-handle full-start"></view><view class="range-handle full-end"></view></view></picker>
 				</view>
-				<view class="condition-group vip-condition-group">
+				<view class="condition-group advanced-condition-group">
 					<text class="condition-label">收入偏好（年）</text>
 					<view class="condition-choice-grid income-grid"><view v-for="item in incomeOptions" :key="item" class="choice-chip" :class="{ selected: income === item }" @tap="income = item"><text>{{ item }}</text></view></view>
 				</view>
-				<view class="condition-group vip-condition-group">
+				<view class="condition-group advanced-condition-group">
 					<text class="condition-label">家乡偏好</text>
 					<picker class="wide-condition-picker" mode="selector" :range="hometownOptions" :value="hometownIndex" @change="onHometownChange"><view class="wide-picker-value"><text>{{ hometownOptions[hometownIndex] }}</text><text>›</text></view></picker>
 				</view>
-				<view class="condition-group vip-condition-group">
+				<view class="condition-group advanced-condition-group">
 					<text class="condition-label">学历偏好</text>
 					<view class="condition-choice-grid education-grid"><view v-for="item in educationOptions" :key="item" class="choice-chip" :class="{ selected: education === item }" @tap="education = item"><text>{{ item }}</text></view></view>
 				</view>
-				<view class="condition-group vip-condition-group">
+				<view class="condition-group advanced-condition-group">
 					<text class="condition-label">婚况偏好</text>
 					<view class="condition-choice-grid marriage-grid"><view v-for="item in marriageOptions" :key="item" class="choice-chip" :class="{ selected: marriage === item }" @tap="marriage = item"><text>{{ item }}</text></view></view>
 				</view>
@@ -166,7 +166,7 @@
 <script setup lang="uts">
 	import XsaSheet from '@/components/XsaSheet.uvue'
 	import XsaTag from '@/components/XsaTag.uvue'
-	import { getOwnProfile, getOwnPreferences, updateOwnProfile, getRecommendUsers, generateIdealPartner } from '@/api'
+	import { getOwnProfile, updateOwnProfile, getRecommendUsers, generateIdealPartner } from '@/api'
 
 	const systemInfo = uni.getSystemInfoSync()
 	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
@@ -311,12 +311,7 @@
 		aiGenerating.value = true
 		stopAiTyping()
 		try {
-			const profileResult = await getOwnProfile()
-			const preferencesResult = await getOwnPreferences()
-			const profile = profileResult.success ? profilePayload(profileResult.data) : {}
-			const preferences = preferencesResult.success ? profilePayload(preferencesResult.data) : {}
-			ownGender.value = profile.gender
-			const result = await generateIdealPartner(profile, preferences)
+			const result = await generateIdealPartner()
 			if (!result.success || result.data == null) {
 				uni.showToast({ title: result.message != null ? toText(result.message) : '暂时无法生成，请稍后重试', icon: 'none' })
 				return
@@ -386,7 +381,7 @@
 	const resultProfile = (item: any): any => item != null && item.profile != null ? item.profile : (item != null ? item : {})
 	const resultAvatar = (item: any): string => {
 		const profile = resultProfile(item)
-		return toText(profile.avatar) || '/static/portraits/profile-woman-main.jpg'
+		return toText(profile.avatar) || '/static/portraits/profile-woman-main.webp'
 	}
 	const resultName = (item: any): string => {
 		const profile = resultProfile(item)
@@ -605,10 +600,8 @@
 .toggle-knob { width: 40rpx; height: 40rpx; border-radius: 999rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
 .advanced-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 34rpx 0 16rpx; }
 .advanced-heading .condition-label { width: auto; font-size: 29rpx; }
-.vip-badge { flex-shrink: 0; padding: 5rpx 12rpx; border-radius: 10rpx; background: var(--accent-bg); color: var(--accent2); font-size: 19rpx; font-weight: 600; }
-.vip-badge.small { background: var(--warm); color: var(--ink2); }
-.vip-line { display: flex; flex-direction: row; align-items: center; gap: 12rpx; margin-bottom: 8rpx; padding: 20rpx 22rpx; border-radius: 18rpx; background: var(--canvas); color: var(--ink2); font-size: 22rpx; }
-.vip-condition-group { min-height: 120rpx; }
+.filter-hint { display: flex; flex-direction: row; align-items: center; margin-bottom: 8rpx; padding: 20rpx 22rpx; border-radius: 18rpx; background: var(--canvas); color: var(--ink2); font-size: 22rpx; }
+.advanced-condition-group { min-height: 120rpx; }
 .condition-choice-grid { min-width: 0; flex: 1; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 12rpx; }
 .condition-choice-grid .choice-chip { min-height: 66rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; padding: 0 8rpx; border-color: transparent; border-radius: 18rpx; background: var(--canvas); font-size: 20rpx; text-align: center; }
 .condition-choice-grid .choice-chip.selected { border-color: transparent; background: var(--accent-bg); }

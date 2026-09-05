@@ -1,0 +1,475 @@
+<template>
+	<view class="page">
+		<view class="topbar" :style="{ paddingTop: statusBarHeight + 'px' }">
+			<button class="back-button" @click="returnHome">‹</button>
+			<view class="topbar-copy">
+				<text class="topbar-title">纸飞机聊天</text>
+				<text class="topbar-desc">{{ profileUnlocked ? '资料已解锁' : '认真表达，温柔回应' }}</text>
+			</view>
+			<view class="topbar-placeholder"></view>
+		</view>
+
+		<view class="action-strip">
+			<button class="action-card" @click="choosePaperPlanePhoto">
+				<text class="action-title">照片</text>
+				<text class="action-desc">拍照或相册</text>
+			</button>
+			<button class="action-card" :class="{ locked: !profileUnlocked }" @click="requestWechatExchange">
+				<text class="action-title">交换微信</text>
+				<text class="action-desc">{{ profileUnlocked ? '只发交换申请' : lockHint }}</text>
+			</button>
+			<button class="action-card" :class="{ locked: !profileUnlocked }" @click="requestPhoneExchange">
+				<text class="action-title">交换电话</text>
+				<text class="action-desc">{{ profileUnlocked ? '只发交换申请' : lockHint }}</text>
+			</button>
+			<button class="action-card" @click="reportPaperPlaneConversation">
+				<text class="action-title">举报</text>
+				<text class="action-desc">不合适就说出来</text>
+			</button>
+		</view>
+
+		<view class="unlock-banner" v-if="conversationId > 0">
+			<view class="unlock-main">
+				<text class="unlock-title">{{ profileUnlocked ? '当前不会展示原始联系方式' : '需要先解锁对方资料' }}</text>
+				<text class="unlock-desc">{{ profileUnlocked ? '解锁后只会继续创建交换申请，不会显示原始联系方式。' : lockHint }}</text>
+			</view>
+			<button v-if="!profileUnlocked" class="unlock-button" :disabled="unlocking" @click="unlockPaperPlaneProfile()">
+				{{ unlocking ? '解锁中...' : '立即解锁' }}
+			</button>
+		</view>
+
+		<scroll-view class="content" scroll-y :scroll-into-view="scrollIntoView">
+			<view class="message-list" v-if="messages.length > 0">
+				<view v-for="item in messages" :key="item.id" :id="'message-' + item.id" class="message-row" :class="{ mine: item.isMine }">
+					<image class="message-avatar" :src="item.avatar" mode="aspectFill"></image>
+					<view class="message-bubble" :class="item.type">
+						<image v-if="item.type == 'image'" class="message-image" :src="item.content" mode="aspectFill"></image>
+						<text v-else class="message-text">{{ item.content }}</text>
+						<text class="message-time">{{ item.timeText }}</text>
+					</view>
+				</view>
+			</view>
+			<view v-else class="empty-state">
+				<view class="empty-icon"><text>✈</text></view>
+				<text class="empty-title">还没有消息</text>
+				<text class="empty-desc">先说一句认真想说的话，或者试着发起交换申请。</text>
+			</view>
+			<view id="paper-plane-chat-bottom" class="scroll-anchor"></view>
+		</scroll-view>
+
+		<view class="composer">
+			<input
+				class="composer-input"
+				:value="draft"
+				@input="onDraftInput"
+				placeholder="写一句想认真说的话"
+				maxlength="200"
+			/>
+			<button class="composer-send" :disabled="sending || draft.trim().length == 0" @click="sendPaperPlaneMessage()">
+				{{ sending ? '发送中...' : '发送' }}
+			</button>
+		</view>
+	</view>
+</template>
+
+<script setup lang="uts">
+	import {
+		getPaperPlaneMessages,
+		sendPaperPlaneMessage as sendPaperPlaneMessageApi,
+		sendPaperPlaneMediaMessage,
+		createPaperPlaneContactExchange,
+		respondPaperPlaneContactExchange,
+		readPaperPlaneConversation,
+		getPaperPlaneProfileUnlock,
+		unlockPaperPlaneProfile as unlockPaperPlaneProfileApi,
+		uploadCommunityMedia,
+		reportContent
+	} from '@/api'
+
+	type PaperPlaneMessage = {
+		id: number
+		isMine: boolean
+		type: string
+		content: string
+		timeText: string
+		avatar: string
+		fromUserId: number
+	}
+
+	const systemInfo = uni.getSystemInfoSync()
+	const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBarHeight : 20
+	const lockHint = '需要 80 积分解锁对方资料后才可使用'
+
+	const conversationId = ref(0)
+	const targetUserId = ref(0)
+	const profileUnlocked = ref(false)
+	const unlockCost = ref(80)
+	const unlocking = ref(false)
+	const loading = ref(false)
+	const sending = ref(false)
+	const mediaSending = ref(false)
+	const draft = ref('')
+	const scrollIntoView = ref('paper-plane-chat-bottom')
+	const messages = ref<PaperPlaneMessage[]>([])
+	const currentUserId = ref(0)
+	const peerAvatar = ref('/static/portraits/profile-woman-alt.webp')
+
+	const readCurrentUserId = (): number => {
+		try {
+			const stored = uni.getStorageSync('xsa_user_id')
+			const parsed = Number(stored)
+			return Number.isNaN(parsed) ? 0 : parsed
+		} catch (e) {
+			return 0
+		}
+	}
+
+	const safeText = (value: any): string => {
+		return value != null ? String(value) : ''
+	}
+
+	const deriveMessageType = (raw: any): string => {
+		if (raw != null && raw.type == 3) return 'voice'
+		if (raw != null && raw.mediaUrl != null && String(raw.mediaUrl).length > 0) return 'image'
+		return 'text'
+	}
+
+	const mapMessage = (raw: any): PaperPlaneMessage => {
+		const mine = raw != null && (raw.mine === true || (currentUserId.value > 0 && Number(raw.fromUserId) == currentUserId.value))
+		const messageType = deriveMessageType(raw)
+		return {
+			id: Number(raw != null && raw.id != null ? raw.id : Date.now()),
+			isMine: mine,
+			type: messageType,
+			content: messageType == 'image'
+				? safeText(raw != null && raw.mediaUrl != null ? raw.mediaUrl : raw.content)
+				: (messageType == 'voice'
+					? safeText(raw != null && raw.voiceDurationSec != null ? raw.voiceDurationSec + ' 秒' : '语音消息')
+					: safeText(raw != null && raw.content != null ? raw.content : '')),
+			timeText: safeText(raw != null && raw.timeText != null ? raw.timeText : '刚刚'),
+			avatar: mine ? '/static/portraits/profile-man-light.webp' : peerAvatar.value,
+			fromUserId: Number(raw != null && raw.fromUserId != null ? raw.fromUserId : 0)
+		}
+	}
+
+	const rebuildPeerUserId = (rows: any[]) => {
+		if (targetUserId.value > 0) return
+		for (let i = 0; i < rows.length; i++) {
+			const row = rows[i]
+			const fromUserId = Number(row != null && row.fromUserId != null ? row.fromUserId : 0)
+			const isMine = row != null && (row.mine === true || (currentUserId.value > 0 && fromUserId == currentUserId.value))
+			if (!isMine && fromUserId > 0) {
+				targetUserId.value = fromUserId
+				break
+			}
+		}
+	}
+
+	const refreshUnlockState = async () => {
+		if (targetUserId.value <= 0) return
+		try {
+			const res = await getPaperPlaneProfileUnlock(targetUserId.value)
+			if (res != null && res.success && res.data != null) {
+				profileUnlocked.value = res.data.unlocked === true
+				unlockCost.value = res.data.points_cost != null ? Number(res.data.points_cost) : 80
+			}
+		} catch (error) {
+			console.error('读取纸飞机资料解锁状态失败', error)
+		}
+	}
+
+	const loadConversation = async () => {
+		if (conversationId.value <= 0) return
+		loading.value = true
+		try {
+			await readPaperPlaneConversation(conversationId.value)
+			const res = await getPaperPlaneMessages(conversationId.value)
+			if (res != null && res.success && Array.isArray(res.data)) {
+				const rows = res.data as any[]
+				rebuildPeerUserId(rows)
+				const mapped: PaperPlaneMessage[] = []
+				for (let i = 0; i < rows.length; i++) {
+					mapped.push(mapMessage(rows[i]))
+				}
+				messages.value = mapped
+				if (mapped.length > 0) {
+					scrollIntoView.value = 'message-' + mapped[mapped.length - 1].id
+				}
+				await refreshUnlockState()
+			}
+		} catch (error) {
+			console.error('加载纸飞机会话失败', error)
+			uni.showToast({ title: '纸飞机会话加载失败', icon: 'none' })
+		} finally {
+			loading.value = false
+		}
+	}
+
+	const appendSystemMessage = (content: string) => {
+		messages.value = messages.value.concat([{
+			id: Date.now(),
+			isMine: false,
+			type: 'system',
+			content: content,
+			timeText: '刚刚',
+			avatar: peerAvatar.value,
+			fromUserId: 0
+		} as PaperPlaneMessage])
+		scrollIntoView.value = 'message-' + messages.value[messages.value.length - 1].id
+	}
+
+	const sendDraftMessage = async (content: string) => {
+		if (conversationId.value <= 0) return
+		const trimmed = content != null ? content.trim() : ''
+		if (trimmed.length == 0) return
+		sending.value = true
+		try {
+			const res = await sendPaperPlaneMessageApi(conversationId.value, trimmed)
+			if (res != null && res.success) {
+				draft.value = ''
+				await loadConversation()
+				appendSystemMessage('已发送：' + trimmed)
+				return
+			}
+			uni.showToast({ title: res != null && res.message != null ? String(res.message) : '发送失败，请重试', icon: 'none' })
+		} catch (error) {
+			console.error('发送纸飞机消息失败', error)
+			uni.showToast({ title: '发送失败，请重试', icon: 'none' })
+		} finally {
+			sending.value = false
+		}
+	}
+
+	const sendPaperPlaneMessage = () => {
+		if (draft.value.trim().length == 0) return
+		sendDraftMessage(draft.value)
+	}
+
+	const choosePaperPlanePhoto = () => {
+		uni.showActionSheet({
+			itemList: ['拍照', '从相册选择'],
+			success: (sheet: any) => {
+				const sourceType = sheet.tapIndex === 0 ? 'camera' : 'album'
+				uni.chooseImage({
+					count: 1,
+					sizeType: ['compressed'],
+					sourceType: [sourceType],
+						success: async (res: any) => {
+							if (res == null || !Array.isArray(res.tempFilePaths) || res.tempFilePaths.length == 0 || mediaSending.value) return
+							mediaSending.value = true
+							try {
+								const uploaded = await uploadCommunityMedia(res.tempFilePaths[0], 'paper_plane')
+								if (uploaded == null || !uploaded.success || uploaded.data == null) {
+									uni.showToast({ title: uploaded != null && uploaded.message != null ? String(uploaded.message) : '图片上传失败，请重试', icon: 'none' })
+									return
+								}
+								const sent = await sendPaperPlaneMediaMessage(conversationId.value, uploaded.data)
+								if (sent != null && sent.success) {
+									await loadConversation()
+									appendSystemMessage('图片已发送')
+									return
+								}
+								uni.showToast({ title: sent != null && sent.message != null ? String(sent.message) : '图片发送失败，请重试', icon: 'none' })
+							} catch (error) {
+								console.error('发送纸飞机图片失败', error)
+								uni.showToast({ title: '图片发送失败，请重试', icon: 'none' })
+							} finally {
+								mediaSending.value = false
+							}
+						}
+				})
+			}
+		})
+	}
+
+	const ensureUnlockedBeforeExchange = async (): Promise<boolean> => {
+		if (profileUnlocked.value) return true
+		if (targetUserId.value <= 0) {
+			uni.showToast({ title: '暂时无法确认对方身份', icon: 'none' })
+			return false
+		}
+		const proceed = await new Promise<boolean>((resolve) => {
+			uni.showModal({
+				title: '需要解锁资料',
+				content: lockHint,
+				confirmText: '立即解锁',
+				cancelText: '取消',
+				success: (result: any) => {
+					resolve(result.confirm === true)
+				},
+				fail: () => resolve(false)
+			})
+		})
+		if (!proceed) return false
+		return await unlockPaperPlaneProfileAction()
+	}
+
+	const unlockPaperPlaneProfileAction = async (): Promise<boolean> => {
+		if (targetUserId.value <= 0 || unlocking.value) return profileUnlocked.value
+		unlocking.value = true
+		try {
+			const res = await unlockPaperPlaneProfileApi(targetUserId.value)
+			if (res != null && res.success && res.data != null && res.data.unlocked === true) {
+				profileUnlocked.value = true
+				unlockCost.value = res.data.points_cost != null ? Number(res.data.points_cost) : unlockCost.value
+				uni.showToast({ title: '资料已解锁', icon: 'none' })
+				return true
+			}
+			uni.showToast({ title: res != null && res.message != null ? String(res.message) : lockHint, icon: 'none' })
+			return false
+		} catch (error) {
+			console.error('解锁纸飞机资料失败', error)
+			uni.showToast({ title: '解锁失败，请重试', icon: 'none' })
+			return false
+		} finally {
+			unlocking.value = false
+		}
+	}
+
+	const requestWechatExchange = async () => {
+		if (!(await ensureUnlockedBeforeExchange())) return
+		await submitContactExchange('wechat')
+	}
+
+	const requestPhoneExchange = async () => {
+		if (!(await ensureUnlockedBeforeExchange())) return
+		await submitContactExchange('phone')
+	}
+
+	const submitContactExchange = async (kind: string) => {
+		if (conversationId.value <= 0) return
+		try {
+			const res = await createPaperPlaneContactExchange(conversationId.value, kind)
+			if (res != null && res.success) {
+				appendSystemMessage(kind == 'wechat' ? '已发起交换微信申请，等待对方同意' : '已发起交换电话申请，等待对方同意')
+				return
+			}
+			uni.showToast({ title: res != null && res.message != null ? String(res.message) : '交换申请发送失败', icon: 'none' })
+		} catch (error) {
+			console.error('发送联系方式交换申请失败', error)
+			uni.showToast({ title: '交换申请发送失败，请重试', icon: 'none' })
+		}
+	}
+
+	const respondToContactExchange = async (exchangeId: number, decision: string) => {
+		const res = await respondPaperPlaneContactExchange(exchangeId, decision)
+		if (res != null && res.success) {
+			appendSystemMessage(decision == 'accept' ? '已同意交换申请' : (decision == 'reject' ? '已拒绝交换申请' : '已撤回交换申请'))
+		}
+		return res
+	}
+
+	const unlockPaperPlaneProfile = () => {
+		unlockPaperPlaneProfileAction()
+	}
+
+	const reportPaperPlaneConversation = () => {
+		if (conversationId.value <= 0) {
+			uni.showToast({ title: '暂时无法举报', icon: 'none' })
+			return
+		}
+		uni.showActionSheet({
+			itemList: ['骚扰', '广告', '低俗', '其他'],
+			success: async (sheet: any) => {
+				const reasonId = sheet.tapIndex === 0
+					? 'harassment'
+					: (sheet.tapIndex === 1 ? 'advertising' : (sheet.tapIndex === 2 ? 'porn' : 'other'))
+				try {
+					const res = await reportContent('paperPlane', conversationId.value, reasonId, '')
+					if (res != null && res.success) {
+						uni.showToast({ title: '举报已提交', icon: 'none' })
+						return
+					}
+					uni.showToast({ title: res != null && res.message != null ? String(res.message) : '举报失败，请重试', icon: 'none' })
+				} catch (error) {
+					console.error('举报纸飞机会话失败', error)
+					uni.showToast({ title: '举报失败，请重试', icon: 'none' })
+				}
+			}
+		})
+	}
+
+	const returnHome = () => {
+		const pages = getCurrentPages()
+		if (pages.length > 1) {
+			uni.navigateBack()
+			return
+		}
+		uni.switchTab({ url: '/pages/community/community' })
+	}
+
+	const onDraftInput = (e: any) => {
+		draft.value = e.detail.value
+	}
+
+	onMounted(() => {
+		currentUserId.value = readCurrentUserId()
+		const pages = getCurrentPages()
+		const currentPage = pages[pages.length - 1]
+		const options = currentPage != null ? currentPage.options : null
+		const parsedConversationId = options != null && options.conversationId != null ? parseInt(options.conversationId) : 0
+		const parsedTargetUserId = options != null && options.targetUserId != null ? parseInt(options.targetUserId) : 0
+		if (!Number.isNaN(parsedConversationId) && parsedConversationId > 0) {
+			conversationId.value = parsedConversationId
+		}
+		if (!Number.isNaN(parsedTargetUserId) && parsedTargetUserId > 0) {
+			targetUserId.value = parsedTargetUserId
+		}
+		loadConversation()
+	})
+
+	onShow(() => {
+		if (conversationId.value > 0) {
+			loadConversation()
+		}
+	})
+</script>
+
+<style scoped>
+	.page { height: 100%; min-height: 0; width: 100vw; overflow: hidden; display: flex; flex-direction: column; background: linear-gradient(180deg, #FFF9F2 0%, #F7F2FF 100%); }
+	/* #ifdef H5 */
+	.page { height: 100vh; }
+	/* #endif */
+	.topbar { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 14px 12px; background: rgba(255, 255, 255, 0.92); border-bottom: 1px solid #E8DFEF; backdrop-filter: blur(12px); }
+	.back-button, .topbar-placeholder { width: 36px; height: 36px; }
+	.back-button { border-radius: 18px; background: #EEE8FF; color: #5635A1; font-size: 26px; line-height: 29px; }
+	.back-button::after { border: none; }
+	.topbar-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+	.topbar-title { font-size: 18px; font-family: var(--serif); font-weight: 800; color: #23153E; }
+	.topbar-desc { font-size: 10px; color: #8C7FA0; }
+	.action-strip { display: flex; flex-direction: row; gap: 8px; padding: 12px 14px 0; }
+	.action-card { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 62px; padding: 10px 6px; border-radius: 16px; background: rgba(255, 255, 255, 0.93); border: 1px solid #E9DFFA; }
+	.action-card::after { border: none; }
+	.action-card.locked { border-color: #E1D2FF; background: #FBF8FF; }
+	.action-title { font-size: 13px; font-weight: 800; color: #291944; }
+	.action-desc { font-size: 9px; line-height: 1.35; color: #8B8298; text-align: center; }
+	.unlock-banner { margin: 12px 14px 0; padding: 12px 14px; display: flex; flex-direction: row; align-items: center; gap: 12px; border-radius: 18px; background: rgba(255, 255, 255, 0.9); border: 1px solid #E8DCF8; box-shadow: 0 8px 18px rgba(97, 64, 167, 0.06); }
+	.unlock-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+	.unlock-title { font-size: 13px; font-weight: 800; color: #291944; }
+	.unlock-desc { font-size: 10px; line-height: 1.45; color: #8B8298; }
+	.unlock-button { width: 86px; height: 34px; margin: 0; border-radius: 11px; background: #7450C8; color: #FFFFFF; font-size: 11px; font-weight: 800; }
+	.unlock-button::after { border: none; }
+	.unlock-button:disabled { opacity: 0.55; }
+	.content { flex: 1; min-height: 0; padding: 12px 14px 12px; box-sizing: border-box; }
+	.message-list { display: flex; flex-direction: column; gap: 10px; }
+	.message-row { display: flex; flex-direction: row; align-items: flex-end; gap: 8px; }
+	.message-row.mine { flex-direction: row-reverse; }
+	.message-avatar { width: 36px; height: 36px; border-radius: 12px; flex-shrink: 0; background: #EEE8FF; }
+	.message-bubble { max-width: 72%; display: flex; flex-direction: column; gap: 6px; padding: 11px 12px; border-radius: 16px; background: #FFFFFF; border: 1px solid #E7DCF7; box-shadow: 0 8px 20px rgba(75, 52, 124, 0.05); }
+	.message-row.mine .message-bubble { background: #F0E9FF; border-color: #E0D1FA; }
+	.message-bubble.system { align-self: center; max-width: 86%; background: #FFF8EC; border-color: #F0DFC1; }
+	.message-bubble.image { padding: 10px; }
+	.message-text { font-size: 14px; line-height: 1.6; color: #2E2144; }
+	.message-time { font-size: 9px; color: #9A8FAD; }
+	.message-image { width: 100%; min-height: 150px; max-height: 220px; border-radius: 12px; background: #EDE8F7; }
+	.empty-state { min-height: 300px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+	.empty-icon { width: 58px; height: 58px; display: flex; align-items: center; justify-content: center; border-radius: 20px; background: #EEE8FF; color: #7B59CB; font-size: 26px; }
+	.empty-title { font-size: 16px; font-weight: 800; color: #352549; }
+	.empty-desc { max-width: 240px; text-align: center; font-size: 12px; line-height: 1.5; color: #8F849C; }
+	.scroll-anchor { width: 1px; height: 1px; }
+	.composer { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, 0.96); border-top: 1px solid #E7DCF4; }
+	.composer-input { flex: 1; min-width: 0; height: 42px; padding: 0 13px; border-radius: 14px; background: #FBFAFD; border: 1px solid #DCD3EB; color: #2E2144; font-size: 14px; }
+	.composer-send { width: 82px; height: 42px; margin: 0; border-radius: 14px; background: #7450C8; color: #FFFFFF; font-size: 13px; font-weight: 800; }
+	.composer-send::after { border: none; }
+	.composer-send:disabled { opacity: 0.45; }
+</style>

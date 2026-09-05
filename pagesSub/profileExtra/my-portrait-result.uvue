@@ -1,0 +1,328 @@
+<template>
+	<view class="mpr-page">
+		<view class="mpr-nav">
+			<view class="mpr-nav-back" @tap="navBack"><text class="mpr-nav-back-text">←</text></view>
+			<text class="mpr-nav-title">{{ subjectLabel }}</text>
+			<view class="mpr-nav-side"></view>
+		</view>
+
+		<view v-if="loading" class="mpr-state">
+			<view class="mpr-loading-dot"></view>
+			<text class="mpr-state-title">{{ stateMessage }}</text>
+		</view>
+
+		<view v-else-if="errorMessage != ''" class="mpr-state">
+			<text class="mpr-state-title">暂时没有铺开这份成稿</text>
+			<text class="mpr-state-copy">{{ errorMessage }}</text>
+			<view class="mpr-btn" @tap="retryLoad"><text class="mpr-btn-text">重试</text></view>
+		</view>
+
+		<!-- 发布前：只展示当前草稿对应的精确预览。 -->
+		<view v-else-if="!publishedMode && previewContent != ''" class="mpr-body">
+			<view class="mpr-paper">
+				<text class="mpr-kicker">成稿预览 · 尚未发布</text>
+				<text class="mpr-preview-content">{{ previewContent }}</text>
+			</view>
+
+			<view class="mpr-actions">
+				<view class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': publishing }" @tap="onConfirmPublish">
+					<text class="mpr-btn-primary-text">{{ publishing ? '正在发布…' : '发布这份成稿' }}</text>
+				</view>
+				<view class="mpr-btn" @tap="onContinueChat"><text class="mpr-btn-text">继续聊聊完善</text></view>
+				<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">返回墨相档案</text></view>
+			</view>
+			<text class="mpr-hint">发布的是你此刻看到的这一版。发布完成后，AI 会整理完整画像并交给你确认。</text>
+		</view>
+
+		<!-- 已发布但叙事 Worker 尚未生成完成。 -->
+		<view v-else-if="publishedMode && !narrativeReady" class="mpr-state">
+			<text class="mpr-state-title">正在写下完整画像</text>
+			<text class="mpr-state-copy">成稿已经发布，完整理解仍在后台整理。稍后刷新即可，不需要重复发布。</text>
+			<view class="mpr-btn mpr-btn-primary" @tap="retryLoad">
+				<text class="mpr-btn-primary-text">刷新画像</text>
+			</view>
+			<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">先返回档案</text></view>
+		</view>
+
+		<!-- 完整画像：pending_confirmation / confirmed / 历史 published。 -->
+		<scroll-view v-else-if="narrativeReady" scroll-y class="mpr-scroll" enhanced :show-scrollbar="false">
+			<view class="mpr-body">
+				<view class="mpr-paper">
+					<text class="mpr-kicker">{{ narrativeStatusLabel }}</text>
+					<text v-if="narrative.persona_title != null && narrative.persona_title != ''" class="mpr-title">{{ narrative.persona_title }}</text>
+
+					<view v-if="narrative.persona_tags != null && narrative.persona_tags.length > 0" class="mpr-tags">
+						<text v-for="tag in narrative.persona_tags" :key="tag" class="mpr-tag">{{ tag }}</text>
+					</view>
+
+					<view v-if="narrative.insight != null && narrative.insight != ''" class="mpr-section">
+						<text class="mpr-section-label">AI 的理解</text>
+						<text class="mpr-section-copy mpr-serif">{{ narrative.insight }}</text>
+					</view>
+
+					<view v-if="narrative.dimensions != null && narrative.dimensions.length > 0" class="mpr-section">
+						<text class="mpr-section-label">画像结构</text>
+						<view v-for="dim in narrative.dimensions" :key="dim.key" class="mpr-dimension">
+							<text class="mpr-dimension-title">{{ dim.title }}</text>
+							<text class="mpr-dimension-copy">{{ dim.summary }}</text>
+						</view>
+					</view>
+
+					<view v-if="narrative.ideal_weights != null && narrative.ideal_weights.length > 0" class="mpr-section">
+						<text class="mpr-section-label">你在意的配比</text>
+						<view v-for="weight in narrative.ideal_weights" :key="weight.key" class="mpr-weight">
+							<text class="mpr-weight-label">{{ weight.label }}</text>
+							<view class="mpr-weight-track"><view class="mpr-weight-fill" :style="{ width: weight.percent + '%' }"></view></view>
+							<text class="mpr-weight-value">{{ weight.percent }}%</text>
+						</view>
+					</view>
+
+					<view v-if="narrative.recent_change != null" class="mpr-section mpr-change">
+						<text class="mpr-section-label">最近的一笔</text>
+						<text class="mpr-dimension-title">{{ narrative.recent_change.summary }}</text>
+						<text class="mpr-dimension-copy">{{ narrative.recent_change.observation }}</text>
+					</view>
+
+					<view v-if="narrative.history_observations != null && narrative.history_observations.length > 0" class="mpr-section">
+						<text class="mpr-section-label">一路留下的变化</text>
+						<view v-for="item in narrative.history_observations" :key="item.revision_id" class="mpr-history">
+							<text class="mpr-dimension-copy">{{ item.observation }}</text>
+						</view>
+					</view>
+
+					<view v-if="narrative.conclusion != null && narrative.conclusion != ''" class="mpr-section mpr-conclusion">
+						<text class="mpr-section-label">收束</text>
+						<text class="mpr-section-copy mpr-serif">{{ narrative.conclusion }}</text>
+					</view>
+				</view>
+
+				<view class="mpr-actions">
+					<view v-if="awaitingNarrativeConfirmation" class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': confirming }" @tap="onConfirmNarrative">
+						<text class="mpr-btn-primary-text">{{ confirming ? '正在确认…' : '这份画像符合我' }}</text>
+					</view>
+					<view class="mpr-btn" @tap="onContinueChat"><text class="mpr-btn-text">继续聊聊完善</text></view>
+					<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">返回墨相档案</text></view>
+				</view>
+				<text v-if="awaitingNarrativeConfirmation" class="mpr-hint">确认前请先完整看一遍。确认只表示这份文字符合你的自我理解，不代表平台替你作出事实认证。</text>
+			</view>
+		</scroll-view>
+
+		<view v-else class="mpr-state">
+			<text class="mpr-state-title">还没有可整理的{{ subjectLabel }}</text>
+			<view class="mpr-btn" @tap="onContinueChat"><text class="mpr-btn-text">去聊一聊</text></view>
+		</view>
+	</view>
+</template>
+
+<script lang="uts">
+	import { createProfilePreview, getProfilePreview, type ProfilePreviewRecord } from '@/api/ai-moxiang.uts'
+	import { publishProfileDraft, pollTaskUntilTerminal, getPortraitNarrative, confirmPortraitNarrative } from '@/api/ai-profile.uts'
+
+	export default {
+		data() {
+			return {
+				subject: 'personal',
+				subjectLabel: '我的墨相',
+				draftId: '',
+				expectedRevision: 0,
+				previewId: '',
+				previewContent: '',
+				publishedMode: false,
+				narrative: null as any,
+				loading: true,
+				publishing: false,
+				confirming: false,
+				pageAlive: true,
+				stateMessage: '正在整理成稿…',
+				errorMessage: ''
+			}
+		},
+		computed: {
+			narrativeReady(): boolean {
+				if (this.narrative == null) return false
+				const status = String(this.narrative.status ?? '')
+				return status == 'pending_confirmation' || status == 'confirmed' || status == 'published'
+			},
+			awaitingNarrativeConfirmation(): boolean {
+				return this.narrative != null && String(this.narrative.status ?? '') == 'pending_confirmation'
+			},
+			narrativeStatusLabel(): string {
+				if (this.awaitingNarrativeConfirmation) return '完整画像 · 待你确认'
+				return '完整画像 · 已确认'
+			}
+		},
+		onLoad(query: any) {
+			const q = query || {}
+			this.subject = String(q.subject ?? 'personal') == 'ideal_partner' ? 'ideal_partner' : 'personal'
+			this.subjectLabel = this.subject == 'ideal_partner' ? '愿遇之相' : '我的墨相'
+			this.draftId = String(q.draft_id ?? '')
+			this.expectedRevision = Number(q.expected_revision ?? 0)
+			this.previewId = String(q.preview_id ?? '')
+			this.publishedMode = this.draftId == '' && this.previewId == ''
+			if (this.publishedMode) this.loadNarrative()
+			else this.loadPreview()
+		},
+		onUnload() {
+			this.pageAlive = false
+		},
+		methods: {
+			navBack() {
+				uni.navigateBack({ delta: 1, fail: () => { uni.switchTab({ url: '/pages/profile/profile' }) } })
+			},
+			async loadPreview() {
+				this.loading = true
+				this.stateMessage = '正在生成成稿预览…'
+				this.errorMessage = ''
+				try {
+					let preview: ProfilePreviewRecord | null = null
+					if (this.previewId != '') {
+						preview = await getProfilePreview(this.previewId)
+					} else if (this.draftId != '' && this.expectedRevision >= 0) {
+						preview = await createProfilePreview(this.draftId, this.expectedRevision)
+						this.previewId = preview.previewId
+					} else {
+						throw new Error('缺少草稿或预览参数')
+					}
+					if (preview.status == 'confirmed') {
+						this.publishedMode = true
+						await this.loadNarrative(false)
+						return
+					}
+					if (preview.status != 'active') throw new Error('预览已经失效，请返回墨相师重新整理')
+					this.draftId = preview.draftId
+					this.expectedRevision = preview.expectedRevision
+					this.previewContent = preview.content
+				} catch (e: any) {
+					this.errorMessage = '加载预览失败：' + (e?.message ?? String(e))
+				} finally {
+					this.loading = false
+				}
+			},
+			async loadNarrative(showLoading: boolean = true) {
+				if (showLoading) this.loading = true
+				this.stateMessage = '正在读取完整画像…'
+				this.errorMessage = ''
+				try {
+					const res = await getPortraitNarrative(this.subject)
+					if (!res.success || res.data == null) throw new Error(String(res.message ?? '画像读取失败'))
+					this.narrative = res.data
+				} catch (e: any) {
+					this.errorMessage = '读取完整画像失败：' + (e?.message ?? String(e))
+				} finally {
+					this.loading = false
+				}
+			},
+			retryLoad() {
+				if (this.publishedMode) this.loadNarrative()
+				else this.loadPreview()
+			},
+			onConfirmPublish() {
+				if (this.publishing) return
+				uni.showModal({
+					title: '确认发布',
+					content: '将发布你现在看到的这一版，发布后仍可继续完善并留下新版本。',
+					success: (res: any) => {
+						if (res.confirm) this.publishPreview()
+					}
+				})
+			},
+			async publishPreview() {
+				if (this.draftId == '' || this.previewId == '' || this.publishing) return
+				this.publishing = true
+				this.loading = true
+				this.stateMessage = '正在发布这份成稿…'
+				this.errorMessage = ''
+				try {
+					const res = await publishProfileDraft(this.draftId, this.expectedRevision, this.previewId)
+					if (!res.success || res.data == null) throw new Error(String(res.message ?? '发布失败'))
+					const taskId = String(res.data.task_id ?? '')
+					if (taskId != '') {
+						const task = await pollTaskUntilTerminal(taskId, 40, () => this.pageAlive)
+						if (!task.done || task.status != 'succeeded') throw new Error(task.error != '' ? task.error : '发布任务未完成')
+					}
+					// 发布任务完成后先切换为只读模式，后续叙事失败也不能诱导用户重复发布。
+					this.publishedMode = true
+					this.previewContent = ''
+					this.stateMessage = '正在写下完整画像…'
+					const narrativeTaskId = String(res.data.narrative_task_id ?? '')
+					if (narrativeTaskId != '') {
+						const narrativeTask = await pollTaskUntilTerminal(narrativeTaskId, 40, () => this.pageAlive)
+						if (!narrativeTask.done || narrativeTask.status != 'succeeded') {
+							this.narrative = { status: 'pending' }
+							uni.showToast({ title: '成稿已发布，完整画像仍在整理', icon: 'none' })
+							return
+						}
+					}
+					await this.loadNarrative(false)
+				} catch (e: any) {
+					this.errorMessage = '发布失败：' + (e?.message ?? String(e))
+				} finally {
+					this.loading = false
+					this.publishing = false
+				}
+			},
+			async onConfirmNarrative() {
+				if (!this.awaitingNarrativeConfirmation || this.confirming) return
+				this.confirming = true
+				try {
+					const res = await confirmPortraitNarrative(this.subject)
+					if (!res.success || res.data == null) throw new Error(String(res.message ?? '确认失败'))
+					// confirm 响应为精简结构；重新 GET，保留 dimensions/conclusion 等完整字段。
+					await this.loadNarrative(false)
+					uni.showToast({ title: '画像已确认', icon: 'none' })
+				} catch (e: any) {
+					uni.showToast({ title: '确认失败，请稍后重试', icon: 'none' })
+				} finally {
+					this.confirming = false
+				}
+			},
+			onContinueChat() {
+				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-master?subject=' + this.subject })
+			},
+			onBackToArchive() {
+				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-archive' })
+			}
+		}
+	}
+</script>
+
+<style>
+	.mpr-page { min-height: 100vh; background: var(--canvas); color: var(--ink); }
+	.mpr-nav { display: flex; align-items: center; padding: 16px 16px 12px; }
+	.mpr-nav-back, .mpr-nav-side { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+	.mpr-nav-back-text { font-size: 24px; color: var(--ink); }
+	.mpr-nav-title { flex: 1; text-align: center; font-size: 17px; color: var(--ink); font-weight: 700; }
+	.mpr-state { padding: 96px 24px 48px; display: flex; flex-direction: column; align-items: center; }
+	.mpr-loading-dot { width: 12px; height: 12px; border-radius: 999px; background: var(--accent); margin-bottom: 16px; }
+	.mpr-state-title { font-size: 18px; color: var(--ink); font-weight: 700; text-align: center; }
+	.mpr-state-copy { font-size: 13px; color: var(--ink2); line-height: 1.7; text-align: center; margin-top: 10px; }
+	.mpr-scroll { height: calc(100vh - 72px); }
+	.mpr-body { padding: 12px 16px 48px; }
+	.mpr-paper { background: var(--paper); padding: 28px 22px; border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-sm); }
+	.mpr-kicker { display: block; font-size: 11px; color: var(--accent2); font-weight: 700; letter-spacing: 0.08em; text-align: center; }
+	.mpr-title { display: block; margin-top: 12px; font-size: 26px; color: var(--ink); font-weight: 700; font-family: var(--serif); text-align: center; }
+	.mpr-preview-content { display: block; margin-top: 18px; font-size: 16px; color: var(--ink); line-height: 1.9; white-space: pre-wrap; font-family: var(--serif); }
+	.mpr-tags { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+	.mpr-tag { padding: 5px 10px; border-radius: 999px; background: var(--accent-bg); color: var(--accent2); font-size: 12px; }
+	.mpr-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+	.mpr-section-label { display: block; font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: 0.1em; }
+	.mpr-section-copy { display: block; margin-top: 8px; font-size: 15px; color: var(--ink); line-height: 1.9; }
+	.mpr-serif { font-family: var(--serif); }
+	.mpr-dimension, .mpr-history { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+	.mpr-dimension-title { display: block; font-size: 14px; color: var(--ink); font-weight: 700; }
+	.mpr-dimension-copy { display: block; font-size: 13px; color: var(--ink2); line-height: 1.7; margin-top: 4px; }
+	.mpr-weight { display: flex; flex-direction: row; align-items: center; gap: 8px; margin-top: 12px; }
+	.mpr-weight-label { width: 72px; font-size: 12px; color: var(--ink2); }
+	.mpr-weight-track { flex: 1; height: 7px; border-radius: 999px; background: var(--warm); overflow: hidden; }
+	.mpr-weight-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+	.mpr-weight-value { width: 36px; text-align: right; font-size: 12px; color: var(--ink2); }
+	.mpr-change, .mpr-conclusion { padding: 18px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+	.mpr-actions { margin-top: 24px; }
+	.mpr-btn { margin-top: 12px; min-height: 46px; padding: 12px 18px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
+	.mpr-btn-primary { background: var(--accent2); border-color: var(--accent2); }
+	.mpr-btn-disabled { opacity: 0.55; }
+	.mpr-btn-ghost { background: transparent; }
+	.mpr-btn-text { font-size: 14px; color: var(--ink2); font-weight: 600; }
+	.mpr-btn-primary-text { font-size: 14px; color: var(--text-invert); font-weight: 700; }
+	.mpr-hint { display: block; margin-top: 18px; font-size: 11px; color: var(--muted); line-height: 1.7; text-align: center; }
+</style>

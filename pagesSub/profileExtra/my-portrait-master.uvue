@@ -3,16 +3,78 @@
 		<!-- 导航栏 -->
 		<view class="mm-nav">
 			<view class="mm-nav-back" @tap="navBack">
-				<text class="mm-nav-back-text">‹</text>
+				<text class="mm-nav-back-text">✕</text>
 			</view>
 			<text class="mm-nav-title">墨相师</text>
 			<view class="mm-nav-side"></view>
 		</view>
 
+		<!-- Phase 2 P2-02/P2-04 —— 双阶段卡(墨相师首页,no buildMode 时展示)。
+			移除顶部主体 Tab;每张卡只打开自己的独立会话。 -->
+		<view v-if="!buildMode && stateResponse != null" class="mm-journey-cards">
+			<view class="mm-stage-card" :class="stageCardClass('personal')" @tap="onEnterSubject('personal')">
+				<text class="mm-stage-card-title">我的墨相</text>
+				<text class="mm-stage-card-sub">{{ stageCardSub('personal') }}</text>
+				<text v-if="stageCardPercent('personal') > 0" class="mm-stage-card-pct">{{ stageCardPercent('personal') }}%</text>
+				<view v-if="stageHasPublished('personal')" class="mm-stage-card-btn" @tap.stop="goPortrait('personal')">
+					<text class="mm-stage-card-btn-text">查看成稿</text>
+				</view>
+				<view v-else-if="stageHasUnfinishedDraft('personal')" class="mm-stage-card-btn" @tap.stop="goPortrait('personal')">
+					<text class="mm-stage-card-btn-text">继续整理</text>
+				</view>
+			</view>
+			<view class="mm-stage-card" :class="stageCardClass('ideal_partner')" @tap="onEnterSubject('ideal_partner')">
+				<text class="mm-stage-card-title">愿遇之相</text>
+				<text class="mm-stage-card-sub">{{ stageCardSub('ideal_partner') }}</text>
+				<text v-if="stageCardPercent('ideal_partner') > 0" class="mm-stage-card-pct">{{ stageCardPercent('ideal_partner') }}%</text>
+				<view v-if="stageHasPublished('ideal_partner')" class="mm-stage-card-btn" @tap.stop="goPortrait('ideal_partner')">
+					<text class="mm-stage-card-btn-text">查看成稿</text>
+				</view>
+				<view v-else-if="stageHasUnfinishedDraft('ideal_partner')" class="mm-stage-card-btn" @tap.stop="goPortrait('ideal_partner')">
+					<text class="mm-stage-card-btn-text">继续整理</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 兼容旧入口:进入某主体后,展示 MoxiangEntryState(授权/首次/恢复)。
+			仅在用户已点击双阶段卡、但 buildMode 仍未就绪时显示。 -->
+		<view v-if="!buildMode && stateResponse != null && pendingSubject != ''" class="mm-entry-wrap">
+			<MoxiangEntryState :state="stateResponse" :subject="pendingSubject" :errorMessage="stateError" @grant-consent="grantConsentFlow" @start-chat="startChatFlow" @continue-chat="continueChatFlow" @retry="retryConnect" />
+			<view class="mm-entry-back" @tap="onBackToCards">
+				<text class="mm-entry-back-text">← 返回两幅画像</text>
+			</view>
+		</view>
+
+		<!-- P1-D 收尾：网络/授权错误兜底(state 拉取失败但用户已 connected 时,允许重试回到 entry) -->
+		<view v-if="!buildMode && stateResponse == null && stateError != ''" class="mm-entry-wrap">
+			<view class="mm-state">
+				<text class="mm-state-text">暂时连不上{{ masterRoleName }}</text>
+				<text class="mm-state-sub">{{ stateError }}</text>
+				<view class="mm-state-btn" @tap="retryConnect">
+					<text class="mm-state-btn-text">重试</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 六维理解进度由旅程 WebSocket 实时驱动。 -->
+		<MoxiangProgressPanel
+			v-if="buildMode && currentSubjectSummary != null"
+			:metrics="currentSubjectSummary"
+			:livePercent="liveProgressPercent"
+			:extractionStatus="currentExtractionStatus"
+		/>
+		<!-- 邀请卡仅在服务端声明的 building 阶段出现，且始终绑定其主体。 -->
+		<MoxiangBuildInviteCard
+			v-if="buildMode && inviteVisibleInStage && currentPendingInvite != null"
+			:invite="currentPendingInvite"
+			:busy="inviteBusy"
+			@accept="acceptInvite"
+			@snooze="snoozeInvite"
+		/>
 		<!-- 角色形象区 -->
 		<view class="mm-hero" :class="'mm-hero-' + masterState">
 			<MoxiangMasterAvatar :state="masterState" />
-			<text class="mm-hero-name">墨相师</text>
+			<text class="mm-hero-name">{{ masterRoleName }}</text>
 			<text class="mm-hero-sub">{{ statusLabel }}</text>
 		</view>
 
@@ -23,7 +85,7 @@
 				<view class="mm-steam-dot mm-steam-dot-2"></view>
 				<view class="mm-steam-dot mm-steam-dot-3"></view>
 			</view>
-			<text class="mm-state-text">正在连接墨相师</text>
+			<text class="mm-state-text">正在连接{{ masterRoleName }}</text>
 		</view>
 
 		<!-- 错误/降级 -->
@@ -33,13 +95,20 @@
 			<view class="mm-state-btn" @tap="retryConnect">
 				<text class="mm-state-btn-text">重试</text>
 			</view>
+			<view class="mm-state-link" @tap="goFallbackBuild">
+				<text class="mm-state-link-text">改用备用题库 / 语音流程</text>
+			</view>
 		</view>
 
 		<!-- 对话主体 -->
-		<view v-else class="mm-body">
+		<view v-else-if="sessionStarted" class="mm-body">
 			<!-- 消息流 -->
 			<scroll-view scroll-y class="mm-flow" enhanced :show-scrollbar="false" :scroll-into-view="scrollAnchor" :scroll-with-animation="true">
-				<view v-for="msg in messages" :key="msg.id" :id="'msg-' + msg.id">
+				<view v-if="visibleMessages.length == 0" class="mm-empty">
+					<text class="mm-empty-title">从一句近况开始</text>
+					<text class="mm-empty-sub">说说最近在想什么，{{ masterRoleName }}会帮你慢慢整理。</text>
+				</view>
+				<view v-for="msg in visibleMessages" :key="msg.id" :id="'msg-' + msg.id">
 					<!-- 墨相师消息(左) -->
 					<view v-if="msg.role == 'master'" class="mm-msg mm-msg-left">
 						<view class="mm-msg-avatar">
@@ -71,6 +140,50 @@
 							<view class="mm-dot"></view>
 						</view>
 					</view>
+
+					<!-- 确认卡片(建构模式) -->
+					<view v-if="msg.role == 'card' && msg.card != null" class="mm-msg mm-msg-left">
+						<view class="mm-msg-avatar">
+							<MoxiangMasterAvatar state="thinking" />
+						</view>
+						<view class="mm-card">
+							<view class="mm-card-head" @tap="toggleCard(msg)">
+								<text class="mm-card-title">我想和你确认一件小事</text>
+								<text class="mm-card-fold">{{ cardProgressLabel(msg) }}</text>
+							</view>
+							<view v-if="msg.collapsed != true" class="mm-card-list">
+								<view v-for="item in msg.card.items" :key="item.fieldKey">
+									<view v-if="item.fieldKey == currentCardItemKey(msg)" class="mm-card-item">
+										<text v-if="item.category != ''" class="mm-card-cat">{{ categoryLabel(item.category) }}</text>
+										<text v-if="item.content != ''" class="mm-card-content">{{ item.content }}</text>
+										<text v-if="item.displayValue != ''" class="mm-card-value">{{ cardValueText(item) }}</text>
+										<view class="mm-card-actions">
+											<view class="mm-card-btn mm-card-btn-primary" :class="{ 'mm-card-btn-disabled': msg.confirming == true }" @tap="confirmCardItem(msg)">
+												<text class="mm-card-btn-text-primary">确认这一条</text>
+											</view>
+											<view class="mm-card-btn" @tap="startEdit(item)">
+												<text class="mm-card-btn-text">需要修改</text>
+											</view>
+											<view class="mm-card-btn" @tap="deleteItem(msg.card, item)">
+												<text class="mm-card-btn-text">删除</text>
+											</view>
+										</view>
+										<view v-if="editingKey == item.fieldKey" class="mm-card-edit">
+											<textarea class="mm-card-textarea" v-model="editText" :maxlength="200" placeholder="改成…" />
+											<view class="mm-card-actions">
+												<view class="mm-card-btn mm-card-btn-primary" @tap="submitEdit(msg.card, item)">
+													<text class="mm-card-btn-text-primary">保存修改</text>
+												</view>
+												<view class="mm-card-btn" @tap="cancelEdit">
+													<text class="mm-card-btn-text">取消</text>
+												</view>
+											</view>
+										</view>
+									</view>
+								</view>
+							</view>
+						</view>
+					</view>
 				</view>
 				<view class="mm-flow-bottom"></view>
 			</scroll-view>
@@ -82,7 +195,7 @@
 
 			<!-- 语音模式 TTS 播报提示 -->
 			<view v-if="lastTTSUrl != ''" class="mm-tts-bar">
-				<text class="mm-tts-label">墨相师说完了</text>
+				<text class="mm-tts-label">{{ masterRoleName }}说完了</text>
 				<view class="mm-tts-replay" @tap="replayTTS">
 					<text class="mm-tts-replay-text">再听一遍</text>
 				</view>
@@ -126,7 +239,7 @@
 						:class="{ 'mm-voice-active': masterState == 'listening' }"
 						@tap="toggleVoice"
 					>
-						<text class="mm-voice-btn-text">{{ masterState == 'listening' ? '说完' : '说话' }}</text>
+						<text class="mm-voice-btn-text">{{ voiceActionLabel }}</text>
 					</view>
 					<view
 						v-if="masterState == 'idle' && lastReplyText != ''"
@@ -138,17 +251,31 @@
 				</view>
 			</view>
 		</view>
+		<XsaMoxiangTrace :trace="devMoxiangTrace" />
 	</view>
 </template>
 
 <script setup lang="uts">
 import MoxiangMasterAvatar from '@/components/MoxiangMasterAvatar.uvue'
-import { MasterWS } from '@/api/voice-master-ws.uts'
+import MoxiangEntryState from '@/components/moxiang/MoxiangEntryState.uvue'
+import MoxiangProgressPanel from '@/components/moxiang/MoxiangProgressPanel.uvue'
+import MoxiangBuildInviteCard from '@/components/moxiang/MoxiangBuildInviteCard.uvue'
+import XsaMoxiangTrace from '@/components/XsaMoxiangTrace.uvue'
+import { MasterWS, MASTER_ROLE_NAME, ConfirmCardPayload, ConfirmCardItem, BuildInvitePayload, JourneyStage, JourneyProgress, ExtractionStatus } from '@/api/voice-master-ws.uts'
 import { resolveMediaUrl } from '@/api/config.uts'
+import { ProfileSubject, getProfileDraft, patchProfileDraft, fieldAction, getAiConsents, grantProfileTextConsent } from '@/api/ai-profile.uts'
+import { getMoxiangState, getSessionTurns, getMoxiangArchive, MoxiangStateResponse, MoxiangSubjectSummary, MoxiangTurn, MoxiangArchiveResponse, ArchiveSubject } from '@/api/ai-moxiang.uts'
+import { displayFieldValue } from '@/utils/profile-field-display.uts'
+import { categoryLabel } from '@/utils/moxiang-dimension.uts'
+import { loadMoxiangTrace } from '@/utils/moxiangTrace.uts'
 
 // ===== 状态 =====
+// 产品能力仍叫“墨相”，对话中的 AI 角色使用独立身份名，避免把 LLM
+// provider/model 或能力名误当成用户正在交流的对象。
+const masterRoleName = MASTER_ROLE_NAME
 const connecting = ref(true)
 const connectError = ref('')
+const sessionStartFailed = ref(false)
 const masterState = ref('idle')  // idle / thinking / listening / speaking
 const inputMode = ref('text')    // text / voice
 const inputText = ref('')
@@ -158,6 +285,173 @@ const lastTTSUrl = ref('')
 const lastTTSDuration = ref(0)
 const scrollAnchor = ref('')
 const messages = ref([] as any[])
+
+// ===== 建构模式状态 =====
+const buildMode = ref(false)
+const currentSubject = ref<ProfileSubject>('personal')
+// Phase 2 P2-02：pendingSubject 记录用户从双阶段卡选择但 buildMode 还没就绪的主体;
+// buildMode=true 后由 currentSubject 接管。空字符串表示用户还在双阶段卡。
+const pendingSubject = ref<ProfileSubject | ''>('')
+const personalExtractionStatus = ref('')
+const idealPartnerExtractionStatus = ref('')
+const personalLiveProgress = ref<number | null>(null)
+const idealPartnerLiveProgress = ref<number | null>(null)
+// 服务端 readiness 事件可能在重连时重放；按主体记忆本次页面生命周期内
+// 是否已经询问过，避免同一门槛重复弹窗。
+const buildPromptShown = ref<{ personal: boolean; ideal_partner: boolean }>({
+	personal: false,
+	ideal_partner: false
+})
+let personalDraft: ConfirmCardPayload | null = null
+let idealPartnerDraft: ConfirmCardPayload | null = null
+let personalCard: ConfirmCardPayload | null = null
+let idealPartnerCard: ConfirmCardPayload | null = null
+const visibleMessages = computed((): any[] => {
+	const subject = currentSubject.value
+	return messages.value.filter((msg: any) => msg.subject == subject)
+})
+
+// ===== Phase 1 Contract v1.1 P1-D：state / history / build_invite =====
+const stateResponse = ref<MoxiangStateResponse | null>(null)
+const stateError = ref('')
+// 档案聚合：入口卡「查看成稿 / 继续整理」按钮的数据源。发布后活动会话关闭、
+// state 无 session，archive 是唯一能同时看到 currentRevision 与 activeDraft
+// 的只读聚合；拉取失败只影响成稿入口，不阻塞对话。
+const portraitArchive = ref<MoxiangArchiveResponse | null>(null)
+// 组件用 camelCase 字段；WS payload 本身是 snake_case，这里适配为组件 shape。
+interface InviteViewItem {
+	profileDimension: string
+	content: string
+	confidence: number
+}
+interface InviteView {
+	inviteId: string
+	subject: ProfileSubject
+	journeyStage: JourneyStage
+	candidateCount: number
+	dimensionCount: number
+	effectiveTurnCount: number
+	summaryItems: InviteViewItem[]
+}
+const pendingInvite = ref<InviteView | null>(null)
+const inviteBusy = ref(false)
+const sessionStarted = ref(false)
+const restoredTurnIds = ref<Set<string>>(new Set())
+// One-time openings are identified by subject + server session + text so a
+// stale/replayed event is deduped while an explicit new session can welcome
+// the user again.
+const openingMessageKeys = new Set<string>()
+const showEntry = computed((): boolean => stateResponse.value == null)
+const currentSubjectSummary = computed((): MoxiangSubjectSummary | null => {
+	if (stateResponse.value == null) return null
+	return currentSubject.value == 'ideal_partner'
+		? stateResponse.value.idealPartner
+		: stateResponse.value.personal
+})
+// P1-D 收尾：build_invite 仅在 journey_stage=building 时展示，避免误触发。
+const currentJourneyStage = computed((): string => {
+	const summary = currentSubjectSummary.value
+	if (summary == null) return 'chatting'
+	return summary.journeyStage
+})
+const inviteVisibleInStage = computed((): boolean => {
+	return currentJourneyStage.value == 'building'
+})
+const currentPendingInvite = computed((): InviteView | null => {
+	const invite = pendingInvite.value
+	if (invite == null || invite.subject != currentSubject.value) return null
+	return invite
+})
+
+/**
+ * 只负责询问并启动建档；旅程邀请先接受后生成草稿卡，绝不自动发布。
+ * subject 在回调里再次校验，防止用户切换主体后误打开另一幅画像。
+ */
+function maybePromptBuild(subject: ProfileSubject, inviteId: string = '') {
+	if (buildPromptShown.value[subject]) return
+	if (subject != currentSubject.value) return
+	buildPromptShown.value[subject] = true
+	const title = subject == 'personal' ? '我的墨相可以开始构建了' : '愿遇之相可以开始构建了'
+	uni.showModal({
+		title,
+		content: '我们已经收集到足够内容。现在开始构建画像吗？构建后会先给你一份可审阅的预览，确认后才会发布。',
+		confirmText: '现在构建',
+		cancelText: '稍后再说',
+		success: (res: any) => {
+			if (res.confirm && subject == currentSubject.value) {
+				// 旅程门槛由 build_invite 权威确认；先接受邀请生成草稿，
+				// 再由服务端推送 confirm_card，不能把候选直接当成已发布画像。
+				if (inviteId == '') return
+				if (ws == null || !ws.isConnected()) {
+					inviteBusy.value = false
+					uni.showToast({ title: '整理邀请尚未连接，请稍后重试', icon: 'none' })
+					return
+				}
+				inviteBusy.value = true
+				ws.acceptBuildInvite(subject, inviteId)
+			}
+		}
+	})
+}
+
+function syncGateFromState(subject: ProfileSubject) {
+	const response = stateResponse.value
+	if (response == null) return
+	const summary = subject == 'ideal_partner' ? response.idealPartner : response.personal
+	const inviteId = String(summary.pendingBuildInviteId ?? '')
+	if (summary.journeyStage == 'building' && inviteId != '' && ws != null && ws.isConnected()) {
+		maybePromptBuild(subject, inviteId)
+	}
+}
+
+function draftBySubject(subject: ProfileSubject): ConfirmCardPayload | null {
+	return subject == 'personal' ? personalDraft : idealPartnerDraft
+}
+
+function cardBySubject(subject: ProfileSubject): ConfirmCardPayload | null {
+	return subject == 'personal' ? personalCard : idealPartnerCard
+}
+
+function sessionIdForSubject(subject: ProfileSubject): string {
+	if (stateResponse.value == null) return ''
+	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+	if (summary.sessionId == null) return ''
+	return String(summary.sessionId)
+}
+
+function setSessionIdForSubject(subject: ProfileSubject, sessionId: string) {
+	if (sessionId == '' || stateResponse.value == null) return
+	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+	summary.sessionId = sessionId
+}
+
+function setDraftBySubject(subject: ProfileSubject, card: ConfirmCardPayload | null) {
+	if (subject == 'personal') personalDraft = card
+	else idealPartnerDraft = card
+}
+
+function setCardBySubject(subject: ProfileSubject, card: ConfirmCardPayload | null) {
+	if (subject == 'personal') personalCard = card
+	else idealPartnerCard = card
+}
+
+// 兼容既有测试命名，同时确保动作始终读取卡片自身 subject/revision。
+function draftState(subject: ProfileSubject): ConfirmCardPayload | null {
+	return draftBySubject(subject)
+}
+
+const currentExtractionStatus = computed((): string => {
+	return currentSubject.value == 'personal'
+		? personalExtractionStatus.value
+		: idealPartnerExtractionStatus.value
+})
+const liveProgressPercent = computed((): number | null => {
+	return currentSubject.value == 'personal'
+		? personalLiveProgress.value
+		: idealPartnerLiveProgress.value
+})
+const editingKey = ref('')
+const editText = ref('')
 
 let ws: MasterWS | null = null
 let recorderManager: any = null
@@ -175,14 +469,212 @@ const statusLabel = computed(() : string => {
 	return 'AI 引路人'
 })
 
+// Keep user-facing labels as plain computed strings so the mini-program
+// template never renders an intermediate boolean or expression value.
+const voiceActionLabel = computed(() : string => {
+	return masterState.value == 'listening' ? '说完' : '说话'
+})
+
+const stageLabel = computed(() : string => {
+	return currentSubject.value == 'personal' ? '正在认识你自己' : '正在聊你期待的关系'
+})
+
+// ===== Phase 2 P2-02/P2-04 双阶段卡(墨相师首页) =====
+function stageCardClass(subject: ProfileSubject): string {
+	if (stateResponse.value == null) return 'mm-stage-card-locked'
+	const isPartner = subject == 'ideal_partner'
+	const canStart = isPartner ? stateResponse.value.canStartIdealPartner : true
+	if (!canStart) return 'mm-stage-card-locked'
+	const summary = isPartner ? stateResponse.value.idealPartner : stateResponse.value.personal
+	if (summary == null) return 'mm-stage-card-locked'
+	// published → 已完成高亮;其他可点
+	if (summary.publishedRevisionId != null) return 'mm-stage-card-done'
+	return 'mm-stage-card-active'
+}
+
+function stageCardSub(subject: ProfileSubject): string {
+	if (stateResponse.value == null) return '加载中...'
+	const isPartner = subject == 'ideal_partner'
+	if (isPartner && !stateResponse.value.canStartIdealPartner) return '请先完成我的墨相'
+	const summary = isPartner ? stateResponse.value.idealPartner : stateResponse.value.personal
+	if (summary == null) return '还没有开始'
+	if (summary.publishedRevisionId != null) return '已发布'
+	if (summary.sessionId != null && summary.sessionId != '') return '继续完善'
+	return '开始聊聊'
+}
+
+function stageCardPercent(subject: ProfileSubject): number {
+	if (stateResponse.value == null) return 0
+	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+	if (summary == null) return 0
+	return Math.round(Number(summary.overallPercent ?? 0))
+}
+
+// ===== 入口卡成稿出口（发布后可见性修复）=====
+function stageArchiveBlock(subject: ProfileSubject): ArchiveSubject | null {
+	if (portraitArchive.value == null) return null
+	return subject == 'ideal_partner' ? portraitArchive.value.idealPartner : portraitArchive.value.personal
+}
+
+// 已发布：state 的 publishedRevisionId（B3 后无活动会话也可见）或档案 currentRevision。
+function stageHasPublished(subject: ProfileSubject): boolean {
+	if (stateResponse.value != null) {
+		const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+		if (summary != null && summary.publishedRevisionId != null) return true
+	}
+	const block = stageArchiveBlock(subject)
+	return block != null && block.currentRevision != null
+}
+
+// 有草稿/预览但没走完发布：给「继续整理」出口。
+function stageHasUnfinishedDraft(subject: ProfileSubject): boolean {
+	const block = stageArchiveBlock(subject)
+	if (block == null) return false
+	if (block.activeDraft != null) return true
+	return block.preview != null && block.preview.status == 'active'
+}
+
+async function loadPortraitArchive() {
+	try {
+		portraitArchive.value = await getMoxiangArchive()
+	} catch (e: any) {
+		// 静默：成稿入口按钮只是锦上添花，不能拖累对话主流程。
+	}
+}
+
 // ===== 连接 =====
 function connectWS() {
+	// A retry creates a fresh socket, but the local message stream belongs to the
+	// page/session and must survive the transport replacement.
+	if (ws != null) {
+		ws.disconnect()
+		ws = null
+	}
 	connecting.value = true
 	connectError.value = ''
+	sessionStartFailed.value = false
 	ws = new MasterWS({
-		onSessionReady: () => {
+		onSubjectChanged: (subject: ProfileSubject, sessionId?: string) => {
+			currentSubject.value = subject
+			setSessionIdForSubject(subject, String(sessionId ?? ''))
+			removeVisibleCardMessages()
+			const cached = cardBySubject(subject)
+			if (cached != null) addCardMessage(cached)
+			// subject_switch only acknowledges the subject; restore the target
+			// session from its own state summary without mixing turn IDs/cards.
+			if (stateResponse.value != null) {
+				const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+				if (summary.sessionId != null && summary.sessionId != '') {
+					loadSessionHistory(summary.sessionId, null, subject)
+				}
+				const inviteId = String(summary.pendingBuildInviteId ?? '')
+				if (summary.journeyStage == 'building' && inviteId != '') {
+					maybePromptBuild(subject, inviteId)
+				}
+			}
+		},
+		onJourneyReady: (subject: ProfileSubject, sessionId: string, journeyStage: JourneyStage, resumed: boolean) => {
 			connecting.value = false
-			// 开场白已在 session_start 后由后端推送(ai_reply)
+			currentSubject.value = subject
+			sessionStarted.value = true
+			buildMode.value = true
+			if (sessionId != '') {
+				setSessionIdForSubject(subject, sessionId)
+				loadSessionHistory(sessionId, null, subject)
+			}
+			if (resumed && stateResponse.value != null) {
+				const bucket = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+				bucket.sessionId = sessionId
+				bucket.journeyStage = journeyStage
+			}
+			// REST state may restore a pending invite before the WS replays any
+			// candidate events. Once the socket is ready, ask exactly once and pass
+			// the server-owned invite id through the accept path.
+			if (stateResponse.value != null) {
+				const bucket = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+				const inviteId = String(bucket.pendingBuildInviteId ?? '')
+				if (journeyStage == 'building' && inviteId != '') {
+					maybePromptBuild(subject, inviteId)
+				}
+			}
+			if (resumed) {
+				// 服务端会在重连时重放确认卡；稍等其到达，仍缺失才走 REST 兜底。
+				setTimeout(() => {
+					restoreConfirmCardFromRest(subject)
+				}, 1500)
+			}
+		},
+		onExtractionStatus: (status: ExtractionStatus) => {
+			if (status.subject == 'personal') personalExtractionStatus.value = status.status
+			else idealPartnerExtractionStatus.value = status.status
+		},
+		 onJourneyProgress: (progress: JourneyProgress) => {
+			if (stateResponse.value == null) return
+			const summary = progress.subject == 'ideal_partner'
+				? stateResponse.value.idealPartner
+				: stateResponse.value.personal
+			if (progress.subject == 'personal') personalLiveProgress.value = progress.overallPercent
+			else idealPartnerLiveProgress.value = progress.overallPercent
+			summary.overallPercent = progress.overallPercent
+			for (const key in progress.dimensions) {
+				const incoming = progress.dimensions[key]
+				const dimension: any = (summary.dimensions as any)[key]
+				if (dimension != null) {
+					dimension.percent = incoming.percent
+					dimension.evidenceCount = incoming.evidenceCount
+				}
+			}
+		},
+		onBuildInvite: (invite: BuildInvitePayload) => {
+			// P1-D 收尾：journey_stage≠building 时静默忽略,
+			// 不在 chatting/ready/published 期间意外弹出邀请卡。
+			if (invite.journey_stage != 'building') {
+				return
+			}
+			const rawItems: any[] = Array.isArray(invite.summary_items) ? (invite.summary_items as any[]) : []
+			const items: InviteViewItem[] = rawItems.map((it: any) => ({
+				profileDimension: String(it.profile_dimension != null ? it.profile_dimension : ''),
+				content: String(it.content != null ? it.content : ''),
+				confidence: Number(it.confidence ?? 0)
+			}))
+			pendingInvite.value = {
+				inviteId: String(invite.invite_id != null ? invite.invite_id : ''),
+				subject: invite.subject,
+				journeyStage: invite.journey_stage,
+				candidateCount: Number(invite.candidate_count ?? 0),
+				dimensionCount: Number(invite.dimension_count ?? 0),
+				effectiveTurnCount: Number(invite.effective_turn_count ?? 0),
+				summaryItems: items
+			}
+			// build_invite 同时是服务端阶段切换的权威通知；同步本地摘要，
+			// 这样用户点“稍后再说”时邀请卡仍会留在当前对话中。
+			if (stateResponse.value != null) {
+				const bucket = invite.subject == 'ideal_partner'
+					? stateResponse.value.idealPartner
+					: stateResponse.value.personal
+				bucket.journeyStage = invite.journey_stage
+				bucket.pendingBuildInviteId = String(invite.invite_id ?? '')
+			}
+			// 门槛由服务端候选计数判定；当前主体收到邀请时先给出一次
+			// 明确的“是否构建”确认。取消后保留邀请卡，用户仍可稍后处理。
+			if (invite.subject == currentSubject.value) {
+				maybePromptBuild(invite.subject, String(invite.invite_id ?? ''))
+			}
+		},
+			onBuildInviteResolved: (resolution) => {
+			if (pendingInvite.value != null && pendingInvite.value.inviteId == resolution.invite_id) {
+				if (resolution.resolution == 'accepted') {
+					pendingInvite.value = null
+				} else {
+					pendingInvite.value = null
+				}
+				inviteBusy.value = false
+			}
+			if (stateResponse.value != null) {
+				const bucket = resolution.subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+				bucket.journeyStage = resolution.journey_stage
+				bucket.pendingBuildInviteId = null
+			}
 		},
 		onPartialTranscript: (text: string) => {
 			partialText.value = text
@@ -200,7 +692,8 @@ function connectWS() {
 				id: typingMsgId,
 				role: 'typing',
 				text: '',
-				canListen: false
+				canListen: false,
+				subject: currentSubject.value
 			})
 			scrollToBottom()
 		},
@@ -213,7 +706,14 @@ function connectWS() {
 				scrollToBottom()
 			}
 		},
-		onAIReply: (text: string) => {
+		onAIReply: (text: string, isOpening?: boolean) => {
+			if (isOpening === true) {
+				// Include the server session id so a real new session can show its
+				// own welcome while replayed events on the same session stay deduped.
+				const openingKey = currentSubject.value + '|' + sessionIdForSubject(currentSubject.value) + '|' + text
+				if (openingMessageKeys.has(openingKey)) return
+				openingMessageKeys.add(openingKey)
+			}
 			// 完整回复:替换 typing 占位为正式消息
 			const idx = findMsgIndex(typingMsgId)
 			if (idx >= 0) {
@@ -229,12 +729,33 @@ function connectWS() {
 			masterState.value = 'speaking'
 			playAudio(audioUrl)
 		},
+		onConfirmCard: (card: ConfirmCardPayload) => {
+			// REST 兜底可能已按同一草稿重建过卡片；WS 重放同 draftId 时不再重复入流。
+			const cached = cardBySubject(card.subject)
+			if (cached != null && cached.draftId == card.draftId) return
+			setDraftBySubject(card.subject, card)
+			setCardBySubject(card.subject, card)
+			editingKey.value = ''
+			editText.value = ''
+			if (card.subject == currentSubject.value) addCardMessage(card)
+		},
 		onError: (code: string, message: string) => {
 			if (connecting.value) {
+				sessionStartFailed.value = true
 				connectError.value = message
 				connecting.value = false
+				// Do not let MasterWS auto-reconnect after a rejected session_start;
+				// a later onSessionReady from that stale socket must not be mistaken
+				// for a usable conversation.
+				if (ws != null) {
+					ws.disconnect()
+					ws = null
+				}
 			} else {
 				uni.showToast({ title: message, icon: 'none' })
+				// 邀请接受/暂缓等待服务端回执；失败时解除忙状态，
+				// 保留邀请卡以便用户重试，不把界面锁死。
+				inviteBusy.value = false
 				masterState.value = 'idle'
 				// 移除 typing 占位
 				const idx = findMsgIndex(typingMsgId)
@@ -242,21 +763,27 @@ function connectWS() {
 			}
 		},
 		onClose: () => {
-			if (!connecting.value) {
-				uni.showToast({ title: '墨相师已离开', icon: 'none' })
+			inviteBusy.value = false
+			if (!connecting.value && sessionStarted.value) {
+				uni.showToast({ title: masterRoleName + '已离开', icon: 'none' })
 			}
 		}
 	})
+	// 双画像共用一条自然对话旅程 WebSocket；主体切换只改变当前会话绑定。
+	if (ws != null) {
+		ws.startJourneyMode(currentSubject.value, 'profile-text-v1')
+	}
 	ws.connect()
 }
 
 // ===== 消息管理 =====
-function addMessage(role: string, text: string, canListen: boolean = false) {
+function addMessage(role: string, text: string, canListen: boolean = false, subject: ProfileSubject = currentSubject.value) {
 	messages.value.push({
 		id: Date.now() + Math.floor(Math.random() * 1000),
 		role: role,
 		text: text,
-		canListen: canListen
+		canListen: canListen,
+		subject: subject
 	})
 	scrollToBottom()
 }
@@ -278,10 +805,328 @@ function scrollToBottom() {
 	})
 }
 
+// ===== 建构模式:确认卡片 =====
+function addCardMessage(card: ConfirmCardPayload) {
+	// 当前阶段只显示自身的活动卡片，另一主体卡片缓存到切回时恢复。
+	removeVisibleCardMessages()
+	messages.value.push({
+		id: Date.now() + Math.floor(Math.random() * 1000),
+		role: 'card',
+		text: '',
+		canListen: false,
+		subject: card.subject,
+		card: card,
+		collapsed: false,
+		confirmIndex: 0,
+		confirming: false
+	})
+	scrollToBottom()
+}
+
+function removeVisibleCardMessages() {
+	for (let i = messages.value.length - 1; i >= 0; i--) {
+		const m = messages.value[i]
+		if (m.role == 'card') {
+			messages.value.splice(i, 1)
+		}
+	}
+}
+
+function findCardMsgIndex(cardId: string) : number {
+	for (let i = 0; i < messages.value.length; i++) {
+		const m = messages.value[i]
+		if (m.role == 'card' && m.card != null && m.card.cardId == cardId) return i
+	}
+	return -1
+}
+
+function removeCardMessage(cardId: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx >= 0) {
+		messages.value.splice(idx, 1)
+	}
+}
+
+function removeCardItem(cardId: string, fieldKey: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx < 0) return
+	const card = messages.value[idx].card
+	const items: any[] = card.items != null ? (card.items as any[]) : []
+	const next: any[] = []
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].fieldKey != fieldKey) {
+			next.push(items[i])
+		}
+	}
+	card.items = next
+	if (next.length == 0) {
+		// 全部删完:卡片随之下线
+		removeCardMessage(cardId)
+		setCardBySubject(card.subject, null)
+	} else if (messages.value[idx].confirmIndex != null) {
+		messages.value[idx].confirmIndex = Math.min(Number(messages.value[idx].confirmIndex), next.length - 1)
+	}
+}
+
+function updateCardItemValue(cardId: string, fieldKey: string, newText: string) {
+	const idx = findCardMsgIndex(cardId)
+	if (idx < 0) return
+	const card = messages.value[idx].card
+	const items: any[] = card.items != null ? (card.items as any[]) : []
+	for (let i = 0; i < items.length; i++) {
+		if (items[i].fieldKey == fieldKey) {
+			items[i].displayValue = newText
+		}
+	}
+}
+
+function toggleCard(msg: any) {
+	msg.collapsed = msg.collapsed != true
+}
+
+function currentCardItemKey(msg: any): string {
+	if (msg == null || msg.card == null || msg.card.items == null) return ''
+	const items: any[] = msg.card.items as any[]
+	const index = Number(msg.confirmIndex ?? 0)
+	if (index < 0 || index >= items.length) return ''
+	return String(items[index].fieldKey != null ? items[index].fieldKey : '')
+}
+
+function cardProgressLabel(msg: any): string {
+	if (msg == null || msg.card == null || msg.card.items == null) return ''
+	const total = (msg.card.items as any[]).length
+	if (total == 0) return '已完成'
+	const index = Math.max(0, Math.min(total - 1, Number(msg.confirmIndex ?? 0)))
+	return '第 ' + (index + 1) + ' 条，共 ' + total + ' 条'
+}
+
+// #18：确认卡的结构化字段 display_value 是后端裸码（如 330100/4/single），
+// 按 fieldKey 映射成中文；无映射时回落原串。entry 条目走 content，不经过这里。
+function cardValueText(item: any): string {
+	if (item == null) return ''
+	const key = item.fieldKey != null ? String(item.fieldKey) : ''
+	const dv = item.displayValue != null ? String(item.displayValue) : ''
+	if (key == '' || dv == '') return dv
+	const shown = displayFieldValue(key, dv, '')
+	return shown != '' ? shown : dv
+}
+
+function currentRevision(card: ConfirmCardPayload) : number {
+	return card.expectedRevision
+}
+
+// 乐观锁刷新链:后端每次 PATCH 都推进 expected_revision,成功动作后从草稿读最新值
+async function refreshDraftState(card: ConfirmCardPayload) {
+	const res = await getProfileDraft(card.draftId)
+	const ds = draftState(card.subject)
+	if (res.success && res.data != null && ds != null && ds.draftId == card.draftId) {
+		const rev = res.data.expected_revision
+		if (rev != null) {
+			ds.expectedRevision = Number(rev)
+			card.expectedRevision = Number(rev)
+		}
+	}
+}
+
+async function confirmAll(card: ConfirmCardPayload) {
+	const rev = currentRevision(card)
+	const actions: any[] = []
+	for (let i = 0; i < card.items.length; i++) {
+		actions.push(fieldAction(card.items[i].fieldKey, 'confirm', null, rev))
+	}
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		removeCardMessage(card.cardId)
+		setCardBySubject(card.subject, null)
+		uni.showToast({ title: '都记对了', icon: 'none' })
+		await refreshDraftState(card)
+		await loadMoxiangState()
+		// 确认完成 ≠ 发布：必须把用户送到结果页点「发布这份成稿」，
+		// 否则草稿永远停在已确认未发布，「我的画像」看不到成稿。
+		goPortrait()
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '确认失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+async function confirmCardItem(msg: any) {
+	if (msg == null || msg.card == null || msg.confirming == true) return
+	const card = msg.card as ConfirmCardPayload
+	const itemKey = currentCardItemKey(msg)
+	if (itemKey == '') return
+	let item: ConfirmCardItem | null = null
+	for (let i = 0; i < card.items.length; i++) {
+		if (card.items[i].fieldKey == itemKey) {
+			item = card.items[i]
+			break
+		}
+	}
+	if (item == null) return
+
+	msg.confirming = true
+	try {
+		const rev = currentRevision(card)
+		const res = await patchProfileDraft(card.draftId, [fieldAction(item.fieldKey, 'confirm', null, rev)], rev)
+		if (!res.success) {
+			const message = res.message != null ? ('' + res.message) : '确认失败,请重试'
+			uni.showToast({ title: message, icon: 'none' })
+			return
+		}
+		await refreshDraftState(card)
+		// 单条确认会改变六维确认数；立即重拉状态，避免进度条停留在旧快照。
+		await loadMoxiangState()
+		const nextIndex = Number(msg.confirmIndex ?? 0) + 1
+		if (nextIndex < card.items.length) {
+			msg.confirmIndex = nextIndex
+			addMessage('master', '好,这一条我记下了。我们继续确认下一点。', true, card.subject)
+		} else {
+			removeCardMessage(card.cardId)
+			setCardBySubject(card.subject, null)
+			addMessage('master', '这一组内容已经逐一确认完成。我会把它整理成最后的总结,确认后就会出现在“我的墨相”。', true, card.subject)
+			// 与 confirmAll 同口径：逐条确认走完也要接上发布出口。
+			goPortrait()
+		}
+	} finally {
+		msg.confirming = false
+	}
+}
+
+async function deleteItem(card: ConfirmCardPayload, item: ConfirmCardItem) {
+	const rev = currentRevision(card)
+	const actions: any[] = [fieldAction(item.fieldKey, 'delete', null, rev)]
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		removeCardItem(card.cardId, item.fieldKey)
+		uni.showToast({ title: '已删除', icon: 'none' })
+		await refreshDraftState(card)
+		await loadMoxiangState()
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '删除失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+// ===== 建构模式:内联修改 =====
+function startEdit(item: ConfirmCardItem) {
+	editingKey.value = item.fieldKey
+	editText.value = item.displayValue != '' ? item.displayValue : item.content
+}
+
+function cancelEdit() {
+	editingKey.value = ''
+	editText.value = ''
+}
+
+async function submitEdit(card: ConfirmCardPayload, item: ConfirmCardItem) {
+	const newText = editText.value.trim()
+	if (newText == '') {
+		uni.showToast({ title: '内容不能为空', icon: 'none' })
+		return
+	}
+	const rev = currentRevision(card)
+	const actions: any[] = [fieldAction(item.fieldKey, 'replace', newText, rev)]
+	const res = await patchProfileDraft(card.draftId, actions, rev)
+	if (res.success) {
+		updateCardItemValue(card.cardId, item.fieldKey, newText)
+		cancelEdit()
+		uni.showToast({ title: '已更新', icon: 'none' })
+		await refreshDraftState(card)
+		await loadMoxiangState()
+	} else {
+		const msg = res.message != null ? ('' + res.message) : '修改失败,请重试'
+		uni.showToast({ title: msg, icon: 'none' })
+	}
+}
+
+// ===== 建构模式:统一结果页 =====
+// subjectArg 为空时沿用当前主体；入口卡「查看成稿/继续整理」显式传入。
+async function goPortrait(subjectArg?: string) {
+	const subject: ProfileSubject = subjectArg != null && subjectArg != ''
+		? (subjectArg == 'ideal_partner' ? 'ideal_partner' : 'personal')
+		: currentSubject.value
+	const card = draftState(subject)
+	if (card != null) {
+		uni.navigateTo({
+			url: '/pagesSub/profileExtra/my-portrait-result?subject=' + subject
+				+ '&draft_id=' + card.draftId
+				+ '&expected_revision=' + card.expectedRevision
+		})
+		return
+	}
+
+	// 页面恢复后 WS 卡片可能尚未重放；从档案聚合恢复 active preview/draft。
+	try {
+		const archive = await getMoxiangArchive()
+		const block = subject == 'ideal_partner' ? archive.idealPartner : archive.personal
+		let url = '/pagesSub/profileExtra/my-portrait-result?subject=' + subject
+		if (block.preview != null && block.preview.status == 'active') {
+			url += '&preview_id=' + block.preview.previewId
+		} else if (block.activeDraft != null) {
+			url += '&draft_id=' + block.activeDraft.draftId
+				+ '&expected_revision=' + block.activeDraft.expectedRevision
+		} else if (block.currentRevision == null) {
+			uni.showToast({ title: '暂时没有可整理的成稿', icon: 'none' })
+			return
+		}
+		uni.navigateTo({ url: url })
+	} catch (e) {
+		uni.showToast({ title: '读取成稿失败,请稍后重试', icon: 'none' })
+	}
+}
+
+// Phase 2 P2-02 / P2-04 —— 双阶段卡入口
+function onEnterSubject(subject: ProfileSubject) {
+	if (subject == 'ideal_partner' && stateResponse.value != null && !stateResponse.value.canStartIdealPartner) {
+		uni.showToast({ title: '请先完成我的墨相', icon: 'none' })
+		return
+	}
+	if (subject == 'ideal_partner' && stateResponse.value != null && stateResponse.value.canStartIdealPartner) {
+		// 老用户恢复路径:理想伴侣已经有会话/草稿 → 直接进入该主体的 master session。
+		currentSubject.value = 'ideal_partner'
+		pendingSubject.value = ''
+		enterSubjectSession('ideal_partner')
+		return
+	}
+	currentSubject.value = subject
+	pendingSubject.value = subject
+	// 如果已经有会话(state 显示 sessionId),直接进入 buildMode;否则等用户在 MoxiangEntryState 点开始。
+	loadMoxiangState().then(() => {
+		const summary = subject == 'ideal_partner' ? stateResponse.value?.idealPartner : stateResponse.value?.personal
+		if (summary != null && summary.sessionId != null && summary.sessionId != '') {
+			enterSubjectSession(subject)
+		}
+	})
+}
+
+function enterSubjectSession(subject: ProfileSubject) {
+	if (subject == 'ideal_partner') {
+		// ideal_partner 走独立会话入口(可能为老用户恢复或新开启)
+		startChatFlowFor(subject)
+		return
+	}
+	startChatFlowFor('personal')
+}
+
+function onBackToCards() {
+	// 双阶段卡 → MoxiangEntryState → 返回双阶段卡(无任何数据丢失)
+	pendingSubject.value = ''
+}
+
+function goFallbackBuild() {
+	uni.navigateTo({
+		url: '/pagesSub/profileExtra/my-portrait?subject=' + currentSubject.value + '&fallback=1'
+	})
+}
+
 // ===== 文字模式 =====
 function sendText() {
 	const text = inputText.value.trim()
-	if (text == '' || ws == null || !ws.isConnected()) return
+	if (text == '') return
+	if (ws == null || !ws.isConnected() || !sessionStarted.value) {
+		uni.showToast({ title: masterRoleName + '正在准备中', icon: 'none' })
+		return
+	}
 	if (masterState.value == 'thinking') return
 	addMessage('user', text)
 	inputText.value = ''
@@ -419,8 +1264,185 @@ function closeTTS() {
 
 // ===== 重试 =====
 function retryConnect() {
-	messages.value = [] as any[]
-	connectWS()
+	// Keep both visible turns and the dedupe index.  Only a transient typing
+	// placeholder is safe to remove when the transport is retried.
+	const typingIndex = findMsgIndex(typingMsgId)
+	if (typingIndex >= 0) messages.value.splice(typingIndex, 1)
+	typingMsgId = 0
+	connectError.value = ''
+	stateError.value = ''
+	// 重新拉 state,只有存在可恢复会话时才建立 WS；新用户回到入口卡片。
+	loadStateAndMaybeConnect()
+}
+
+// ===== Phase 1 Contract v1.1 P1-D：state / history / build_invite =====
+// 进入页面:GET /ai/moxiang state → 渲染 entry → 用户点开始 → 建立 WS → GET history
+async function loadMoxiangState() {
+	stateError.value = ''
+	try {
+		stateResponse.value = await getMoxiangState()
+		syncGateFromState('personal')
+		syncGateFromState('ideal_partner')
+	} catch (e: any) {
+		stateError.value = (e?.message != null ? ('' + e.message) : '加载失败，请重试')
+		stateResponse.value = null
+	}
+}
+
+// State loading and socket startup are separate concerns. In particular, a
+// first-time visitor has no session to connect to and must not remain in the
+// full-page connecting state forever.
+async function loadStateAndMaybeConnect() {
+	await loadMoxiangState()
+	loadPortraitArchive()
+	const summary = currentSubjectSummary.value
+	const shouldConnect = summary != null && summary.sessionId != null && summary.sessionId != ''
+	if (shouldConnect) {
+		connectWS()
+	} else {
+		connecting.value = false
+	}
+}
+
+// 确认卡 REST 兜底：卡片正常由 WS 推送（含服务端重连重放）；若重放丢失或
+// 通道异常，用档案里的未完成草稿重建卡片，避免旅程卡死在 building 无人确认。
+async function restoreConfirmCardFromRest(subject: ProfileSubject) {
+	if (stateResponse.value == null) return
+	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
+	if (summary == null || summary.pendingConfirmCard != true) return
+	if (cardBySubject(subject) != null) return
+	try {
+		let archive = portraitArchive.value
+		if (archive == null) {
+			archive = await getMoxiangArchive()
+			portraitArchive.value = archive
+		}
+		if (archive == null) return
+		const block = subject == 'ideal_partner' ? archive.idealPartner : archive.personal
+		const draft = block.activeDraft
+		if (draft == null) return
+		const res = await getProfileDraft(draft.draftId)
+		const data: any = res != null && res.success == true && res.data != null ? res.data : null
+		if (data == null || !Array.isArray(data.fields)) return
+		const items: ConfirmCardItem[] = []
+		for (let i = 0; i < data.fields.length; i++) {
+			const f: any = data.fields[i]
+			if (String(f.confirmation_status ?? '') != 'suggested') continue
+			const item: ConfirmCardItem = {
+				fieldKey: String(f.field_key ?? ''),
+				kind: String(f.field_kind ?? 'structured'),
+				category: String(f.category ?? ''),
+				content: String(f.content ?? ''),
+				displayValue: String(f.display_value ?? '')
+			}
+			items.push(item)
+		}
+		if (items.length == 0) return
+		const card: ConfirmCardPayload = {
+			subject: subject,
+			cardId: 'rest-' + draft.draftId,
+			draftId: draft.draftId,
+			expectedRevision: Number(draft.expectedRevision ?? 0),
+			items: items
+		}
+		setDraftBySubject(subject, card)
+		setCardBySubject(subject, card)
+		if (subject == currentSubject.value && sessionStarted.value) addCardMessage(card)
+	} catch (e: any) {
+		// 兜底失败静默：下一次重连的服务端重放仍会覆盖此场景。
+	}
+}
+
+// 按 turn_id 去重合并服务端历史到本地消息流
+async function loadSessionHistory(sessionId: string, beforeTurnNo: number | null, subject: ProfileSubject = currentSubject.value) {
+	try {
+		const res = await getSessionTurns(sessionId, beforeTurnNo, 50)
+		for (let i = 0; i < res.turns.length; i++) {
+			const t: MoxiangTurn = res.turns[i]
+			if (restoredTurnIds.value.has(t.turnId)) continue
+			restoredTurnIds.value.add(t.turnId)
+			if (t.role == 'assistant') {
+				addMessage('master', t.content, false, subject)
+			} else {
+				addMessage('user', t.content, false, subject)
+			}
+		}
+	} catch (e: any) {
+		// 历史读取失败不替换本地已有消息,提示重试
+		stateError.value = '重新加载历史'
+	}
+}
+
+// 用户从 entry 点 "开始聊聊" / "继续上次对话" → 切换到聊天视图并建立 WS
+function startChatFlow() {
+	return startChatFlowFor(currentSubject.value)
+}
+
+function startChatFlowFor(subject: ProfileSubject) {
+	if (subject == 'ideal_partner' && stateResponse.value != null && !stateResponse.value.canStartIdealPartner) {
+		uni.showToast({ title: '请先完成我的墨相', icon: 'none' })
+		pendingSubject.value = ''
+		return
+	}
+	const switchingSubject = sessionStarted.value && currentSubject.value != subject
+	pendingSubject.value = ''
+	if (ws == null) {
+		currentSubject.value = subject
+		connectWS()
+		return
+	}
+	if (switchingSubject) {
+		if (ws.isConnected()) {
+			ws.switchSubject(subject)
+		} else {
+			// The socket's onOpen will replay this target subject after reconnect.
+			currentSubject.value = subject
+			ws.startJourneyMode(subject, 'profile-text-v1')
+		}
+	} else if (!sessionStarted.value) {
+		currentSubject.value = subject
+		ws.startJourneyMode(subject, 'profile-text-v1')
+	} else {
+		currentSubject.value = subject
+	}
+}
+
+function continueChatFlow() {
+	startChatFlow()
+}
+
+async function grantConsentFlow() {
+	// P1-D 收尾:真正调用授权 API,而不是直接 startChatFlow。
+	// 后端要求 X-Expected-Privacy-Revision 头与 GET /ai/consents 返回的
+	// privacy_revision 匹配,先拉一次再调授权。
+	try {
+		const consentsRes = await getAiConsents()
+		const privacyRevision = Number(consentsRes?.data?.privacy_revision ?? 0)
+		const res = await grantProfileTextConsent(privacyRevision)
+		if (res.success) {
+			stateError.value = ''
+			startChatFlow()
+			// 重新拉 state 以更新 entry 视图的 consentGranted
+			loadMoxiangState()
+		} else {
+			const msg = res.message != null ? ('' + res.message) : '授权失败,请稍后再试'
+			stateError.value = msg
+		}
+	} catch (e: any) {
+		stateError.value = (e?.message != null ? ('' + e.message) : '授权失败,请稍后再试')
+	}
+}
+
+function acceptInvite(inviteId: string) {
+	if (ws == null || inviteBusy.value) return
+	inviteBusy.value = true
+	ws.acceptBuildInvite(currentSubject.value, inviteId)
+}
+
+function snoozeInvite(inviteId: string) {
+	if (ws == null || inviteBusy.value) return
+	inviteBusy.value = true
+	ws.snoozeBuildInvite(currentSubject.value, inviteId)
 }
 
 // ===== 导航 =====
@@ -433,12 +1455,26 @@ function navBack() {
 		ws.disconnect()
 		ws = null
 	}
-	uni.navigateBack({ delta: 1 })
+	// 页面栈兜底:直开/分享进入时栈内仅当前页,navigateBack 无效则回首页
+	const pages = getCurrentPages()
+	if (pages.length > 1) {
+		uni.navigateBack({ delta: 1 })
+	} else {
+		uni.reLaunch({ url: '/pages/index/index' })
+	}
 }
 
 // ===== 生命周期 =====
-onLoad(() => {
-	connectWS()
+onLoad((options: any) => {
+	if (options != null && String(options.subject != null ? options.subject : '') == 'ideal_partner') {
+		currentSubject.value = 'ideal_partner'
+	}
+	// Phase 1 P1-D:先 GET state 再决定是否连接 WS
+	loadStateAndMaybeConnect()
+	// Dev-only:挂载前异步拉取最近一次回放 trace
+	loadMoxiangTrace().then((trace) => {
+		devMoxiangTrace.value = trace
+	})
 })
 
 onUnmounted(() => {
@@ -452,6 +1488,9 @@ onUnmounted(() => {
 		ws = null
 	}
 })
+
+// Dev-only trace(由 ``XsaMoxiangTrace`` 折叠层消费,生产 __DEV__ 替换后恒为 null)
+const devMoxiangTrace = ref<any>(null)
 </script>
 
 <style scoped>
@@ -459,6 +1498,7 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	height: 100vh;
+	box-sizing: border-box;
 	background: #F7F1E5;
 }
 
@@ -468,13 +1508,20 @@ onUnmounted(() => {
 	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
+	flex-shrink: 0;
 	padding: 0 16px;
 	height: 44px;
 	padding-top: var(--status-bar-height, 0px);
 	background: #F7F1E5;
 }
-.mm-nav-back { padding: 0 8px; }
-.mm-nav-back-text { font-size: 28px; color: #2E2418; }
+.mm-nav-back {
+	width: 44px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-nav-back-text { font-size: 20px; color: #2E2418; }
 .mm-nav-title {
 	font-size: 17px;
 	font-weight: 700;
@@ -482,6 +1529,98 @@ onUnmounted(() => {
 	font-family: var(--serif, serif);
 }
 .mm-nav-side { width: 28px; }
+
+/* ===== 双画像阶段 ===== */
+.mm-subject-panel {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 16px 0;
+}
+.mm-stage-label {
+	font-size: 12px;
+	color: var(--ink2);
+	text-align: center;
+	margin-bottom: 7px;
+}
+/* Phase 2 P2-02: 旧顶部 Tab CSS 已不再使用(由 .mm-journey-cards 取代)。保留空行作分割。 */
+
+/* ===== Phase 2 双阶段卡(墨相师首页) ===== */
+.mm-journey-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 24px 16px 16px;
+}
+.mm-stage-card {
+	display: flex;
+	flex-direction: column;
+	border-radius: 14px;
+	padding: 16px 18px;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	box-shadow: 0 2px 8px rgba(180, 118, 43, 0.06);
+}
+.mm-stage-card-active {
+	border-color: #B4762B;
+	background: linear-gradient(135deg, #FFFCF5 0%, #FAF1DF 100%);
+}
+.mm-stage-card-done {
+	border-color: #5A9D8E;
+	background: linear-gradient(135deg, #FFFCF5 0%, #EAF3EF 100%);
+}
+.mm-stage-card-locked {
+	opacity: 0.55;
+	background: #F4ECDC;
+	border-color: #D6C8AE;
+}
+.mm-stage-card-title {
+	font-size: 18px;
+	font-weight: 700;
+	color: #2E2418;
+	font-family: var(--serif, serif);
+}
+.mm-stage-card-sub {
+	font-size: 12px;
+	color: #5C4F3D;
+	margin-top: 4px;
+}
+.mm-stage-card-pct {
+	font-size: 26px;
+	font-weight: 700;
+	color: #B4762B;
+	margin-top: 12px;
+	align-self: flex-end;
+	font-family: var(--serif, serif);
+}
+.mm-stage-card-done .mm-stage-card-pct { color: #5A9D8E; }
+.mm-stage-card-btn {
+	margin-top: 10px;
+	align-self: flex-start;
+	padding: 6px 14px;
+	border-radius: 14px;
+	border: 1px solid #B4762B;
+	background: #FFFCF5;
+}
+.mm-stage-card-done .mm-stage-card-btn {
+	border-color: #5A9D8E;
+}
+.mm-stage-card-btn-text {
+	font-size: 12px;
+	color: #B4762B;
+	font-weight: 600;
+}
+.mm-stage-card-done .mm-stage-card-btn-text { color: #5A9D8E; }
+.mm-entry-back {
+	margin-top: 12px;
+	padding: 10px 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-entry-back-text {
+	font-size: 12px;
+	color: #9A8C77;
+}
 
 /* ===== 角色形象区 ===== */
 .mm-hero {
@@ -538,10 +1677,13 @@ onUnmounted(() => {
 	background: #B4762B;
 }
 .mm-state-btn-text { font-size: 13px; color: #FFFCF5; font-weight: 700; }
+.mm-state-link { margin-top: 14px; padding: 8px 12px; }
+.mm-state-link-text { font-size: 12px; color: var(--accent2); text-decoration: underline; }
 
 /* ===== 对话主体 ===== */
 .mm-body {
 	flex: 1;
+	min-height: 0;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -550,30 +1692,52 @@ onUnmounted(() => {
 /* 消息流 */
 .mm-flow {
 	flex: 1;
+	min-height: 0;
 	padding: 0 12px;
 }
 .mm-flow-bottom { height: 8px; }
 
+.mm-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 56px 28px 24px;
+}
+.mm-empty-title {
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--ink);
+	font-family: var(--serif, serif);
+}
+.mm-empty-sub {
+	margin-top: 8px;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--ink2);
+	text-align: center;
+}
+
 .mm-msg {
 	display: flex;
 	flex-direction: row;
-	margin-bottom: 12px;
+	margin-bottom: 8px;
 	align-items: flex-start;
 }
 .mm-msg-left { justify-content: flex-start; }
 .mm-msg-right { justify-content: flex-end; }
 
 .mm-msg-avatar {
-	width: 36px;
-	height: 36px;
-	margin-right: 8px;
+	width: 32px;
+	height: 32px;
+	margin-right: 6px;
 	flex-shrink: 0;
 }
 
 .mm-bubble {
-	max-width: 72%;
-	padding: 10px 14px;
-	border-radius: 12px 12px 12px 0;
+	max-width: 78%;
+	padding: 8px 12px;
+	border-radius: 10px 10px 10px 0;
 }
 .mm-bubble-master {
 	background: #FFFCF5;
@@ -581,11 +1745,12 @@ onUnmounted(() => {
 }
 .mm-bubble-user {
 	background: #B4762B;
-	border-radius: 12px 12px 0 12px;
+	border-radius: 10px 10px 0 10px;
 }
 .mm-bubble-text {
 	font-size: 14px;
-	line-height: 1.55;
+	line-height: 1.45;
+	word-break: break-all;
 }
 .mm-bubble-master .mm-bubble-text { color: #2E2418; }
 .mm-bubble-user .mm-bubble-text { color: #FFFCF5; }
@@ -650,6 +1815,7 @@ onUnmounted(() => {
 
 /* ===== 底部输入区 ===== */
 .mm-input-bar {
+	flex-shrink: 0;
 	padding: 8px 12px;
 	padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 	background: #F7F1E5;
@@ -724,4 +1890,117 @@ onUnmounted(() => {
 	justify-content: center;
 }
 .mm-listen-btn-text { font-size: 13px; color: #B4762B; }
+
+/* ===== 发布就绪 ===== */
+.mm-ready {
+	margin: 8px 16px 0;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: rgba(180, 118, 43, 0.12);
+	border: 1px solid rgba(180, 118, 43, 0.3);
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+}
+.mm-ready-text { font-size: 13px; color: #B4762B; font-weight: 700; text-align: center; }
+.mm-ready-actions { display: flex; flex-direction: row; margin-top: 9px; }
+.mm-ready-btn {
+	flex: 1;
+	height: 34px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	background: var(--surface);
+	margin: 0 3px;
+}
+.mm-ready-btn-primary { background: var(--accent2); }
+.mm-ready-btn-text { font-size: 12px; color: var(--accent2); font-weight: 700; }
+.mm-ready-btn-text-primary { color: var(--text-invert); }
+
+/* ===== 确认卡片 ===== */
+.mm-card {
+	max-width: 78%;
+	background: #FFFCF5;
+	border: 1px solid #E6DAC4;
+	border-radius: 12px;
+	padding: 12px;
+}
+.mm-card-head {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+}
+.mm-card-title { font-size: 14px; font-weight: 700; color: #2E2418; }
+.mm-card-fold { font-size: 11px; color: #9A8C77; }
+.mm-card-list { display: flex; flex-direction: column; }
+.mm-card-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid #F0E7D5;
+}
+.mm-card-cat {
+	font-size: 11px;
+	color: #B4762B;
+	background: rgba(180, 118, 43, 0.1);
+	border-radius: 999px;
+	padding: 2px 8px;
+}
+.mm-card-content {
+	margin-top: 6px;
+	font-size: 13px;
+	color: #2E2418;
+	line-height: 1.5;
+}
+.mm-card-value { margin-top: 4px; font-size: 12px; color: #5C4F3D; }
+.mm-card-actions {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+.mm-card-btn {
+	padding: 4px 14px;
+	border-radius: 999px;
+	background: rgba(180, 118, 43, 0.1);
+	border: 1px solid rgba(180, 118, 43, 0.25);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-card-btn-text { font-size: 12px; color: #B4762B; }
+.mm-card-btn-primary { background: #B4762B; flex: 1; }
+.mm-card-btn-disabled { opacity: 0.55; }
+.mm-card-btn-text-primary { font-size: 12px; color: #FFFCF5; font-weight: 700; }
+.mm-card-edit {
+	display: flex;
+	flex-direction: column;
+	margin-top: 8px;
+}
+.mm-card-textarea {
+	width: 100%;
+	height: 72px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: #F7F1E5;
+	border: 1px solid #E6DAC4;
+	font-size: 13px;
+	color: #2E2418;
+}
+.mm-card-confirm {
+	margin-top: 12px;
+	height: 36px;
+	border-radius: 8px;
+	background: #B4762B;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.mm-card-confirm-text { font-size: 13px; color: #FFFCF5; font-weight: 700; }
+
 </style>

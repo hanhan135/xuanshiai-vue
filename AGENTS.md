@@ -1,6 +1,6 @@
 # 宣誓爱项目 — AGENTS.md
 
-> 文档版本：3.1.1
+> 文档版本：3.1.2
 > 适用范围：xuanshiai-vue/ 内的生产实现、保护配置与验证。
 > 定版 PRD 主副本：../PRODUCT.md。
 
@@ -52,14 +52,15 @@
 
 ## 6. 验证与文档同步
 
-1. 修改前检查 Git 工作区并保留用户已有改动。
-2. 开发新页面或二级视图前，重新阅读本文件 §4、`DESIGN.md`、`uni.scss` 以及对应上级页面源码，并在实现前核对色调继承关系。
-3. graphify-out/graph.json 存在时，先用 graphify query 缩小范围，再回到源文件核对。
-4. 运行 node tests/test-mock-system.js 与 git diff --check。
-5. 对 mp-weixin 产物运行质量检查：`npm run verify:mp`（CI 门禁）或 `npm run verify:mp:dev`（开发阶段容忍上限）。
-6. 通过 HBuilderX 编译 mp-weixin，并在微信开发者工具回归关键路径；H5 结果不能替代小程序验收。
-7. 修改代码或重要项目文档后，从工作区根目录运行 graphify update .。
-8. 产品范围、流程、安全与商业化更新 PRODUCT.md；Token、组件与视觉语言更新 DESIGN.md 和必要的 uni.scss；运行和架构说明更新 CLAUDE.md 或 docs/。
+1. 每次开始任何文件修改前（包括代码、Mock、测试、文档与非受保护配置），先检查工作树并执行 `git fetch upstream --prune`。通过 `refs/remotes/upstream/HEAD` 解析上游默认分支，不得假定其名称；记录最新上游提交。当前任务分支未包含该提交时，必须先按维护者确认的工作流将其整合进当前分支、处理冲突并再次核对工作树，随后才可修改文件。不得用隐式 `git pull`、重置或覆盖操作跳过冲突，也不得覆盖用户已有改动；上游不可访问、工作树不安全或冲突处理方式不明确时，应先报告并请求方向。
+2. 修改前检查 Git 工作区并保留用户已有改动。
+3. 开发新页面或二级视图前，重新阅读本文件 §4、`DESIGN.md`、`uni.scss` 以及对应上级页面源码，并在实现前核对色调继承关系。
+4. graphify-out/graph.json 存在时，先用 graphify query 缩小范围，再回到源文件核对。
+5. 运行 node tests/test-mock-system.js 与 git diff --check。
+6. 对 mp-weixin 产物运行质量检查：`npm run verify:mp`（CI 门禁）或 `npm run verify:mp:dev`（开发阶段容忍上限）。
+7. 通过 HBuilderX 编译 mp-weixin，并在微信开发者工具回归关键路径；H5 结果不能替代小程序验收。
+8. 修改代码或重要项目文档后，从工作区根目录运行 graphify update .。
+9. 产品范围、流程、安全与商业化更新 PRODUCT.md；Token、组件与视觉语言更新 DESIGN.md 和必要的 uni.scss；运行和架构说明更新 CLAUDE.md 或 docs/。
 
 ### 6.1. verify:mp 门禁说明
 

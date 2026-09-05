@@ -5,11 +5,12 @@
  */
 
 const PORTRAIT = {
-  main: '/static/portraits/profile-woman-main.jpg',
-  alt: '/static/portraits/profile-woman-alt.jpg',
-  community: '/static/portraits/profile-woman-community.jpg',
-  man: '/static/portraits/profile-man-light.jpg',
-  sea: '/static/portraits/profile-man-sea.jpg'
+  main: '/static/portraits/profile-woman-pose1.png',
+  alt: '/static/portraits/profile-woman-pose2.png',
+  community: '/static/portraits/profile-woman-pose3.png',
+  pose4: '/static/portraits/profile-woman-pose4.png',
+  man: '/static/portraits/profile-man-light.webp',
+  sea: '/static/portraits/profile-man-sea.webp'
 }
 
 /** 会话内拉黑列表（全局过滤动态 / 纸飞机作者） */
@@ -62,9 +63,7 @@ export const mockDynamicList = [
     timeText: '刚刚',
     likeCount: 36,
     commentCount: 2,
-    collectCount: 4,
     liked: false,
-    collected: false,
     followed: false,
     applyStatus: 'pending',
     tabs: ['discover', 'city'],
@@ -130,9 +129,7 @@ export const mockDynamicList = [
     timeText: '30 分钟前',
     likeCount: 58,
     commentCount: 1,
-    collectCount: 11,
     liked: true,
-    collected: true,
     followed: true,
     applyStatus: 'none',
     tabs: ['discover', 'follow'],
@@ -188,9 +185,7 @@ export const mockDynamicList = [
     timeText: '12 分钟前',
     likeCount: 21,
     commentCount: 1,
-    collectCount: 2,
     liked: false,
-    collected: false,
     followed: false,
     applyStatus: 'none',
     tabs: ['discover', 'city'],
@@ -244,9 +239,7 @@ export const mockDynamicList = [
     timeText: '昨天',
     likeCount: 44,
     commentCount: 0,
-    collectCount: 6,
     liked: false,
-    collected: false,
     followed: true,
     applyStatus: 'pending',
     tabs: ['discover', 'follow', 'city'],
@@ -288,9 +281,7 @@ export const mockDynamicList = [
     timeText: '3 小时前',
     likeCount: 19,
     commentCount: 0,
-    collectCount: 3,
     liked: false,
-    collected: false,
     followed: false,
     applyStatus: 'none',
     tabs: ['discover'],
@@ -330,9 +321,7 @@ export const mockDynamicList = [
     timeText: '5 小时前',
     likeCount: 12,
     commentCount: 0,
-    collectCount: 1,
     liked: false,
-    collected: false,
     followed: true,
     applyStatus: 'none',
     tabs: ['discover', 'follow'],
@@ -435,7 +424,7 @@ export const mockPaperPlaneConversations = [
     planeId: 901,
     userId: 8,
     name: '沈知意',
-    avatar: '/static/portraits/profile-woman-alt.jpg',
+    avatar: '/static/portraits/profile-woman-alt.webp',
     planeType: '文字纸飞机',
     lastMessage: '我也喜欢散步，周末要不要一起去河边走走？',
     time: Date.now() - 12 * 60 * 1000,
@@ -545,6 +534,17 @@ export const mockCommunityBanners = [
     kicker: 'PAPER PLANE',
     cover: PORTRAIT.alt,
     targetId: 0
+  },
+  {
+    id: 4,
+    type: 'activity',
+    title: '线下活动：插画与城市记忆',
+    subtitle: '实名报名，公共场所见面',
+    description: '小规模线下沙龙，先了解活动规则再报名。',
+    cta: '查看活动',
+    kicker: 'OFFLINE',
+    cover: PORTRAIT.community,
+    targetId: 2
   }
 ]
 
@@ -567,8 +567,20 @@ export const mockCommunityNotifications = [
     content: '晚霞那条路我也常走…',
     timeText: '30 分钟前',
     read: false,
-    targetType: 'post',
-    targetId: 1
+    targetType: 'comment',
+    targetId: 101,
+    payload: { post_id: 1, comment_id: 101 }
+  },
+  {
+    id: 7,
+    type: 'reply',
+    title: '林雨桐 回复了你的评论',
+    content: '线条很温柔，像在西湖边写生。',
+    timeText: '40 分钟前',
+    read: false,
+    targetType: 'comment',
+    targetId: 201,
+    payload: { post_id: 2, comment_id: 201 }
   },
   {
     id: 3,
@@ -588,7 +600,9 @@ export const mockCommunityNotifications = [
     timeText: '2 天前',
     read: true,
     targetType: 'activity',
-    targetId: 2
+    targetId: 2,
+    isOfficialActivity: true,
+    isOfficial: true
   },
   {
     id: 5,
@@ -607,8 +621,9 @@ export const mockCommunityNotifications = [
     content: '线条很温柔，像在西湖边写生。',
     timeText: '昨天',
     read: true,
-    targetType: 'post',
-    targetId: 2
+    targetType: 'comment',
+    targetId: 201,
+    payload: { post_id: 2, comment_id: 201 }
   }
 ]
 

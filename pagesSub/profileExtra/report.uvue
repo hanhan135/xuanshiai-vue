@@ -68,28 +68,28 @@
 </script>
 
 <style scoped>
-.report-page { min-height: 100vh; background: #F4F5F9; color: var(--ink); }
+.report-page { min-height: 100vh; background: var(--canvas); color: var(--ink); }
 .report-nav { height: 100px; padding: 44px 18px 0; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: space-between; background: var(--paper); }
 .nav-back, .nav-placeholder { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
 .nav-back text { font-size: 38px; line-height: 36px; }
-.nav-title { font-size: 22px; font-weight: 800; font-family: var(--serif); }
+.nav-title { font-size: 19px; font-weight: 800; font-family: var(--serif); }
 .report-scroll { height: calc(100vh - 100px); padding: 24px 24px 120px; box-sizing: border-box; }
 .report-card { padding: 24px 18px 30px; border-radius: 22px; background: var(--paper); }
-.section-title { display: block; font-size: 21px; font-weight: 800; }
+.section-title { display: block; font-size: 17px; font-weight: 800; }
 .reason-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
-.reason-item { min-height: 52px; padding: 0 8px; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; background: #F3F5F9; font-size: 14px; color: var(--ink2); }
-.reason-item.selected { background: #F9E5FB; color: #B44CC6; font-weight: 700; }
-.section-divider { height: 1px; margin: 28px 0; background: #E7E8ED; }
-.detail-input { width: 100%; height: 126px; margin-top: 20px; padding: 16px; box-sizing: border-box; border-radius: 14px; background: #F4F5F7; color: var(--ink2); font-size: 14px; line-height: 1.5; }
+.reason-item { min-height: 52px; padding: 0 8px; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; background: var(--warm); font-size: 12px; color: var(--ink2); }
+.reason-item.selected { background: var(--accent-bg); color: var(--accent2); font-weight: 700; }
+.section-divider { height: 1px; margin: 28px 0; background: var(--line); }
+.detail-input { width: 100%; height: 126px; margin-top: 20px; padding: 16px; box-sizing: border-box; border-radius: 14px; background: var(--warm); color: var(--ink2); font-size: 13px; line-height: 1.5; }
 .word-count { display: block; margin-top: -24px; padding-right: 14px; text-align: right; font-size: 12px; color: var(--muted); }
 .evidence-row { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
-.evidence-item, .evidence-add { position: relative; width: 92px; height: 112px; border-radius: 10px; overflow: hidden; background: #F3F5F9; }
+.evidence-item, .evidence-add { position: relative; width: 92px; height: 112px; border-radius: 10px; overflow: hidden; background: var(--warm); }
 .evidence-item image { width: 100%; height: 100%; }
 .evidence-add { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
 .evidence-plus { font-size: 38px; font-weight: 300; line-height: 38px; }
 .evidence-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); color: var(--text-invert); }
-.submit-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 18px 20px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(244,245,249,0), #F4F5F9 25%); }
-.submit-button { height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, #E99AF5, #F4B8F7); color: var(--ink); font-size: 18px; font-weight: 800; }
+.submit-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 18px 20px calc(18px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(244,248,247,0), var(--canvas) 25%); }
+.submit-button { height: 56px; border-radius: 28px; display: flex; align-items: center; justify-content: center; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--text-invert); font-size: 16px; font-weight: 800; }
 .submit-button.disabled { opacity: .55; }
 .nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
 .nav-back text { font-size: 16px; line-height: 1; color: #2C2C2C; }
