@@ -8,11 +8,15 @@
  *   客户端可调用 acceptBuildInvite / snoozeBuildInvite 终结邀请
  */
 
-import { buildWsUrl, getAccessToken } from './config.uts'
+import { buildWsTicketUrl, getAccessToken } from './config.uts'
+import { request } from './request.uts'
 import { ProfileSubject } from './ai-profile.uts'
+import { debugLog } from '@/utils/debug-log.uts'
+import { MASTER_ROLE_NAME } from '@/utils/moxiang-badge.uts'
+import { adaptContinuousMoxiangState, ContinuousMoxiangState } from './ai-moxiang.uts'
 
-/** 用户可见的对话角色名；供应商/模型名只存在于服务端调用与审计层。 */
-export const MASTER_ROLE_NAME = '知遇'
+// 角色名唯一来源在 utils/moxiang-badge.uts，这里只透传，避免两处「知遇」各自漂移。
+export { MASTER_ROLE_NAME }
 
 /** 旅程阶段枚举(Contract v1.1 §1.2) */
 export type JourneyStage = 'chatting' | 'building' | 'ready' | 'published'
@@ -80,18 +84,48 @@ export interface ConfirmCardPayload {
 	items: ConfirmCardItem[]
 }
 
+/**
+ * 把后端下行 error.code 分类为可展示/可决策的错误类型。
+ * 语义对齐 docs/api/语音.md §4 错误表；未知 code 归入 unknown，不静默丢弃。
+ */
+export function classifyMasterWSError(code: string): string {
+	if (code == 'AI_POLICY_DENIED') return 'policy_denied'
+	if (code == 'AI_TEMPORARILY_UNAVAILABLE') return 'temporarily_unavailable'
+	if (code == 'AI_QUOTA_EXCEEDED') return 'quota_exceeded'
+	if (code == 'AI_INPUT_INVALID') return 'input_invalid'
+	if (code == 'AUTH_REQUIRED') return 'auth_required'
+	return 'unknown'
+}
+
 export interface MasterWSCallbacks {
 	onSessionReady?: (sessionId?: string, subject?: ProfileSubject, resumed?: boolean, newSession?: boolean) => void
+	onContinuousState?: (state: ContinuousMoxiangState) => void
 	onSubjectChanged?: (subject: ProfileSubject, sessionId?: string, resumed?: boolean, newSession?: boolean) => void
-	onPartialTranscript?: (text: string) => void
-	onFinalTranscript?: (text: string) => void
-	onAIThinking?: () => void
+onPartialTranscript?: (text: string) => void
+onFinalTranscript?: (text: string) => void
+onAIThinking?: () => void
+onTranscriptPreview?: (transcriptId: string, clientTurnId: string, sessionId: string, text: string, expiresIn: number) => void
+onTranscriptConfirmed?: (transcriptId: string, clientTurnId: string, sourceId: string, text: string) => void
+onTranscriptCancelled?: (transcriptId: string) => void
+onTranscriptExpired?: (transcriptId: string) => void
 	onAIContent?: (text: string) => void
 	onAIReply?: (text: string, isOpening?: boolean, generationId?: string) => void
 	onTTSAudio?: (audioUrl: string, durationMs: number) => void
 	onConfirmCard?: (card: ConfirmCardPayload) => void
 	onPublishReady?: (subject: ProfileSubject, summary: string) => void
 	onError?: (code: string, message: string) => void
+	/**
+	 * 类型化错误（在 onError 之外额外触发，onError 保持原签名不变）。
+	 * kind 语义对齐后端文档 docs/api/语音.md §4：
+	 * - policy_denied：listen 时账号撤权/注销/签名上下文失效 → 停止播放并
+	 *   重新获取当前会话/音频；
+	 * - temporarily_unavailable：ASR/TTS/模型暂时失败或无法确认账号状态
+	 *   → 稍后重试，不复用旧音频 URL；
+	 * - quota_exceeded：额度用尽；
+	 * - input_invalid：入参或状态非法（如 revise_text 空串、未 session_start）；
+	 * - unknown：其他/未知 code。
+	 */
+	onTypedError?: (kind: string, code: string, message: string) => void
 	onClose?: () => void
 	// ===== Phase 1 Contract v1.1 P1-D =====
 	onJourneyReady?: (subject: ProfileSubject, sessionId: string, journeyStage: JourneyStage, resumed: boolean, protocolVersion?: number) => void
@@ -120,6 +154,7 @@ export class MasterWS {
 	// 旅程参数:非空时 session_start 固定携带 moxiang_journey。
 	private journeySubject: ProfileSubject | null = null
 	private journeyConsentVersion = ''
+	private continuousFlow = false
 	// 实时语音 v2:connect 前调用 enableRealtimeV2() 后 session_start
 	// 携带 protocolVersion=2 与 pcmPlayback 能力声明;未协商成功自动回退 v1。
 	private protocolV2 = false
@@ -150,15 +185,46 @@ export class MasterWS {
 		this.callbacks.onError?.('AI_INPUT_INVALID', '画像主体非法')
 	}
 
-	connect(): boolean {
+	async connect(): Promise<boolean> {
 		this.manuallyClosed = false
 		const token = getAccessToken()
 		if (token == '') {
 			this.callbacks.onError?.('AUTH_REQUIRED', '未登录,请先登录')
 			return false
 		}
-		const url = buildWsUrl('/voice/moxiang-master', token)
-		console.log('🔌 [MasterWS] connecting /voice/moxiang-master')
+
+		// WebSocket 端点只接受一次性 AI ticket；长期 JWT 仅用于下面的
+		// Bearer HTTP 请求，绝不进入连接 URL。
+		let ticketResponse: any = null
+		try {
+			ticketResponse = await request({
+				url: '/voice/ws-ticket',
+				method: 'POST',
+				data: {}
+			})
+		} catch (e) {
+			this.callbacks.onError?.('AI_TEMPORARILY_UNAVAILABLE', '凭证服务暂时不可用')
+			return false
+		}
+		if (this.manuallyClosed) return false
+		const ticket = ticketResponse != null && ticketResponse.success === true && ticketResponse.data != null
+			? String(ticketResponse.data.ticket != null ? ticketResponse.data.ticket : '')
+			: ''
+		if (ticket == '') {
+			const status = ticketResponse != null ? Number(ticketResponse.code != null ? ticketResponse.code : 0) : 0
+			if (status == 401) {
+				this.callbacks.onError?.('AUTH_REQUIRED', '登录状态已失效,请重新登录')
+			} else {
+				const message = ticketResponse != null && ticketResponse.message != null && String(ticketResponse.message) != ''
+					? String(ticketResponse.message)
+					: '凭证服务暂时不可用'
+				this.callbacks.onError?.('AI_TEMPORARILY_UNAVAILABLE', message)
+			}
+			return false
+		}
+
+		const url = buildWsTicketUrl('/voice/moxiang-master', ticket)
+		debugLog('[MasterWS] connecting /voice/moxiang-master')
 		this.socketTask = uni.connectSocket({
 			url: url,
 			success: () => {},
@@ -174,7 +240,7 @@ export class MasterWS {
 	private bindEvents() {
 		if (this.socketTask == null) return
 		this.socketTask.onOpen(() => {
-			console.log('✅ [MasterWS] connected')
+			debugLog('[MasterWS] connected')
 			this.connected = true
 			this.reconnectAttempts = 0
 			this.sendSessionStart()
@@ -183,15 +249,13 @@ export class MasterWS {
 			this.handleMessage(res.data)
 		})
 		this.socketTask.onClose(() => {
-			console.log('🔌 [MasterWS] closed')
+			debugLog('[MasterWS] closed')
 			this.connected = false
 			if (!this.manuallyClosed && this.reconnectAttempts < this.maxReconnect) {
 				this.reconnectAttempts++
-				console.log('🔄 [MasterWS] reconnecting attempt', this.reconnectAttempts)
+				debugLog('[MasterWS] reconnecting attempt', this.reconnectAttempts)
 				setTimeout(() => {
-					if (!this.manuallyClosed) {
-						this.connect()
-					}
+					if (!this.manuallyClosed) this.connect()
 				}, 1000 * this.reconnectAttempts)
 			} else {
 				this.callbacks.onClose?.()
@@ -216,6 +280,12 @@ startJourneyMode(subject: ProfileSubject, consentVersion: string) {
 	}
 }
 
+// 画像流程版本与实时语音 protocolVersion 是两个独立能力标识。
+startContinuousMode(consentVersion: string) {
+	this.continuousFlow = true
+	this.startJourneyMode('personal', consentVersion)
+}
+
 switchSubject(subject: ProfileSubject) {
 	if (!this.isSupportedSubject(subject)) {
 		this.reportInvalidSubject()
@@ -233,6 +303,7 @@ private sendSessionStart() {
 				mode: 'moxiang_journey',
 				subject: this.journeySubject,
 				consentVersion: this.journeyConsentVersion,
+				...(this.continuousFlow ? { flow_version: 'continuous_v2' } : {}),
 				protocolVersion: 2,
 				capabilities: { pcmPlayback: true }
 			})
@@ -241,7 +312,8 @@ private sendSessionStart() {
 				type: 'session_start',
 				mode: 'moxiang_journey',
 				subject: this.journeySubject,
-				consentVersion: this.journeyConsentVersion
+				consentVersion: this.journeyConsentVersion,
+				...(this.continuousFlow ? { flow_version: 'continuous_v2' } : {})
 			})
 		}
 	} else {
@@ -285,6 +357,13 @@ snoozeBuildInvite(subject: ProfileSubject, inviteId: string) {
 		if (msg == null || msg.type == null) return
 		const type = String(msg.type)
 		switch (type) {
+			case 'continuous_state':
+				try {
+					this.callbacks.onContinuousState?.(adaptContinuousMoxiangState(msg.state))
+				} catch (e) {
+					this.callbacks.onError?.('AI_TEMPORARILY_UNAVAILABLE', '画像状态未能同步，请重新加载')
+				}
+				break
 			case 'session_ready':
 				{
 					const sessionId = String(msg.session_id != null ? msg.session_id : '')
@@ -318,6 +397,29 @@ snoozeBuildInvite(subject: ProfileSubject, inviteId: string) {
 			case 'final_transcript':
 				this.callbacks.onFinalTranscript?.(String(msg.text != null ? msg.text : ''))
 				break
+			case 'transcript_preview':
+				this.callbacks.onTranscriptPreview?.(
+					String(msg.transcript_id != null ? msg.transcript_id : ''),
+					String(msg.client_turn_id != null ? msg.client_turn_id : ''),
+					String(msg.session_id != null ? msg.session_id : ''),
+					String(msg.text != null ? msg.text : ''),
+					Number(msg.expires_in != null ? msg.expires_in : 0),
+				)
+				break
+			case 'transcript_confirmed':
+				this.callbacks.onTranscriptConfirmed?.(
+					String(msg.transcript_id != null ? msg.transcript_id : ''),
+					String(msg.client_turn_id != null ? msg.client_turn_id : ''),
+					String(msg.source_id != null ? msg.source_id : ''),
+					String(msg.text != null ? msg.text : ''),
+				)
+				break
+			case 'transcript_cancelled':
+				this.callbacks.onTranscriptCancelled?.(String(msg.transcript_id != null ? msg.transcript_id : ''))
+				break
+			case 'transcript_expired':
+				this.callbacks.onTranscriptExpired?.(String(msg.transcript_id != null ? msg.transcript_id : ''))
+				break
 			case 'ai_thinking':
 				this.callbacks.onAIThinking?.()
 				break
@@ -337,12 +439,15 @@ snoozeBuildInvite(subject: ProfileSubject, inviteId: string) {
 					Number(msg.duration_ms != null ? msg.duration_ms : 0)
 				)
 				break
-			case 'error':
-				this.callbacks.onError?.(
-					String(msg.code != null ? msg.code : 'UNKNOWN'),
-					String(msg.message != null ? msg.message : MASTER_ROLE_NAME + '对话出错')
-				)
+			case 'error': {
+				const code = String(msg.code != null ? msg.code : 'UNKNOWN')
+				const message = String(msg.message != null ? msg.message : MASTER_ROLE_NAME + '对话出错')
+				// onError 保持既有签名（向后兼容）；onTypedError 额外提供分类，
+				// 使消费方能按 docs/api/语音.md §4 区分「授权已撤回」与「稍后重试」。
+				this.callbacks.onError?.(code, message)
+				this.callbacks.onTypedError?.(classifyMasterWSError(code), code, message)
 				break
+			}
 			case 'extraction_status':
 				this.handleExtractionStatus(msg)
 				break
@@ -590,6 +695,14 @@ snoozeBuildInvite(subject: ProfileSubject, inviteId: string) {
 	// 请求 TTS 播报最新回复
 	sendListen() {
 		this.send({ type: 'listen' })
+	}
+
+	confirmTranscript(transcriptId: string, clientTurnId: string, sessionId: string, text: string) {
+		this.send({ type: 'confirm_transcript', transcript_id: transcriptId, client_turn_id: clientTurnId, session_id: sessionId, text: text })
+	}
+
+	cancelTranscript(transcriptId: string, clientTurnId: string, sessionId: string) {
+		this.send({ type: 'cancel_transcript', transcript_id: transcriptId, client_turn_id: clientTurnId, session_id: sessionId })
 	}
 
 	// 编辑转写文本重新生成

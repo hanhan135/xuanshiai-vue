@@ -1,10 +1,36 @@
-﻿/** API configuration for the deployed FastAPI service. */
+/** API configuration for the deployed FastAPI service. */
+
+const TEST_API_BASE_URL = 'https://xhztest.xyz'
+// 本地与远端联调只切此开关；release 继续遵循正式环境配置。
+const USE_LOCAL_BACKEND = false
+const LOCAL_API_BASE_URL = 'http://127.0.0.1:8000'
+const LOCAL_LAN_API_BASE_URL = 'http://10.5.120.165:8000'
+// release 版本指向生产域名。生产未部署前不要上传 release 版本。
+const PROD_API_BASE_URL = 'https://www.xuanshiai.com'
+
+function resolveApiBaseUrl(): string {
+	try {
+		const info: any = (uni as any).getAccountInfoSync()
+		const miniProgram: any = info != null ? info.miniProgram : null
+		const envVersion = miniProgram != null && miniProgram.envVersion != null ? '' + miniProgram.envVersion : ''
+		if (envVersion == 'release') return PROD_API_BASE_URL
+	} catch (e) {
+		// H5 / 本地环境没有小程序账号信息，回退测试服。
+	}
+	return USE_LOCAL_BACKEND ? LOCAL_API_BASE_URL : TEST_API_BASE_URL
+}
 
 export const USE_MOCK = false
-export const API_BASE_URL = 'http://127.0.0.1:8000'
+export const API_BASE_URL = resolveApiBaseUrl()
 export const ROLE_APPLICATION_USE_MOCK = false
 export const PAPER_PLANE_CHANCE_USE_MOCK = true
-export const LAN_API_BASE_URL = 'http://127.0.0.1:8000'
+// 红娘喜讯：服务端消费端接口尚未部署，默认关闭演示数据；仅本地预览/测试可打开。
+export const GOOD_NEWS_USE_MOCK = false
+
+// 情感实验室（MBTI）开关集中在此管理。后端 /emotion-lab/* 已就绪，走真实接口；
+// 失败时页面保留本地题库降级，不整页白屏。
+export const EMOTION_LAB_USE_MOCK = false
+export const LAN_API_BASE_URL = API_BASE_URL == LOCAL_API_BASE_URL ? LOCAL_LAN_API_BASE_URL : API_BASE_URL
 
 // FastAPI mounts its router directly at /api/v1.
 export const API_PREFIX = '/api/v1'
@@ -14,6 +40,9 @@ export const REFRESH_TOKEN_KEY = 'xsa_refresh_token'
 export const CURRENT_USER_ID_KEY = 'xsa_user_id'
 export const ONBOARDING_MODE_KEY = 'xsa_onboarding_mode'
 export const ONBOARDING_COMPLETED_KEY = 'xsa_onboarding_completed'
+// token 与「签发它的后端地址」绑定。换环境后旧 token 必须视为无效，
+// 否则会拿上一套后端的 JWT 去请求新后端，必然 401（本次联调的根因）。
+export const TOKEN_BASE_KEY = 'xsa_token_base'
 
 // 开发态仅可使用本地演示身份，禁止提交真实 token。
 export const FASTAPI_AUTO_ENTER_COMMUNITY = false
@@ -31,20 +60,57 @@ export const MOCK_DELAY = 300
 export function getAccessToken(): string {
   try {
     const token = uni.getStorageSync(ACCESS_TOKEN_KEY)
-    if (token != null && token !== '') return '' + token
+    if (token == null || token === '') return ''
+    const boundBase = uni.getStorageSync(TOKEN_BASE_KEY)
+    const base = boundBase != null ? String(boundBase) : ''
+    // 空值 = 升级前的历史 token，按当前环境放行，避免升级即全员掉登录。
+    if (base != '' && base != API_BASE_URL) {
+      clearAuthTokens()
+      return ''
+    }
+    return '' + token
+  } catch (e) {}
+  return ''
+}
+
+export function getRefreshToken(): string {
+  try {
+    const token = uni.getStorageSync(REFRESH_TOKEN_KEY)
+    if (token == null || token === '') return ''
+    const boundBase = uni.getStorageSync(TOKEN_BASE_KEY)
+    const base = boundBase != null ? String(boundBase) : ''
+    // 与 getAccessToken 同款环境绑定校验：换后端后旧 refresh_token 视为无效，
+    // 避免拿上一套后端的 refresh_token 去打新后端（必然 401）。
+    if (base != '' && base != API_BASE_URL) return ''
+    return '' + token
   } catch (e) {}
   return ''
 }
 
 export function setAuthTokens(accessToken: string, refreshToken: string = '') {
   try {
-    if (accessToken != null && accessToken !== '') uni.setStorageSync(ACCESS_TOKEN_KEY, accessToken)
+    if (accessToken != null && accessToken !== '') {
+      uni.setStorageSync(ACCESS_TOKEN_KEY, accessToken)
+      uni.setStorageSync(TOKEN_BASE_KEY, API_BASE_URL)
+    }
     if (refreshToken != null && refreshToken !== '') uni.setStorageSync(REFRESH_TOKEN_KEY, refreshToken)
     else uni.removeStorageSync(REFRESH_TOKEN_KEY)
   } catch (e) {}
 }
 
 export function clearAuthTokens() {
+  // 纸飞机身份/积分额度是按账号存的，退出登录必须一并清理，
+  // 否则切换账号后会串出上一个账号的昵称、头像与"剩余次数"。
+  try {
+    const uid = uni.getStorageSync(CURRENT_USER_ID_KEY)
+    if (uid != null && '' + uid != '') {
+      uni.removeStorageSync('xsa_paper_plane_profile_v1:' + uid)
+    }
+  } catch (e) {}
+  try {
+    uni.removeStorageSync('xsa_paper_plane_profile_v1')
+    uni.removeStorageSync('xsa_paper_plane_state_v1')
+  } catch (e) {}
   try {
     uni.removeStorageSync(ACCESS_TOKEN_KEY)
   } catch (e) {}
@@ -55,6 +121,7 @@ export function clearAuthTokens() {
     uni.removeStorageSync(CURRENT_USER_ID_KEY)
     uni.removeStorageSync(ONBOARDING_MODE_KEY)
     uni.removeStorageSync(ONBOARDING_COMPLETED_KEY)
+    uni.removeStorageSync(TOKEN_BASE_KEY)
   } catch (e) {}
 }
 
@@ -78,6 +145,37 @@ export function buildWsUrl(path: string, token: string): string {
   }
   const sep = p.indexOf('?') >= 0 ? '&' : '?'
   return base + API_PREFIX + p + sep + 'token=' + encodeURIComponent(token)
+}
+
+/**
+ * Build an AI WebSocket URL with the short-lived, single-use ticket issued
+ * by /voice/ws-ticket. Long-lived access tokens must never be placed in this
+ * URL because WebSocket URLs can be retained by client/network diagnostics.
+ */
+export function buildWsTicketUrl(path: string, ticket: string): string {
+  let p = path != null ? ('' + path) : ''
+  if (p.indexOf('ws://') == 0 || p.indexOf('wss://') == 0) return p
+  if (p.charAt(0) != '/') p = '/' + p
+  let base = API_BASE_URL
+  if (base.indexOf('https://') == 0) {
+    base = 'wss://' + base.substring(8)
+  } else if (base.indexOf('http://') == 0) {
+    base = 'ws://' + base.substring(7)
+  }
+  const sep = p.indexOf('?') >= 0 ? '&' : '?'
+  return base + API_PREFIX + p + sep + 'ticket=' + encodeURIComponent(ticket)
+}
+
+export function buildLiveWsUrl(path: string, ticket: string, lastVersion: number = 0): string {
+  let p = path != null ? ('' + path) : ''
+  if (p.charAt(0) != '/') p = '/' + p
+  let base = API_BASE_URL
+  if (base.indexOf('https://') == 0) {
+    base = 'wss://' + base.substring(8)
+  } else if (base.indexOf('http://') == 0) {
+    base = 'ws://' + base.substring(7)
+  }
+  return base + API_PREFIX + p + '?ticket=' + encodeURIComponent(ticket) + '&last_version=' + Math.max(0, Number(lastVersion))
 }
 
 export function resolveMediaUrl(value: any): string {

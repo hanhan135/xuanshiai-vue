@@ -2,8 +2,8 @@ const fs = require('fs')
 const assert = require('assert')
 
 const page = fs.readFileSync('pagesSub/userExtra/user/edit.uvue', 'utf8')
-const card = fs.readFileSync('components/XsaProfileAiCard.uvue', 'utf8')
-const firstAnalysis = fs.readFileSync('components/XsaProfileAiFirstAnalysis.uvue', 'utf8')
+const card = fs.readFileSync('pagesSub/userExtra/components/XsaProfileAiCard.uvue', 'utf8')
+const firstAnalysis = fs.readFileSync('pagesSub/userExtra/components/XsaProfileAiFirstAnalysis.uvue', 'utf8')
 const api = fs.readFileSync('api/ai-profile.uts', 'utf8')
 const request = fs.readFileSync('api/request.uts', 'utf8')
 const editPageStyle = page.match(/\.edit-page\s*\{([^}]*)\}/s)?.[1] || ''
@@ -13,7 +13,8 @@ assert(page.includes('XsaProfileAiFirstAnalysis'), '编辑资料页应挂载首�
 assert(page.includes('openAiFirstAnalysis'), '空状态应能打开首次分析视图')
 assert(page.includes('startAiFirstAnalysis'), '首次分析视图应能触发分析')
 assert(page.includes('const aiFirstAnalysisVisible = ref(true)'), '编辑页默认应展示初次使用页面')
-assert(page.includes('aiError.value = res.message'), '重新分析失败应始终保留错误信息')
+assert(page.includes("aiFailureNotice(res, 'AI 用心度评审')"), '分析失败应按 businessCode 分诊（未开放/暂不可用/超时）')
+assert(page.includes('aiError.value = notice'), '重新分析失败应始终保留错误信息')
 assert(card.includes('@tap="onStart"'), '空状态开始分析应与重新分析区分')
 assert(card.includes('@click="onRetry"'), '重新分析按钮应兼容 click 事件')
 assert(firstAnalysis.includes('@click="onStart"'), '初次分析按钮应兼容 click 事件')
@@ -24,7 +25,8 @@ assert(firstAnalysis.includes('paper-stack'), '首次分析应使用方案 A 的
 assert(firstAnalysis.includes('class="analysis-card"'), '首次分析视图应保持原 AI 卡片尺寸')
 assert(!firstAnalysis.includes('position: fixed'), '首次分析视图不能覆盖为全屏浮层')
 assert(card.includes('ai-empty-main'), '资料页空态应使用方案 A 的双栏引导')
-assert(!card.includes('class="ai-stale"'), '结果卡不应再显示绿色资料更新提示块')
+assert(card.includes('class="ai-stale"'), '结果卡应明确提示当前结果基于上次保存资料')
+assert(card.includes('当前结果基于上次保存的资料'), '旧分析提示不能声称已分析未保存输入')
 assert(card.includes('分析最新资料'), '结果卡底部必须显示分析最新资料按钮')
 assert(!card.includes('class="ai-score"'), '结果态顶部不应重复显示分数')
 assert(card.includes('class="ai-inline-error"'), '分析失败时应在已有结果卡内显示错误提示')
@@ -39,7 +41,10 @@ assert(page.includes('offsetTop: -12'), '目标卡片标题应停在滚动区顶
 assert(page.includes('duration: 260'), 'To-do 定位应使用快速平滑滚动')
 assert.match(editPageStyle, /(?:^|;)\s*min-height:\s*100vh\s*;/, '编辑资料页应由页面承载长内容滚动')
 assert(!/(?:^|;)\s*overflow:\s*hidden\s*;/.test(editPageStyle), '编辑资料页不能阻断页面级滚动')
-assert.match(bottomSpacerStyle, /height:\s*calc\(100vh\s*-\s*312px\)/, '末尾卡片后应预留随视口变化的空间，使关于我也能滚到顶部附近')
+// 旧版用 calc(100vh - 312px) 的空占位块把最后一个"关于我"推到可视区顶部，
+// 代价是页面底部出现近整屏空白（测试反馈已确认是缺陷）。底部避让改由
+// .scroll-content 的 padding-bottom 承担，这里断言不再预留视口级空白。
+assert.ok(bottomSpacerStyle === '' || !/100vh/.test(bottomSpacerStyle), '末尾卡片后不应再预留近整屏空白')
 assert(page.includes('id="sec-avatar"'), '头像建议应定位到头像卡片')
 assert(page.includes('id="sec-photos"'), '相册建议应定位到我的相册卡片')
 assert(page.includes('id="sec-basic_info"'), '基础信息与 MBTI 建议应定位到基础信息卡片')
@@ -75,4 +80,10 @@ assert(card.includes('-webkit-line-clamp: 4'), '结果卡错误信息最多显�
 assert(!card.includes('ai-basis'), '结果态不应显示本次参考资料区块')
 assert(!firstAnalysis.match(/\.[\w-]+\s+(text|view)(?=\s|\{|\.)/), '小程序组件样式不应使用标签选择器')
 
+assert(page.includes('thoughtfulnessCacheKey'), '用心度本地缓存必须按当前账号命名空间隔离')
+assert(page.includes('aiFirstAnalysisVisible.value = false'), '读取到既有结果后必须直接展示结果卡')
+assert(page.includes('res.success && res.data == null'), '服务端 404 归一为未分析时必须清除失效缓存')
+assert(page.includes('guardThoughtfulnessSaveState'), '首次分析与重试必须共用未保存资料门槛')
+assert(page.includes('aiAnalysisBaselineJson'), '分析期间保存新资料后旧返回必须标记为过期')
+assert(api.includes("url: '/ai/profile/thoughtfulness'"), '用心度结果与分析必须使用现有服务端接口')
 console.log('AI 用心度首次分析与重试状态校验通过')

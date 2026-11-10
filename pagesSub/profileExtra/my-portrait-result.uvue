@@ -20,7 +20,38 @@
 			<view class="mpr-btn" @tap="retryLoad"><text class="mpr-btn-text">重试</text></view>
 		</view>
 
-		<!-- 发布前：只展示当前草稿对应的精确预览。 -->
+		<view v-else-if="!publishedMode && continuousFlow" class="mpr-body">
+			<view class="mpr-paper">
+				<text class="mpr-kicker">{{ continuousGenerationLabel }}</text>
+				<text v-if="continuousNotice != ''" class="mpr-state-copy mpr-review-notice">{{ continuousNotice }}</text>
+				<template v-if="continuousPreview != null">
+					<text v-if="continuousPreview.content != ''" class="mpr-preview-content">{{ continuousPreview.content }}</text>
+					<text v-else class="mpr-state-copy">正文仍在后台生成，离开后可从档案恢复同一任务。</text>
+					<view v-if="continuousPreview.fields.length > 0" class="mpr-section">
+						<text class="mpr-section-label">本次会生效的信息</text>
+						<view v-for="(field, index) in continuousRows" :key="field.field_key" class="mpr-field-row">
+							<text class="mpr-dimension-title">{{ field.label }}</text>
+							<textarea v-if="continuousEditing && !field.removed" :value="field.editor_text" @input="onContinuousFieldInput(index, $event)" :disabled="continuousMutationBusy || continuousPatchPayload != null" class="mpr-field-editor" :maxlength="2000" auto-height />
+							<text v-else class="mpr-dimension-copy">{{ field.removed ? '保存后移除' : field.display_value }}</text>
+							<text v-if="field.change != 'unchanged'" class="mpr-field-change">{{ field.change == 'added' ? '新增' : '有变化' }}{{ field.previous_label != null ? ' · 原值：' + field.previous_label : '' }}</text>
+							<view v-if="continuousEditing" class="mpr-field-remove" @tap="toggleContinuousField(index)"><text>{{ field.removed ? '保留这项' : '移除这项' }}</text></view>
+						</view>
+					</view>
+					<view v-if="continuousPreview.boundary_changed" class="mpr-boundary-warning"><text>这次整理涉及相处底线或长期期待的变化，请确认它确实代表你的想法。</text></view>
+				</template>
+			</view>
+			<view class="mpr-actions">
+				<view v-if="continuousEditing" class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': continuousMutationBusy }" @tap="saveContinuousEdits"><text class="mpr-btn-primary-text">{{ continuousMutationBusy ? '正在保存…' : (continuousPatchPayload != null ? '重试核对原修改' : '保存修改并重新成稿') }}</text></view>
+				<view v-else-if="canConfirmContinuous" class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': continuousMutationBusy }" @tap="onConfirmContinuous"><text class="mpr-btn-primary-text">{{ confirming ? '正在确认…' : (continuousConfirmPending ? '重试核对整份确认' : '确认整份画像') }}</text></view>
+				<view v-if="canConfirmContinuous && !continuousEditing && !continuousConfirmPending" class="mpr-btn" @tap="beginContinuousEdit"><text class="mpr-btn-text">修改这份理解</text></view>
+				<view v-if="continuousPreview != null && continuousPreview.generation_status == 'failed' && continuousPreview.status != 'stale'" class="mpr-btn" @tap="retryContinuousBuild"><text class="mpr-btn-text">重试生成</text></view>
+				<view v-if="continuousConflict || continuousPreview == null" class="mpr-btn" @tap="reloadContinuousVersion"><text class="mpr-btn-text">读取当前版本重新审阅</text></view>
+				<view class="mpr-btn" @tap="onContinueChat"><text class="mpr-btn-text">继续聊聊完善</text></view>
+				<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">返回画像档案</text></view>
+			</view>
+			<text class="mpr-hint">{{ continuousEditing ? '修改尚未成为正式画像。保存后请重新阅读生成的正文；未保存就离开会丢失本次编辑。' : '整份确认只让当前正文和信息一起生效，不会自动公开，也不影响另一份画像。' }}</text>
+		</view>
+
 		<view v-else-if="!publishedMode && previewContent != ''" class="mpr-body">
 			<view class="mpr-paper">
 				<text class="mpr-kicker">成稿预览 · 尚未发布</text>
@@ -39,21 +70,21 @@
 
 		<!-- 已发布但叙事 Worker 尚未生成完成。 -->
 		<view v-else-if="publishedMode && !narrativeReady" class="mpr-state">
-			<text class="mpr-state-title">正在写下完整画像</text>
-			<text class="mpr-state-copy">成稿已经发布，完整理解仍在后台整理。稍后刷新即可，不需要重复发布。</text>
+			<text class="mpr-state-title">{{ continuousFlow ? '正在读取已确认画像' : '正在写下完整画像' }}</text>
+			<text class="mpr-state-copy">{{ continuousFlow ? '确认结果已经提交。请刷新核对正式版本，不会另行生成不同正文。' : '暂未取得可展示的完整画像。请刷新重试，或返回画像档案查看已有历史摘要；无需重复发布。' }}</text>
 			<text v-if="narrativeFailure != ''" class="mpr-state-copy mpr-fail">上次整理失败：{{ narrativeFailure }}。可稍后刷新重试，不影响已发布的成稿。</text>
 			<view class="mpr-btn mpr-btn-primary" @tap="retryLoad">
 				<text class="mpr-btn-primary-text">刷新画像</text>
 			</view>
-			<view v-if="narrativeFailure != ''" class="mpr-btn" :class="{ 'mpr-btn-disabled': regenerating }" @tap="onRegenerateNarrative">
+			<view v-if="!continuousFlow && narrativeFailure != ''" class="mpr-btn" :class="{ 'mpr-btn-disabled': regenerating }" @tap="onRegenerateNarrative">
 				<text class="mpr-btn-text">{{ regenerating ? '正在重新生成…' : '重新生成完整画像' }}</text>
 			</view>
 			<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">先返回档案</text></view>
 		</view>
 
-		<!-- 完整画像：pending_confirmation / confirmed / 历史 published。 -->
 		<scroll-view v-else-if="narrativeReady" scroll-y class="mpr-scroll" enhanced :show-scrollbar="false">
 			<view class="mpr-body">
+				<view v-if="narrativeNotice != ''" class="mpr-paper mpr-version-notice"><text class="mpr-state-copy">{{ narrativeNotice }}</text></view>
 				<view class="mpr-paper">
 					<text class="mpr-kicker">{{ narrativeStatusLabel }}</text>
 					<text v-if="narrative.persona_title != null && narrative.persona_title != ''" class="mpr-title">{{ narrative.persona_title }}</text>
@@ -138,11 +169,13 @@
 					<view v-if="awaitingNarrativeConfirmation" class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': confirming }" @tap="onConfirmNarrative">
 						<text class="mpr-btn-primary-text">{{ confirming ? '正在确认…' : '这份画像符合我' }}</text>
 					</view>
-					<view v-if="narrativeReady && subject == 'personal'" class="mpr-btn mpr-btn-poster" @tap="onOpenPoster">
-						<text class="mpr-btn-poster-text">生成专属墨相海报</text>
-					</view>
+					<view v-if="canPrepareProfileCard" class="mpr-btn mpr-btn-profile-card" @tap="onPrepareProfileCard"><text class="mpr-btn-profile-card-text">整理为公开介绍</text></view>
+					<view v-if="narrativeReady && subject == 'ideal_partner'" class="mpr-btn mpr-btn-profile-card" @tap="onOpenSearchSuggestions"><text class="mpr-btn-profile-card-text">根据已确认资料整理找人建议</text></view>
 					<view class="mpr-btn" @tap="onContinueChat"><text class="mpr-btn-text">继续聊聊完善</text></view>
-					<view class="mpr-btn mpr-btn-ghost" @tap="onBackToArchive"><text class="mpr-btn-text">返回画像档案</text></view>
+					<text v-if="posterPublicError != ''" class="mpr-hint">{{ posterPublicError }}</text>
+					<view v-if="canPrepareProfileCard" class="mpr-btn mpr-btn-poster" @tap="onOpenPoster">
+						<text class="mpr-btn-poster-text">{{ posterPublicLoading ? '正在准备海报…' : '生成专属画像海报' }}</text>
+					</view>
 				</view>
 				<text v-if="awaitingNarrativeConfirmation" class="mpr-hint">确认前请先完整看一遍。确认只表示这份文字符合你的自我理解，不代表平台替你作出事实认证。</text>
 			</view>
@@ -155,14 +188,53 @@
 
 		<!-- 专属墨相海报弹窗 -->
 		<MoxiangPosterSheet :visible="showPosterSheet" :data="posterData" @close="showPosterSheet = false" />
+
+		<view v-if="profileCardVisible" class="mpr-card-mask" @tap="closeProfileCard">
+			<view class="mpr-card-sheet" @tap.stop>
+				<text class="mpr-card-title">整理为公开介绍</text>
+				<scroll-view scroll-y class="mpr-card-scroll" enhanced :show-scrollbar="false">
+					<view class="mpr-card-content">
+						<text class="mpr-card-copy">确认画像只代表本人确认，不会自动公开。点击“确认采用”才会写入公开资料；未选择字段不写入。实际可见对象仍受现有隐私设置约束，这里不会扩大可见范围。</text>
+						<text class="mpr-card-copy mpr-card-boundary">这里不会修改长期择偶标准、发送消息或公开访谈原文。关于我问答写入的是资料页的公开问答，已答过的题保留原答案。</text>
+						<text v-if="profileCardSelfIntroKept" class="mpr-card-copy mpr-card-boundary">提示：你选择保留原有自我介绍，本次不会写入新内容，因此暂时无法生成海报。想用新介绍请点上面的「点此改为替换」。</text>
+						<view v-if="profileCardLoading" class="mpr-card-state"><text>{{ profileCardWaitCopy != '' ? profileCardWaitCopy : '正在整理公开介绍…' }}</text></view>
+						<view v-else-if="profileCardError != ''" class="mpr-card-state"><text>{{ profileCardError }}</text><view class="mpr-btn" @tap="onPrepareProfileCard"><text class="mpr-btn-text">重新整理</text></view></view>
+						<view v-else>
+							<text v-if="profileCardApplyMessage != ''" class="mpr-card-limit">{{ profileCardApplyMessage }}</text>
+								<view v-for="row in profileCardRows" :key="row.key" class="mpr-card-row">
+									<view class="mpr-card-row-copy"><text class="mpr-card-row-label">{{ row.label }}</text></view>
+									<text v-if="row.locked" class="mpr-card-row-locked">已有回答</text>
+									<text v-else class="mpr-card-row-toggle" @tap="toggleProfileCardField(row.key)">{{ row.selected ? '采用' : '跳过' }}</text>
+									<template v-if="row.key == 'self_intro'">
+										<textarea v-model="row.value" class="mpr-card-editor" maxlength="500" :disabled="profileCardApplying || profileCardApplyPayload != null" />
+										<view v-if="row.selected" class="mpr-card-replace" @tap="toggleReplaceExistingSelfIntro"><text>你已有自我介绍</text><text class="mpr-card-replace-value">{{ replaceExistingSelfIntro ? '✓ 用新的替换' : '保留原来的（点此改为替换）' }}</text></view>
+									</template>
+									<template v-else-if="row.isQa">
+										<textarea v-model="row.value" class="mpr-card-editor" maxlength="300" :disabled="row.locked || profileCardApplying || profileCardApplyPayload != null" />
+										<text v-if="row.locked" class="mpr-card-limit">这题你已经有回答，本次不会覆盖；想改写请到「编辑资料」手动修改。</text>
+										<text v-else class="mpr-card-limit">{{ row.value.length }}/300，可以直接改，写进去的是你确认过的这段</text>
+									</template>
+									<view v-else class="mpr-card-tags"><text class="mpr-card-limit">{{ profileCardTagLimitText }}</text><view v-for="tag in row.tags" :key="tag" class="mpr-card-tag" :class="{ 'mpr-card-tag-selected': profileCardSelectedTags.indexOf(tag) >= 0 }" @tap="toggleProfileCardTag(tag)"><text>{{ tag }}</text></view></view>
+								</view>
+								<text v-if="profileCardInterestTagsAbsent" class="mpr-card-limit">本次没有生成可采用的兴趣标签，正文仍可采用。</text>
+						</view>
+					</view>
+				</scroll-view>
+				<view v-if="!profileCardLoading && profileCardError == '' && profileCardRows.length > 0" class="mpr-card-actions"><view class="mpr-btn mpr-btn-ghost" @tap="closeProfileCard"><text class="mpr-btn-text">{{ profileCardApplyPayload != null ? '返回' : '取消' }}</text></view><view class="mpr-btn mpr-btn-primary" :class="{ 'mpr-btn-disabled': profileCardApplying }" @tap="onRequestApplyProfileCard"><text class="mpr-btn-primary-text">{{ profileCardApplying ? '正在保存…' : (profileCardApplyPayload != null ? '重试核对' : '确认采用') }}</text></view></view>
+			</view>
+		</view>
 	</view>
 </template>
 
 <script lang="uts">
 	import { createProfilePreview, getProfilePreview, type ProfilePreviewRecord } from '@/api/ai-moxiang.uts'
-	import { publishProfileDraft, pollTaskUntilTerminal, getPortraitNarrative, confirmPortraitNarrative, regeneratePortraitNarrative } from '@/api/ai-profile.uts'
+	import { createContinuousProfilePreview, getContinuousProfilePreview, getContinuousMoxiangState, buildContinuousPortrait, type ContinuousProfilePreview } from '@/api/ai-moxiang.uts'
+	import { publishProfileDraft, pollTaskUntilTerminal, getPortraitNarrative, confirmPortraitNarrative, regeneratePortraitNarrative, patchProfileDraftWithKey, coerceProfileFieldValue, confirmProfilePreview, fieldLabel, fieldAction, genIdempotencyKey } from '@/api/ai-profile.uts'
+	import { summarizeProfileCard, getProfileCardDraft, applyProfileCardDraft, isProfileCardVersionConflict, waitForProfileCardTask, createProfileCardIdempotencyKey } from '@/api/ai-profile-card.uts'
 	import { getMeProfile, getOwnProfile } from '@/api/user.uts'
-	import MoxiangPosterSheet from '@/components/moxiang/MoxiangPosterSheet.uvue'
+	import { getPublicProfileCardExport } from '@/api/ai-profile.uts'
+	import MoxiangPosterSheet from '@/pagesSub/profileExtra/components/moxiang/MoxiangPosterSheet.uvue'
+	import { displayFieldValue } from '@/utils/profile-field-display.uts'
 	import type { MoxiangPosterData } from '@/utils/moxiang-poster-drawer.uts'
 
 	const systemInfo = uni.getSystemInfoSync()
@@ -170,6 +242,26 @@
 	const menuButtonInfo = uni.getMenuButtonBoundingClientRect()
 	const navPadTop = menuButtonInfo != null && menuButtonInfo.top > statusBarHeight ? menuButtonInfo.top : statusBarHeight + 6
 	const menuButtonSpacing = menuButtonInfo != null ? (systemInfo.windowWidth - menuButtonInfo.left) : 8
+	// 与后端 QA_QUESTION_TEXTS（app/schemas/auth.py）逐字一致：
+	// question_id 1/2/3 是资料卡「关于我」三道固定题，写回时按 id 合并。
+	// 注意：必须放在 MAX_PROFILE_CARD_ADOPT_TAGS 之前——test-profile-card-tag-consistency
+	// 依赖「预算常量以无花括号声明行开头」的源码布局做配平切片。
+	const PROFILE_QA_LABELS: any = {
+		1: '你理想中的另一半是什么样的',
+		2: '喜欢什么运动',
+		3: '你期待的爱情是什么样子的'
+	}
+	const PROFILE_QA_MAX_LENGTH = 300
+	// 采用标签预算：后端 merge 写入按「已有标签 + 本次采用 <= 10」做最终校验，
+	// 前端用同一口径预先限制可选数量，避免用户只撞到通用校验报错。
+	// existing < 0 表示还没读到已有标签数，退回旧的 3 个上限，由后端兜底。
+	const MAX_PROFILE_CARD_ADOPT_TAGS = 3
+	const MAX_PERSONAL_TAGS = 10
+	function profileCardTagBudget(existing: number): number {
+		const room = MAX_PERSONAL_TAGS - existing
+		if (room <= 0) return 0
+		return room > MAX_PROFILE_CARD_ADOPT_TAGS ? MAX_PROFILE_CARD_ADOPT_TAGS : room
+	}
 
 	export default {
 		components: {
@@ -180,12 +272,31 @@
 				navPadTop: navPadTop,
 				menuButtonSpacing: menuButtonSpacing,
 				subject: 'personal',
-				subjectLabel: '我的墨相',
+				subjectLabel: '我的真实画像',
 				draftId: '',
 				expectedRevision: 0,
 				previewId: '',
 				previewContent: '',
 				publishedMode: false,
+				continuousFlow: false,
+				continuousPreview: null as ContinuousProfilePreview | null,
+				continuousRows: [] as any[],
+				publishedRevisionId: 0,
+				continuousConfirmKey: '',
+				continuousConfirmPending: false,
+				continuousEditDirty: false,
+				continuousEditing: false,
+				continuousSaving: false,
+				continuousPatchKey: '',
+				continuousPatchPayload: null as any,
+				continuousBuildKey: '',
+				continuousNotice: '',
+				continuousConflict: false,
+				continuousTimer: 0,
+				continuousReadSeq: 0,
+				continuousPrivacySeq: 0,
+				pageVisible: true,
+				shownOnce: false,
 				narrative: null as any,
 				loading: true,
 				publishing: false,
@@ -194,70 +305,676 @@
 				stateMessage: '正在整理成稿…',
 				errorMessage: '',
 				narrativeFailure: '',
+				narrativeNotice: '',
 				regenerating: false,
 				showPosterSheet: false,
 				openPosterOnReady: false,
-				posterIdentity: { nickname: '', ageText: '', cityText: '', verifiedBadge: '' }
+				profileCardVisible: false,
+				profileCardLoading: false,
+				// 资料卡生成实测 24-33s（推理模型先出 reasoning 再出 JSON），
+				// 单条静态文案会让用户以为卡死；按已等待时长分档换文案。
+				profileCardWaitCopy: '',
+				profileCardElapsedMs: 0,
+				profileCardWaitTimer: -1,
+				profileCardApplying: false,
+				profileCardError: '',
+				profileCardExpectedRevision: 0,
+				profileCardDraftId: '',
+				profileCardSourceRevisionId: null as any,
+				profileCardBaseProfileRevision: null as any,
+				profileCardSelectedTags: [] as string[],
+				profileCardExistingTagCount: -1,
+				// 用户是否已有自我介绍：决定「保留/替换」是否会影响能否生成海报。
+				profileCardHasExistingSelfIntro: false,
+				// 已有回答的问答序号：后端 apply 对 qa_1/qa_3 已有答案直接跳过，
+				// 只有第 2 题（运动）会覆盖，这里用来在 UI 上如实标记「不会覆盖」。
+				profileCardExistingQaIds: [] as number[],
+				profileCardTagApplyMode: '',
+				replaceExistingSelfIntro: false,
+				profileCardRows: [] as any[],
+				profileCardSummarizeKey: '',
+				profileCardApplyKey: '',
+				profileCardApplyPayload: null as any,
+				profileCardApplyContext: null as any,
+				profileCardApplyUncertain: false,
+				profileCardApplyMessage: '',
+				profileCardDraft: null as any,
+				profileCardInterestTagsAbsent: false,
+				profileCardSubmittedTags: [] as string[],
+				posterIdentity: { nickname: '', ageText: '', cityText: '', verifiedBadge: '' },
+				// 海报公开内容只来自 export 接口（当前 personal 正式版本已采用的公开字段）。
+				posterPublic: null as any,
+				posterPublicLoading: false,
+				posterPublicError: ''
 			}
 		},
 		computed: {
+			continuousMutationBusy(): boolean {
+				return this.confirming || this.continuousSaving || this.regenerating
+			},
+			canConfirmContinuous(): boolean {
+				const preview = this.continuousPreview
+				return preview != null && preview.status == 'active' && preview.generation_status == 'completed'
+					&& preview.content.trim() != '' && preview.fields.length > 0 && !this.continuousConflict
+					&& !this.continuousEditDirty && this.continuousPatchPayload == null
+			},
+			continuousGenerationLabel(): string {
+				const preview = this.continuousPreview
+				if (this.continuousConflict || preview?.status == 'stale') return '版本已变化 · 需要重新审阅'
+				if (preview == null) return '正在恢复成稿'
+				if (preview.generation_status == 'failed') return '生成失败 · 可以重试'
+				if (preview.generation_status == 'queued') return '已排队 · 等待生成'
+				if (preview.generation_status == 'processing') return '正在生成完整正文'
+				return '完整成稿 · 尚未确认'
+			},
+			// 已有标签越多，本次可采用的数量越少；未读到已有标签数时按旧上限展示。
+			profileCardTagLimitText(): string {
+				const budget = profileCardTagBudget(this.profileCardExistingTagCount)
+				if (budget <= 0) return '已有兴趣标签已达 ' + MAX_PERSONAL_TAGS + ' 个上限，请先精简后再采用'
+				if (this.profileCardExistingTagCount < 0) return '逐个选择，最多 ' + MAX_PROFILE_CARD_ADOPT_TAGS + ' 个；已有标签默认保留'
+				return '逐个选择，最多再选 ' + budget + ' 个；已有标签默认保留'
+			},
 			narrativeReady(): boolean {
 				if (this.narrative == null) return false
 				const status = String(this.narrative.status ?? '')
 				return status == 'pending_confirmation' || status == 'confirmed' || status == 'published'
 			},
 			awaitingNarrativeConfirmation(): boolean {
-				return this.narrative != null && String(this.narrative.status ?? '') == 'pending_confirmation'
+				if (this.narrative == null) return false
+				const status = String(this.narrative.status ?? '')
+				// 历史 published 行没有逐条确认依据：先经「这份画像符合我」完成一次
+				// 既有确认动作，转成 confirmed 后再开放资料卡；不放宽后端 confirmed 门槛。
+				return status == 'pending_confirmation' || status == 'published'
+			},
+			canPrepareProfileCard(): boolean {
+				if (this.subject != 'personal' || this.narrative == null) return false
+				const status = String(this.narrative.status ?? '')
+				// 只有确实经过用户确认的来源才能整理公开介绍；
+				// 历史 published 行需先完成一次上面的确认动作。
+				return status == 'confirmed'
 			},
 			narrativeStatusLabel(): string {
 				if (this.awaitingNarrativeConfirmation) return '完整画像 · 待你确认'
 				return '完整画像 · 已确认'
 			},
 			posterData(): MoxiangPosterData | null {
-				if (this.narrative == null) return null
-				const ei = this.narrative.emotional_insight != null ? this.narrative.emotional_insight : null
+				// 海报只使用 export 接口返回的公开字段：不再读取 narrative 的
+				// 心理洞察（依恋/底线/小结），那些仅本人可见，不得进入公开海报。
+				const pub = this.posterPublic != null ? this.posterPublic.public : null
+				if (pub == null) return null
+				const selfIntro = String(pub.self_intro ?? '').trim()
+				const tags = (pub.persona_tags != null && Array.isArray(pub.persona_tags) ? (pub.persona_tags as any[]) : []).map((t: any): string => String(t))
 				return {
-					personaTitle: String(this.narrative.persona_title ?? ''),
-					personaTags: (this.narrative.persona_tags != null ? (this.narrative.persona_tags as any[]) : []).map((t: any): string => String(t)),
-					attachmentStyle: String(ei != null ? (ei.attachment_style ?? '') : ''),
-					attachmentSummary: String(ei != null ? (ei.attachment_summary ?? '') : ''),
-					highlights: (ei != null && ei.highlights != null ? (ei.highlights as any[]) : []).map((h: any): string => String(h)),
-					boundaries: (ei != null && ei.boundaries != null ? (ei.boundaries as any[]) : []).map((b: any): string => String(b)),
-					masterMessage: String(ei != null ? (ei.master_message ?? '') : ''),
+					personaTitle: String(pub.persona_title ?? ''),
+					personaTags: tags,
+					attachmentStyle: '',
+					attachmentSummary: '',
+					highlights: selfIntro != '' ? [selfIntro] : [],
+					boundaries: [],
+					masterMessage: '',
 					nickname: String(this.posterIdentity.nickname ?? ''),
 					ageText: String(this.posterIdentity.ageText ?? ''),
 					cityText: String(this.posterIdentity.cityText ?? ''),
 					verifiedBadge: String(this.posterIdentity.verifiedBadge ?? '')
 				} as MoxiangPosterData
+			},
+			// 只在「确实会因此拿不到海报」时提示：已有自我介绍 + 选择保留，
+			// 且自我介绍这一行确实被采用。没有已有介绍时该提示不成立，避免噪音。
+			profileCardSelfIntroKept(): boolean {
+				if (!this.profileCardHasExistingSelfIntro || this.replaceExistingSelfIntro) return false
+				for (let index = 0; index < this.profileCardRows.length; index++) {
+					const row = this.profileCardRows[index]
+					if (row.key == 'self_intro' && row.selected == true) return true
+				}
+				return false
+			},
+			canExportPublicCard(): boolean {
+				if (!this.canPrepareProfileCard) return false
+				return this.posterPublic != null
 			}
 		},
 		onLoad(query: any) {
 			const q = query || {}
+			this.continuousFlow = String(q.flow_version ?? '') == 'continuous_v2'
 			this.subject = String(q.subject ?? 'personal') == 'ideal_partner' ? 'ideal_partner' : 'personal'
-			this.subjectLabel = this.subject == 'ideal_partner' ? '愿遇之相' : '我的墨相'
-			this.draftId = String(q.draft_id ?? '')
-			this.expectedRevision = Number(q.expected_revision ?? 0)
-			this.previewId = String(q.preview_id ?? '')
-			this.publishedMode = this.draftId == '' && this.previewId == ''
+			this.subjectLabel = this.subject == 'ideal_partner' ? '期待的长期关系' : '我的真实画像'
+			// 已确认意图以 published 为准：后端 confirmed 状态仍会带已发布草稿的
+			// draft_id，若按 draft/preview 是否存在判定，会把「查看已确认稿」误送进
+			// 草稿预览并触发 DRAFT_VERSION_CONFLICT。published 只读正式版本。
+			const publishedIntent = String(q.published ?? '') == '1'
+			this.publishedRevisionId = Number(q.revision_id ?? 0)
+			this.draftId = publishedIntent ? '' : String(q.draft_id ?? '')
+			this.expectedRevision = publishedIntent ? 0 : Number(q.expected_revision ?? 0)
+			this.previewId = publishedIntent ? '' : String(q.preview_id ?? '')
+			this.publishedMode = publishedIntent || (this.draftId == '' && this.previewId == '')
 			if (q.openPoster == '1') {
 				this.openPosterOnReady = true
 			}
 			if (this.publishedMode) this.loadNarrative()
 			else this.loadPreview()
 		},
+		onShow() {
+			this.pageVisible = true
+			if (!this.shownOnce) { this.shownOnce = true; return }
+			if (this.continuousFlow && !this.publishedMode) this.loadContinuousPreview(false)
+			else if (this.publishedMode) this.loadNarrative(false)
+		},
+		onHide() {
+			this.pageVisible = false
+			this.continuousReadSeq++
+			this.stopContinuousPolling()
+			// 离页停掉等待计时，回页重新发起时会重建；避免后台空转。
+			this.stopProfileCardWaitTimer()
+		},
 		onUnload() {
 			this.pageAlive = false
+			this.continuousReadSeq++
+			this.stopContinuousPolling()
+			this.stopProfileCardWaitTimer()
 		},
 		methods: {
+			stopContinuousPolling() {
+				if (this.continuousTimer != 0) clearTimeout(this.continuousTimer)
+				this.continuousTimer = 0
+			},
+			scheduleContinuousPolling() {
+				this.stopContinuousPolling()
+				if (!this.pageAlive || !this.pageVisible || this.publishedMode || this.continuousPreview == null) return
+				this.continuousTimer = setTimeout(() => this.loadContinuousPreview(false), 4000)
+			},
+			setReviewLeaveAlert(enabled: boolean) {
+				// 微信原生返回也提示；不把敏感编辑内容写入本地存储。
+				// #ifdef MP-WEIXIN
+				if (enabled && typeof uni.enableAlertBeforeUnload == 'function') uni.enableAlertBeforeUnload({ message: '尚有未保存修改或待核对操作，离开前请确认。' })
+				if (!enabled && typeof uni.disableAlertBeforeUnload == 'function') uni.disableAlertBeforeUnload({})
+				// #endif
+			},
+			leaveReview(action: () => void) {
+				if (this.continuousMutationBusy) { uni.showToast({ title: '正在核对操作结果，请稍候', icon: 'none' }); return }
+				if (!this.continuousEditDirty && this.continuousPatchPayload == null && !this.continuousConfirmPending) { action(); return }
+				uni.showModal({ title: '离开前请确认', content: '未保存修改会丢失；已发送但结果未明的操作可回到档案核对，不会自动再次提交。', confirmText: '仍然离开', success: (res: any) => {
+					if (res.confirm && this.pageAlive) { this.setReviewLeaveAlert(false); action() }
+				} })
+			},
+			clearContinuousPrivateView() {
+				this.continuousReadSeq++
+				this.continuousPrivacySeq++
+				this.stopContinuousPolling()
+				this.continuousPreview = null
+				this.continuousRows = []
+				this.continuousPatchPayload = null
+				this.continuousPatchKey = ''
+				this.continuousConfirmPending = false
+				this.continuousConfirmKey = ''
+				this.continuousEditDirty = false
+				this.continuousEditing = false
+				this.previewContent = ''
+				this.narrative = null
+				this.showPosterSheet = false
+				this.profileCardVisible = false
+				this.profileCardRows = []
+				this.profileCardDraft = null
+				this.profileCardApplyPayload = null
+				this.profileCardApplyContext = null
+				this.profileCardSelectedTags = []
+				this.profileCardSubmittedTags = []
+				this.posterIdentity = { nickname: '', ageText: '', cityText: '', verifiedBadge: '' }
+				// 撤权/离页/重置时必须清空公开导出缓存，避免撤权后仍能渲染旧海报。
+				this.posterPublic = null
+				this.posterPublicLoading = false
+				this.posterPublicError = ''
+				this.continuousBuildKey = ''
+				this.setReviewLeaveAlert(false)
+			},
+			handleContinuousError(error: any) {
+				const code = Number(error?.code)
+				if (code == 401 || code == 403 || code == 404) {
+					this.clearContinuousPrivateView()
+					this.errorMessage = '授权或画像状态已变化，请返回档案核对'
+					this.loading = false
+					return
+				}
+				if (code == 409) this.continuousConflict = true
+				this.continuousNotice = code == 409 ? '版本已变化，未覆盖新画像。请读取当前版本重新审阅。' : String(error?.message ?? '暂时未能同步，请重试核对')
+			},
+			applyContinuousPreview(preview: ContinuousProfilePreview) {
+				if (preview.subject != this.subject || (this.draftId != '' && preview.draft_id != this.draftId)) throw new Error('成稿归属与当前页面不一致')
+				if (preview.status == 'stale') {
+					this.continuousConflict = true
+					this.continuousNotice = '当前稿已过期；保留正在阅读的内容，不会覆盖你的修改。请重新审阅当前版本。'
+				}
+				if (this.continuousEditing || this.continuousPatchPayload != null) return
+				const previous = this.continuousPreview
+				if (previous != null && previous.generation_status == 'completed' && preview.status == 'active'
+					&& (previous.content != preview.content || JSON.stringify(previous.fields) != JSON.stringify(preview.fields))) {
+					this.continuousConflict = true
+					this.continuousNotice = '服务端成稿已变化，请重新审阅；当前正文没有被替换。'
+					return
+				}
+				this.continuousPreview = preview
+				this.previewId = preview.preview_id
+				this.draftId = preview.draft_id
+				this.expectedRevision = preview.expected_revision
+				this.continuousRows = preview.fields.map((field: any): any => {
+					const value = field.value_json
+					const text = field.field_kind == 'entry' ? field.content : (typeof value == 'string' ? value : JSON.stringify(value))
+					// 后端 display_value 是裸机器值（city_code='320100'、education_level='4'、
+					// marriage_status='single'、interest_tags="['逛书店']"）。只读态直接渲染它
+					// 会把编码值露给用户；与确认卡 cardValueText 一致，按 fieldKey 映射成中文。
+					// entry 是自然语言条目，不走映射。
+					let shown = String(field.display_value ?? text ?? '')
+					let previousLabel: string | null = null
+					if (field.field_kind != 'entry') {
+						const mapped = displayFieldValue(field.field_key, value, field.display_value)
+						if (mapped != '') shown = mapped
+						// 「原值」同样可能带裸码，按同一字典翻译；entry 原值就是自然语言。
+						if (field.previous_display_value != null) {
+							const previous = String(field.previous_display_value)
+							const mappedPrevious = displayFieldValue(field.field_key, previous, previous)
+							previousLabel = mappedPrevious != '' ? mappedPrevious : previous
+						}
+					} else if (field.previous_display_value != null) {
+						previousLabel = String(field.previous_display_value)
+					}
+					return { ...field, label: fieldLabel(field.field_key), display_value: shown, previous_label: previousLabel, editor_text: text ?? '', original_text: text ?? '', removed: false }
+				})
+				if (preview.last_error != '') this.continuousNotice = '上次生成失败，可重试；尚未写入正式画像。'
+				if (preview.status == 'confirmed') {
+					this.continuousConfirmPending = false
+					this.setReviewLeaveAlert(false)
+					this.publishedMode = true
+					this.loadNarrative(false)
+				}
+			},
+			async loadContinuousPreview(allowCreate: boolean = true) {
+				if (!this.pageAlive || !this.pageVisible || this.continuousMutationBusy) return
+				this.stopContinuousPolling()
+				const seq = ++this.continuousReadSeq
+				if (this.continuousPreview == null) this.loading = true
+				this.errorMessage = ''
+				try {
+					let preview: ContinuousProfilePreview | null = null
+					if (this.previewId != '') preview = await getContinuousProfilePreview(this.previewId)
+					else if (allowCreate && this.draftId != '') preview = await createContinuousProfilePreview(this.draftId, this.expectedRevision)
+					else throw new Error('请点击读取当前版本恢复成稿')
+					if (seq != this.continuousReadSeq || !this.pageAlive || !this.pageVisible) return
+					this.applyContinuousPreview(preview)
+				} catch (error: any) {
+					if (seq == this.continuousReadSeq && this.pageAlive && this.pageVisible) this.handleContinuousError(error)
+				} finally {
+					if (seq == this.continuousReadSeq && this.pageAlive && this.pageVisible) { this.loading = false; this.scheduleContinuousPolling() }
+				}
+			},
+			beginContinuousEdit() {
+				if (!this.canConfirmContinuous || this.continuousMutationBusy || this.continuousConfirmPending) return
+				this.continuousEditing = true
+				this.continuousNotice = '修改下面的信息后保存；正文将重新生成，需再次审阅。'
+			},
+			onContinuousFieldInput(index: number, event: any) {
+				if (!this.continuousEditing || this.continuousMutationBusy || this.continuousPatchPayload != null) return
+				this.continuousRows[index].editor_text = String(event.detail.value ?? '')
+				this.updateContinuousDirty()
+			},
+			toggleContinuousField(index: number) {
+				if (!this.continuousEditing || this.continuousMutationBusy || this.continuousPatchPayload != null) return
+				this.continuousRows[index].removed = !this.continuousRows[index].removed
+				this.updateContinuousDirty()
+			},
+			updateContinuousDirty() {
+				this.continuousEditDirty = this.continuousRows.some((row: any): boolean => row.removed || row.editor_text != row.original_text)
+				this.setReviewLeaveAlert(this.continuousEditDirty)
+			},
+			async saveContinuousEdits() {
+				if (!this.pageAlive || !this.pageVisible || !this.continuousEditing || this.continuousMutationBusy || this.continuousConflict) return
+				if (this.continuousPatchPayload == null) {
+					const actions: any[] = []
+					for (const row of this.continuousRows) {
+						if (row.removed) { actions.push(fieldAction(row.field_key, 'delete', null, this.expectedRevision)); continue }
+						if (row.editor_text == row.original_text) continue
+						const value = row.field_kind == 'entry' ? row.editor_text.trim() : coerceProfileFieldValue(row.value_json, row.editor_text)
+						if (value == null || (typeof value == 'string' && value.trim() == '')) { this.continuousNotice = row.label + '的格式不正确；如不需要请移除这项。'; return }
+						actions.push(fieldAction(row.field_key, 'replace', value, this.expectedRevision))
+					}
+					if (actions.length == 0) { this.continuousEditing = false; return }
+					this.continuousPatchPayload = { actions, expected_revision: this.expectedRevision }
+					this.continuousPatchKey = genIdempotencyKey()
+				}
+				this.continuousSaving = true
+				this.continuousReadSeq++
+				this.stopContinuousPolling()
+				this.setReviewLeaveAlert(true)
+				let saved = false
+				const privacySeq = this.continuousPrivacySeq
+				try {
+					const payload = this.continuousPatchPayload
+					const res = await patchProfileDraftWithKey(this.draftId, payload.actions, payload.expected_revision, this.continuousPatchKey)
+					if (!this.pageAlive || privacySeq != this.continuousPrivacySeq) return
+					if (!res.success || res.data == null) throw res
+					const revision = res.data.expected_revision
+					if (!Number.isInteger(revision) || revision <= payload.expected_revision) throw new Error('保存回执缺少新版本，请同键重试核对')
+					this.expectedRevision = revision
+					this.previewId = ''
+					this.continuousPreview = null
+					this.continuousRows = []
+					this.continuousPatchPayload = null
+					this.continuousPatchKey = ''
+					this.continuousConfirmKey = ''
+					this.continuousEditDirty = false
+					this.continuousEditing = false
+					this.setReviewLeaveAlert(false)
+					this.continuousNotice = '修改已保存，旧正文已失效。请等待新稿并重新审阅。'
+					saved = true
+				} catch (error: any) {
+					if (!this.pageAlive || privacySeq != this.continuousPrivacySeq) return
+					if (Number(error?.code) == 400 || Number(error?.code) == 422) { this.continuousPatchPayload = null; this.continuousPatchKey = '' }
+					this.handleContinuousError(error)
+					if (this.continuousPatchPayload != null && !this.continuousConflict) this.continuousNotice = '保存结果尚未确认，已锁定原修改。请重试核对，不会重复写入。'
+				} finally {
+					this.continuousSaving = false
+				}
+				if (saved && this.pageVisible) await this.loadContinuousPreview(true)
+			},
+			onConfirmContinuous() {
+				if (!this.canConfirmContinuous || this.continuousEditing || this.continuousMutationBusy) return
+				uni.showModal({ title: '确认整份画像', content: '确认当前正文与全部生效信息符合你的想法。确认不会自动公开，也不会替你作事实认证。', success: (res: any) => {
+					if (res.confirm) this.confirmContinuousPreview()
+				} })
+			},
+			async confirmContinuousPreview() {
+				if (!this.pageAlive || !this.pageVisible || !this.canConfirmContinuous || this.continuousEditing || this.continuousMutationBusy) return
+				this.confirming = true
+				this.continuousReadSeq++
+				this.stopContinuousPolling()
+				if (this.continuousConfirmKey == '') this.continuousConfirmKey = 'continuous-confirm-' + this.previewId + '-' + this.expectedRevision
+				this.continuousConfirmPending = true
+				this.setReviewLeaveAlert(true)
+				const privacySeq = this.continuousPrivacySeq
+				try {
+					const res = await confirmProfilePreview(this.previewId, this.expectedRevision, this.continuousConfirmKey)
+					if (!this.pageAlive || privacySeq != this.continuousPrivacySeq) return
+					if (!res.success || res.data?.revision_id == null) throw res
+					this.continuousConfirmPending = false
+					this.setReviewLeaveAlert(false)
+					this.publishedMode = true
+					this.continuousPreview = null
+					this.continuousRows = []
+					if (this.pageVisible) { await this.loadNarrative(false); uni.showToast({ title: '已确认，推荐理解正在同步更新', icon: 'none' }) }
+				} catch (error: any) {
+					if (!this.pageAlive || privacySeq != this.continuousPrivacySeq) return
+					this.handleContinuousError(error)
+					if (this.continuousConfirmPending && !this.continuousConflict) this.continuousNotice = '确认结果尚未核对，请使用同一按钮重试，或返回档案查看。正文已锁定，不会重复生成正式版本。'
+				} finally { this.confirming = false; this.scheduleContinuousPolling() }
+			},
+			async retryContinuousBuild() {
+				if (!this.pageAlive || !this.pageVisible || this.continuousMutationBusy || this.continuousEditDirty || this.continuousConfirmPending) return
+				this.regenerating = true
+				this.continuousReadSeq++
+				this.stopContinuousPolling()
+				if (this.continuousBuildKey == '') this.continuousBuildKey = genIdempotencyKey()
+				const privacySeq = this.continuousPrivacySeq
+				try {
+					const state = await buildContinuousPortrait(this.subject, false, this.continuousBuildKey)
+					if (!this.pageAlive || privacySeq != this.continuousPrivacySeq) return
+					if (!state.consent_granted) { this.handleContinuousError({ code: 403 }); return }
+					const current = this.subject == 'personal' ? state.personal : state.ideal_partner
+					if (current.draft_id == null || current.preview_id == null || current.expected_revision == null) throw new Error('生成回执缺少稿件版本，请返回档案核对')
+					this.draftId = current.draft_id
+					this.previewId = current.preview_id
+					this.expectedRevision = current.expected_revision
+					this.continuousPreview = null
+					this.continuousRows = []
+					this.continuousBuildKey = ''
+					this.continuousNotice = '已提交生成，请等待任务状态更新。'
+				} catch (error: any) { if (this.pageAlive && privacySeq == this.continuousPrivacySeq) this.handleContinuousError(error) }
+				finally { this.regenerating = false }
+				if (this.pageVisible && this.errorMessage == '') await this.loadContinuousPreview(false)
+			},
+			reloadContinuousVersion() {
+				this.leaveReview(() => this.readCurrentContinuousVersion())
+			},
+			async readCurrentContinuousVersion() {
+				const seq = ++this.continuousReadSeq
+				try {
+					const state = await getContinuousMoxiangState()
+					if (seq != this.continuousReadSeq || !this.pageAlive || !this.pageVisible) return
+					if (!state.consent_granted) { this.handleContinuousError({ code: 403 }); return }
+					const current = this.subject == 'personal' ? state.personal : state.ideal_partner
+					if (current.draft_id == null || current.expected_revision == null) { this.continuousNotice = '暂时没有待确认稿，请返回档案继续聊聊。'; return }
+					this.continuousPreview = null
+					this.continuousRows = []
+					this.continuousEditing = false
+					this.continuousEditDirty = false
+					this.continuousPatchPayload = null
+					this.continuousConfirmPending = false
+					this.continuousConflict = false
+					this.continuousConfirmKey = ''
+					this.previewId = current.preview_id ?? ''
+					this.draftId = current.draft_id
+					this.expectedRevision = current.expected_revision
+					this.setReviewLeaveAlert(false)
+					this.continuousNotice = '已读取当前版本，请重新完整审阅。'
+					await this.loadContinuousPreview(true)
+				} catch (error: any) { if (seq == this.continuousReadSeq && this.pageAlive) this.handleContinuousError(error) }
+			},
 			onOpenPoster() {
+				if (!this.canPrepareProfileCard) return
+				this.loadPublicPosterContent()
+			},
+			async loadPublicPosterContent() {
+				// 公开导出必须绑定当前查看的 personal 正式版本号，避免迟到响应导出错版本。
+				const revisionId = Number(this.narrative != null ? (this.narrative.revision_id ?? 0) : 0)
+				if (!(revisionId > 0)) {
+					this.posterPublicError = '请先确认当前画像，再生成海报'
+					this.showPosterSheet = true
+					return
+				}
+				this.posterPublicLoading = true
+				this.posterPublicError = ''
+				const seq = this.continuousPrivacySeq
+				const subject = this.subject
+				try {
+					const res = await getPublicProfileCardExport(revisionId)
+					if (!this.pageAlive || !this.pageVisible || seq != this.continuousPrivacySeq || subject != 'personal') return
+					if (res != null && res.success && res.data != null && res.data.public != null) {
+						this.posterPublic = res.data
+					} else {
+						this.posterPublic = null
+						this.posterPublicError = String((res != null && res.message != null) ? res.message : '暂无可公开的内容，请先采用公开介绍')
+					}
+				} catch (e) {
+					if (seq == this.continuousPrivacySeq && this.pageAlive) {
+						this.posterPublic = null
+						this.posterPublicError = '公开内容读取失败，请稍后重试'
+					}
+				} finally {
+					if (seq == this.continuousPrivacySeq && this.pageAlive) this.posterPublicLoading = false
+				}
 				this.showPosterSheet = true
+			},
+				buildProfileCardRows(fields: any): any[] {
+					const rows: any[] = []
+					const add = (key: string, label: string, questionId: number = 0) => {
+						const source = fields != null && fields[key] != null ? fields[key] : {}
+						const candidates = source.candidates != null && Array.isArray(source.candidates) ? source.candidates as any[] : []
+						const value = source.value != null && String(source.value).trim() != '' ? String(source.value).trim() : (candidates.length > 0 ? candidates.join('、') : '')
+						if (key == 'interest_tag_candidates') {
+							// 标签为空是可解释状态：正文仍可采用，标签区如实说明，不硬填也不隐藏。
+							this.profileCardInterestTagsAbsent = value == ''
+						}
+						if (value == '') return
+						// 问答：后端 apply 对已有答案的 qa_1/qa_3 直接跳过，只有第 2 题会覆盖；
+						// 这里按同一口径标 locked，避免用户以为新旧答案都会写进去。
+						const locked = questionId > 0 && questionId != 2 && this.profileCardExistingQaIds.indexOf(questionId) >= 0
+						rows.push({
+							key: key,
+							label: label,
+							value: value,
+							selected: !locked,
+							locked: locked,
+							isQa: questionId > 0,
+							questionId: questionId,
+							tags: candidates.map((item: any): string => String(item).trim()).filter((item: string): boolean => item != '')
+						})
+					}
+					add('self_intro', '自我介绍')
+					add('qa_1_partner', PROFILE_QA_LABELS[1], 1)
+					add('qa_2_sports_candidates', PROFILE_QA_LABELS[2], 2)
+					add('qa_3_love', PROFILE_QA_LABELS[3], 3)
+					add('interest_tag_candidates', '兴趣标签')
+					return rows
+				},
+			toggleProfileCardField(key: string) {
+				if (this.profileCardApplying || this.profileCardApplyPayload != null) return
+				for (let index = 0; index < this.profileCardRows.length; index++) if (this.profileCardRows[index].key == key) this.profileCardRows[index].selected = !this.profileCardRows[index].selected
+			},
+			toggleProfileCardTag(tag: string) {
+				if (this.profileCardApplying || this.profileCardApplyPayload != null) return
+				const index = this.profileCardSelectedTags.indexOf(tag)
+				if (index >= 0) this.profileCardSelectedTags.splice(index, 1)
+				else if (this.profileCardSelectedTags.length < profileCardTagBudget(this.profileCardExistingTagCount)) this.profileCardSelectedTags.push(tag)
+				else uni.showToast({ title: this.profileCardTagLimitText, icon: 'none' })
+			},
+			// 采用是合并写入，预算取决于已有标签数；读取失败记为 -1，由后端最终校验兜底。
+			async refreshProfileCardTagBudget() {
+				this.profileCardExistingTagCount = -1
+				this.profileCardHasExistingSelfIntro = false
+				this.profileCardExistingQaIds = []
+				try {
+					const res = await getOwnProfile()
+					if (!this.pageAlive) return
+					if (!res.success || res.data == null) return
+					const profile: any = res.data.profile != null ? res.data.profile : res.data
+					this.profileCardExistingTagCount = Array.isArray(profile.personal_tags) ? (profile.personal_tags as any[]).length : 0
+					// 已有自我介绍时后端默认跳过 self_intro；不提前说明，用户会在
+					// 采用成功之后才发现海报打不开。
+					this.profileCardHasExistingSelfIntro = String(profile.self_intro ?? '').trim() != ''
+					// 已答过的题：后端只覆盖第 2 题，其余保留旧答案，必须提前标记。
+					const existingQa: any[] = Array.isArray(profile.qa_answers) ? profile.qa_answers as any[] : []
+					const ids: number[] = []
+					for (let index = 0; index < existingQa.length; index++) {
+						const item: any = existingQa[index]
+						if (item == null) continue
+						const qid = Number(item.question_id != null ? item.question_id : 0)
+						if (qid > 0 && String(item.answer ?? '').trim() != '') ids.push(qid)
+					}
+					this.profileCardExistingQaIds = ids
+				} catch (e) {
+					this.profileCardExistingTagCount = -1
+				}
+			},
+			toggleReplaceExistingSelfIntro() {
+				if (this.profileCardApplying || this.profileCardApplyPayload != null) return
+				this.replaceExistingSelfIntro = !this.replaceExistingSelfIntro
+			},
+			profileCardOptionalFields(): any {
+				const fields: any = {}
+				if (this.profileCardDraftId != '') fields.draft_id = this.profileCardDraftId
+				if (this.profileCardSourceRevisionId != null) fields.source_revision_id = this.profileCardSourceRevisionId
+				if (this.profileCardBaseProfileRevision != null) fields.base_profile_revision = this.profileCardBaseProfileRevision
+				if (this.profileCardTagApplyMode != '') fields.tag_apply_mode = this.profileCardTagApplyMode
+				return fields
+			},
+			resetProfileCardApply() {
+				this.profileCardApplyKey = ''
+				this.profileCardApplyPayload = null
+				this.profileCardApplyContext = null
+				this.profileCardApplyUncertain = false
+			},
+			closeProfileCard() {
+				if (!this.profileCardApplying) this.profileCardVisible = false
+			},
+			// 资料卡生成是长任务（实测 24-33s）：只给一句静态文案，用户无法区分
+			// 「在跑」和「卡死」。按已等待时长分档换文案，并在离页/结束时清掉定时器。
+			profileCardWaitText(elapsedMs: number): string {
+				const seconds = Math.floor(elapsedMs / 1000)
+				if (seconds < 8) return '正在阅读你的画像…'
+				if (seconds < 30) return '正在整理公开介绍…'
+				// 与 MoxiangProgressPanel 的 30s 档口径一致：慢但不改判失败，
+				// 只安抚等待，避免用户以为卡死而反复点击。
+				return '这次整理得慢了些，仍在生成中，请再等一会儿…'
+			},
+			startProfileCardWaitTimer() {
+				this.stopProfileCardWaitTimer()
+				this.profileCardElapsedMs = 0
+				this.profileCardWaitCopy = this.profileCardWaitText(0)
+				this.profileCardWaitTimer = setInterval(() => {
+					if (!this.pageAlive) { this.stopProfileCardWaitTimer(); return }
+					this.profileCardElapsedMs += 1000
+					this.profileCardWaitCopy = this.profileCardWaitText(this.profileCardElapsedMs)
+				}, 1000)
+			},
+			stopProfileCardWaitTimer() {
+				if (this.profileCardWaitTimer != -1) {
+					clearInterval(this.profileCardWaitTimer)
+					this.profileCardWaitTimer = -1
+				}
+			},
+			async onPrepareProfileCard() {
+				if (!this.canPrepareProfileCard || this.profileCardLoading || this.profileCardApplying) return
+				this.profileCardVisible = true
+				// 保存结果不明时重新打开原操作，不创建新草稿或丢弃幂等上下文。
+				if (this.profileCardApplyPayload != null) return
+				this.profileCardLoading = true
+				this.profileCardError = ''
+				this.profileCardApplyMessage = ''
+				this.startProfileCardWaitTimer()
+				await this.refreshProfileCardTagBudget()
+					this.profileCardRows = []
+					this.profileCardSelectedTags = []
+					this.profileCardInterestTagsAbsent = false
+				if (this.profileCardSummarizeKey == '') this.profileCardSummarizeKey = createProfileCardIdempotencyKey('profile-card-summarize')
+				try {
+					const accepted = await summarizeProfileCard(false, this.profileCardSummarizeKey)
+					if (!this.pageAlive) return
+					if (!accepted.success || accepted.data == null) {
+						if (Number(accepted.code) == 409) this.profileCardSummarizeKey = ''
+						throw new Error(String(accepted.message ?? '资料卡整理暂时不可用'))
+					}
+					const taskId = String(accepted.data.task_id ?? '')
+					const cardDraftId = String(accepted.data.draft_id ?? '')
+					if (cardDraftId == '') throw new Error('服务版本不支持精确草稿，请稍后重试')
+					if (taskId == '') throw new Error('资料卡整理未返回有效任务')
+					const task = await waitForProfileCardTask(taskId, () => this.pageAlive)
+					if (!this.pageAlive) return
+					if (!task.done || task.status != 'succeeded') {
+						if (task.done) this.profileCardSummarizeKey = ''
+						throw new Error(task.error != '' ? task.error : '资料卡整理未完成')
+					}
+					const draft = await getProfileCardDraft(cardDraftId)
+					if (!this.pageAlive) return
+					if (!draft.success || draft.data == null) {
+						if (Number(draft.code) == 404 || Number(draft.code) == 409) this.profileCardSummarizeKey = ''
+						throw new Error(String(draft.message ?? '资料卡草稿读取失败'))
+					}
+					if (String(draft.data.draft_id ?? '') != cardDraftId || draft.data.expected_revision == null || draft.data.base_profile_revision == null || draft.data.source_revision_id == null) throw new Error('草稿版本信息不完整，请重新整理')
+					if (draft.data.status != 'ready' && draft.data.status != 'partial') {
+						this.profileCardSummarizeKey = ''
+						throw new Error('草稿已采用或失效，请重新整理')
+					}
+					this.profileCardDraft = draft.data
+					this.profileCardDraftId = String(draft.data.draft_id ?? '')
+					this.profileCardExpectedRevision = Number(draft.data.expected_revision ?? 0)
+					this.profileCardSourceRevisionId = draft.data.source_revision_id != null ? Number(draft.data.source_revision_id) : null
+					this.profileCardBaseProfileRevision = Number(draft.data.base_profile_revision)
+					this.profileCardTagApplyMode = 'merge'
+					this.resetProfileCardApply()
+					this.replaceExistingSelfIntro = false
+					this.profileCardRows = this.buildProfileCardRows(draft.data.fields)
+				} catch (error: any) {
+					if (this.pageAlive) this.profileCardError = error?.message ?? String(error)
+				} finally {
+					this.stopProfileCardWaitTimer()
+					if (this.pageAlive) this.profileCardLoading = false
+				}
 			},
 			// 海报身份元素（脱敏白名单内）：昵称、年龄段、城市中文、认证徽章。
 			// 任一接口失败都不阻塞海报——身份行留空即可。
 			async loadPosterIdentity() {
 				if (this.subject != 'personal') return
+				const privacySeq = this.continuousPrivacySeq
 				try {
 					const [meRes, profileRes] = await Promise.all([getMeProfile(), getOwnProfile()])
+					if (!this.pageAlive || !this.pageVisible || privacySeq != this.continuousPrivacySeq) return
 					let nickname = ''
 					let verifiedBadge = ''
 					if (meRes.success && meRes.data != null) {
@@ -287,9 +1004,10 @@
 				return s != '' ? s : '情感气质'
 			},
 			navBack() {
-				uni.navigateBack({ delta: 1, fail: () => { uni.switchTab({ url: '/pages/profile/profile' }) } })
+				this.leaveReview(() => uni.navigateBack({ delta: 1, fail: () => { uni.switchTab({ url: '/pages/profile/profile' }) } }))
 			},
 			async loadPreview() {
+				if (this.continuousFlow) { await this.loadContinuousPreview(); return }
 				this.loading = true
 				this.stateMessage = '正在生成成稿预览…'
 				this.errorMessage = ''
@@ -308,7 +1026,7 @@
 						await this.loadNarrative(false)
 						return
 					}
-					if (preview.status != 'active') throw new Error('预览已经失效，请返回墨相师重新整理')
+					if (preview.status != 'active') throw new Error('预览已经失效，请返回知遇重新整理')
 					this.draftId = preview.draftId
 					this.expectedRevision = preview.expectedRevision
 					this.previewContent = preview.content
@@ -319,22 +1037,34 @@
 				}
 			},
 			async loadNarrative(showLoading: boolean = true) {
+				const seq = ++this.continuousReadSeq
 				if (showLoading) this.loading = true
 				this.stateMessage = '正在读取完整画像…'
 				this.errorMessage = ''
 				try {
 					const res = await getPortraitNarrative(this.subject)
-					if (!res.success || res.data == null) throw new Error(String(res.message ?? '画像读取失败'))
+					if (!this.pageAlive || !this.pageVisible || seq != this.continuousReadSeq) return
+					if (!res.success || res.data == null) throw res
+					const returnedRevision = Number(res.data.revision_id ?? 0)
+					// 每次读取先清旧提示：版本一致或本次未指定版本时不得残留上一轮的说明。
+					// 带 revision_id 进入时必须核对正式版本：读到别的版本就如实说明，
+					// 不能把另一版正文当作「你刚才确认的那一版」展示。
+					this.narrativeNotice = ''
+					if (this.publishedRevisionId > 0 && returnedRevision != this.publishedRevisionId) {
+						this.narrativeNotice = '这份画像已更新到第 ' + returnedRevision + ' 版，下面是你当前生效的正式版本。'
+					}
 					this.narrative = res.data
 					if (this.subject == 'personal') this.loadPosterIdentity()
-					if (this.openPosterOnReady && this.narrativeReady) {
-						this.showPosterSheet = true
+					if (this.openPosterOnReady && this.canPrepareProfileCard) {
 						this.openPosterOnReady = false
+						this.loadPublicPosterContent()
 					}
 				} catch (e: any) {
-					this.errorMessage = '读取完整画像失败：' + (e?.message ?? String(e))
+					if (!this.pageAlive || !this.pageVisible || seq != this.continuousReadSeq) return
+					if (this.continuousFlow) this.handleContinuousError(e)
+					this.errorMessage = this.errorMessage || '读取完整画像失败：' + (e?.message ?? '请稍后重试')
 				} finally {
-					this.loading = false
+					if (seq == this.continuousReadSeq) this.loading = false
 				}
 			},
 			retryLoad() {
@@ -342,6 +1072,7 @@
 				else this.loadPreview()
 			},
 			onConfirmPublish() {
+				if (this.continuousFlow) return
 				if (this.publishing) return
 				uni.showModal({
 					title: '确认发布',
@@ -352,6 +1083,7 @@
 				})
 			},
 			async publishPreview() {
+				if (this.continuousFlow) return
 				if (this.draftId == '' || this.previewId == '' || this.publishing) return
 				this.publishing = true
 				this.loading = true
@@ -394,6 +1126,157 @@
 					this.publishing = false
 				}
 			},
+			onRequestApplyProfileCard() {
+				if (this.profileCardApplying || this.profileCardRows.length == 0) return
+				if (this.profileCardSelectedTags.length > profileCardTagBudget(this.profileCardExistingTagCount)) {
+					uni.showToast({ title: this.profileCardTagLimitText, icon: 'none' })
+					return
+				}
+				uni.showModal({
+					title: this.profileCardApplyPayload != null ? '核对上次采用结果' : '确认写入公开资料',
+					content: this.profileCardApplyPayload != null ? '将使用同一幂等键和原先确认的内容重试，不会重复写入，也不会改用当前编辑值。' : '确认采用后，只有你选中的字段会写入公开资料；可见对象仍受现有隐私设置约束。不会修改长期择偶标准、发送消息或公开访谈原文。已有自我介绍默认不替换，需先明确勾选替换。',
+					success: (res: any) => {
+						if (res.confirm && this.pageAlive) this.applyProfileCard()
+					}
+				})
+			},
+			async applyProfileCard() {
+				if (!this.pageAlive || this.profileCardApplying || this.profileCardRows.length == 0) return
+				if (this.profileCardApplyPayload == null) {
+					if (this.profileCardDraftId == '' || this.profileCardSourceRevisionId == null || this.profileCardBaseProfileRevision == null) {
+						this.profileCardError = '草稿版本信息不完整，请重新整理'
+						return
+					}
+					const accepted: any = {}
+					const personalTags: string[] = []
+					const qaAnswers: any[] = []
+					const rejected: string[] = []
+					for (let index = 0; index < this.profileCardRows.length; index++) {
+						const row = this.profileCardRows[index]
+						if (row.selected != true) { rejected.push(row.key); continue }
+						if (row.key == 'self_intro') accepted.self_intro = row.value
+						else if (row.isQa == true && Number(row.questionId) > 0) {
+							// 后端 ProfileQaAnswer：question_id 只能 1/2/3，answer ≤300，空串即不写。
+							const answer = String(row.value ?? '').trim()
+							if (answer == '') { rejected.push(row.key); continue }
+							qaAnswers.push({
+								question_id: Number(row.questionId),
+								question: String(row.label ?? ''),
+								answer: answer.length > PROFILE_QA_MAX_LENGTH ? answer.slice(0, PROFILE_QA_MAX_LENGTH) : answer
+							})
+						}
+						else if (row.key == 'interest_tag_candidates') {
+							if (this.profileCardSelectedTags.length > profileCardTagBudget(this.profileCardExistingTagCount)) {
+								uni.showToast({ title: this.profileCardTagLimitText, icon: 'none' })
+								return
+							}
+							for (let tagIndex = 0; tagIndex < this.profileCardSelectedTags.length; tagIndex++) personalTags.push(this.profileCardSelectedTags[tagIndex])
+						}
+					}
+					if (qaAnswers.length > 0) accepted.qa_answers = qaAnswers
+					if (personalTags.length > 0) accepted.personal_tags = personalTags
+					// 快照与表单数组分离：响应丢失后的同键重试必须保持原 body 摘要。
+					this.profileCardApplyPayload = { expected_revision: this.profileCardExpectedRevision, accepted: accepted, rejected: rejected, replace_existing: { self_intro: this.replaceExistingSelfIntro } }
+					this.profileCardApplyContext = this.profileCardOptionalFields()
+					this.profileCardApplyKey = createProfileCardIdempotencyKey('profile-card-apply')
+					this.profileCardSubmittedTags = personalTags.slice()
+				}
+				this.profileCardApplying = true
+				try {
+					const result = await applyProfileCardDraft(this.profileCardApplyPayload, this.profileCardApplyKey, this.profileCardApplyContext)
+					if (!this.pageAlive) return
+					if (!result.success || result.data == null) {
+						if (isProfileCardVersionConflict(result)) {
+							this.profileCardSummarizeKey = ''
+							this.resetProfileCardApply()
+							this.profileCardError = '资料已变化，请重新整理/刷新；请先核对当前资料，不会自动覆盖'
+							uni.showToast({ title: '资料已变化，请重新整理/刷新', icon: 'none' })
+							return
+						}
+						const code = Number(result.code)
+						if ((code == 400 || code == 422) && !this.profileCardApplyUncertain) {
+							this.resetProfileCardApply()
+							this.profileCardApplyMessage = String(result.message ?? '内容校验未通过，请修改后再次确认')
+						} else {
+							this.profileCardApplyUncertain = true
+							this.profileCardApplyMessage = '保存结果尚未确认，内容已锁定。请同键重试核对，或到我的资料核对结果；不会重复写入。'
+						}
+						uni.showToast({ title: String(result.message ?? '保存结果尚未确认，请重试核对'), icon: 'none' })
+						return
+					}
+					const written = Array.isArray(result.data.written_fields) ? result.data.written_fields as any[] : []
+					const skipped = Array.isArray(result.data.skipped_fields) ? result.data.skipped_fields as any[] : []
+					// 采用成功后读取正式资料核对，不只依赖回执提示"成功"；
+					// 核对不到时如实说明，不重复写入。
+					let readBackIssue = ''
+					try {
+						const own = await getOwnProfile()
+						if (this.pageAlive && own.success && own.data != null) {
+							const profile: any = own.data.profile != null ? own.data.profile : own.data
+							for (let index = 0; index < written.length; index++) {
+								const key = String(written[index])
+								if (key == 'self_intro' && String(profile.self_intro ?? '').trim() == '') readBackIssue = '自我介绍尚未核对到'
+								if (key.indexOf('qa_') == 0) {
+									// 后端回执里的问答键形如 qa_1 / qa_2 / qa_3，按 question_id 回读核对。
+									const qid = Number(key.slice(3))
+									const serverQa: any[] = Array.isArray(profile.qa_answers) ? profile.qa_answers as any[] : []
+									let qaFound = false
+									for (let qaIndex = 0; qaIndex < serverQa.length; qaIndex++) {
+										const item: any = serverQa[qaIndex]
+										if (item != null && Number(item.question_id) == qid && String(item.answer ?? '').trim() != '') {
+											qaFound = true
+											break
+										}
+									}
+									if (!qaFound) readBackIssue = '第 ' + qid + ' 题回答尚未核对到'
+								}
+								if (key == 'personal_tags') {
+									const serverTags = Array.isArray(profile.personal_tags) ? (profile.personal_tags as any[]).map((t: any): string => String(t)) : []
+									for (let tagIndex = 0; tagIndex < this.profileCardSubmittedTags.length; tagIndex++) {
+										if (serverTags.indexOf(this.profileCardSubmittedTags[tagIndex]) < 0) {
+											readBackIssue = '所选标签尚未核对到'
+											break
+										}
+									}
+								}
+							}
+						} else if (this.pageAlive) {
+							readBackIssue = '公开资料尚未核对到'
+						}
+					} catch (e) {
+						readBackIssue = '公开资料尚未核对到'
+					}
+					this.profileCardDraft = result.data
+					this.profileCardExpectedRevision = Number(result.data.expected_revision)
+					this.profileCardSummarizeKey = ''
+					this.resetProfileCardApply()
+					this.profileCardExistingTagCount = -1
+					this.profileCardApplyMessage = ''
+					this.profileCardVisible = false
+					if (readBackIssue != '') {
+						uni.showToast({ title: '已提交；' + readBackIssue + '，请稍后在资料页确认', icon: 'none', duration: 3000 })
+					} else if (written.length == 0) {
+						// 零字段也走成功回执，但公开导出要求至少一项被采用——不说明的话，
+						// 用户随后点「生成专属画像海报」只会看到失败，无从知道卡在哪。
+						uni.showToast({
+							title: skipped.length > 0
+								? '没有采用任何内容，暂时无法生成海报；如需更新已有自我介绍，请勾选「确认替换」'
+								: '公开资料未发生变化，暂时无法生成海报',
+							icon: 'none', duration: 3500
+						})
+					} else {
+						uni.showToast({ title: '已按回执写入公开资料', icon: 'none' })
+					}
+				} catch (error: any) {
+					if (this.pageAlive) {
+						this.profileCardApplyUncertain = true
+						this.profileCardApplyMessage = '保存结果尚未确认，内容已锁定。请同键重试核对，或到我的资料核对结果；不会重复写入。'
+						uni.showToast({ title: error?.message ?? '保存结果尚未确认，请重试核对', icon: 'none' })
+					}
+				} finally {
+					this.profileCardApplying = false
+				}
+			},
 			async onConfirmNarrative() {
 				if (!this.awaitingNarrativeConfirmation || this.confirming) return
 				this.confirming = true
@@ -410,6 +1293,7 @@
 				}
 			},
 			async onRegenerateNarrative() {
+				if (this.continuousFlow) return
 				if (this.regenerating) return
 				this.regenerating = true
 				try {
@@ -434,10 +1318,13 @@
 				}
 			},
 			onContinueChat() {
-				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-master?subject=' + this.subject })
+				this.leaveReview(() => uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-master' + (this.continuousFlow ? '?flow_version=continuous_v2' : '?flow_version=legacy&subject=' + this.subject) }))
+			},
+			onOpenSearchSuggestions() {
+				uni.navigateTo({ url: '/pagesSub/profileExtra/search?suggest=1' })
 			},
 			onBackToArchive() {
-				uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-archive' })
+				this.leaveReview(() => uni.redirectTo({ url: '/pagesSub/profileExtra/my-portrait-archive' }))
 			}
 		}
 	}
@@ -872,4 +1759,36 @@
 		font-weight: 700;
 	}
 
+	.mpr-btn-profile-card { background: var(--surface-warm); border-color: var(--primary); }
+	.mpr-btn-profile-card-text { color: var(--primary); font-size: 14px; font-weight: 700; }
+	.mpr-card-mask { position: fixed; z-index: 120; inset: 0; display: flex; align-items: flex-end; background: rgba(12, 19, 19, 0.36); }
+	.mpr-card-sheet { width: 100%; height: 82vh; box-sizing: border-box; padding: 22px 18px calc(22px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
+	.mpr-card-title { flex-shrink: 0; color: var(--ink); font-size: 20px; font-weight: 700; }
+	.mpr-card-scroll { flex: 1; height: 0; min-height: 0; width: 100%; }
+	.mpr-card-content { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+	.mpr-card-copy, .mpr-card-row-value { color: var(--ink2); font-size: 13px; line-height: 1.55; }
+	.mpr-card-state { display: flex; flex-direction: column; gap: 12px; padding: 18px 0; color: var(--ink2); font-size: 14px; }
+	.mpr-card-boundary { margin-top: 4px; }
+	.mpr-card-limit { display: block; margin-top: 6px; color: var(--primary-dark); font-size: 12px; line-height: 1.5; }
+	.mpr-card-replace { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 8px; box-sizing: border-box; border-radius: 8px; background: var(--surface-warm); color: var(--ink2); font-size: 12px; }
+	.mpr-card-replace-value { color: var(--primary); font-weight: 700; }
+	.mpr-card-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+	.mpr-card-limit, .mpr-card-replace { width: 100%; }
+	.mpr-card-row-copy { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+	.mpr-card-row-label { color: var(--ink); font-size: 14px; font-weight: 700; }
+	.mpr-card-row-toggle { min-height: 44px; display: flex; align-items: center; color: var(--primary); font-size: 13px; font-weight: 700; }
+	.mpr-card-row-locked { min-height: 44px; display: flex; align-items: center; color: var(--muted); font-size: 12px; }
+	.mpr-card-editor { width: 100%; min-height: 100px; padding: 8px; box-sizing: border-box; border-radius: 8px; background: var(--surface-warm); color: var(--ink2); font-size: 14px; line-height: 1.6; }
+	.mpr-card-tags { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+	.mpr-card-tag { min-height: 44px; box-sizing: border-box; display: flex; align-items: center; padding: 6px 10px; border-radius: 12px; background: var(--surface-warm); color: var(--ink2); font-size: 13px; }
+	.mpr-card-tag-selected { color: var(--primary); border: 1px solid var(--primary); }
+	.mpr-card-actions { flex-shrink: 0; display: flex; gap: 10px; margin-top: 4px; }
+	.mpr-card-actions .mpr-btn { flex: 1; min-width: 0; }
+	.mpr-field-row { padding: 14px 0; border-bottom: 1px solid var(--line); }
+	.mpr-field-editor { width: 100%; box-sizing: border-box; min-height: 88px; padding: 12px; margin-top: 10px; color: var(--ink); background: var(--surface-warm); border: 1px solid var(--line); border-radius: 10px; font-size: 14px; line-height: 1.6; }
+	.mpr-field-change { display: block; color: var(--primary); font-size: 12px; line-height: 1.6; margin-top: 8px; }
+	.mpr-field-remove { display: flex; align-items: center; min-height: 44px; color: var(--primary); font-size: 13px; }
+	.mpr-boundary-warning, .mpr-review-notice { display: block; padding: 12px; margin-top: 14px; background: var(--surface-warm); border-radius: 10px; color: var(--primary-dark); font-size: 13px; line-height: 1.6; text-align: left; }
+	.mpr-body { padding-bottom: calc(48px + env(safe-area-inset-bottom)); }
+	.mpr-nav-side { min-height: 44px; }
 </style>

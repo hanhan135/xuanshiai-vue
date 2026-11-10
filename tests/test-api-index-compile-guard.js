@@ -33,15 +33,30 @@ function assertNamedApiExportsResolve() {
 
 assert.match(source, /\bdeleteDynamic\b/, 'api/index.uts must re-export deleteDynamic')
 assert.match(source, /\bdeleteComment\b/, 'api/index.uts must re-export deleteComment')
-for (const name of ['getUserProfileUnlockStatus', 'unlockUserProfile', 'updateOwnNickname']) {
+// 2026-09-27：getUserProfileUnlockStatus / unlockUserProfile 已移除——后端不存在
+// /user/profile-unlock 路由，全仓无调用方（按导出名取用只会 404）。名单只保留
+// 仍在用的导出，并加反向断言防止死 API 回归。
+for (const name of ['updateOwnNickname']) {
   assert.match(source, new RegExp(`\\b${name}\\b`), `api/index.uts must re-export ${name}`)
   assert.match(userApi, new RegExp(`export async function ${name}\\b`), `api/user.uts must implement ${name}`)
+}
+for (const retired of ['getUserProfileUnlockStatus', 'unlockUserProfile', 'getChatFeatureUnlocks', 'unlockChatFeature', 'getRecommendUser', 'getSquareUsers', 'getRecommendUsers']) {
+  // 只对 re-export 条目与函数声明做反向断言；移除注释中保留函数名是允许的。
+  assert.doesNotMatch(
+    source,
+    new RegExp(`^\\s*${retired}\\s*,?\\s*$`, 'm'),
+    `api/index.uts must not re-export removed dead API ${retired}`
+  )
+  assert.doesNotMatch(userApi, new RegExp(`export async function ${retired}\\b`), `api/user.uts must not re-introduce removed dead API ${retired}`)
 }
 
 assert.match(userApi, /url:\s*'\/users\/me\/nickname'/, 'updateOwnNickname must use the authenticated nickname endpoint')
 assert.match(userApi, /method:\s*'PATCH'/, 'updateOwnNickname must use PATCH')
-assert.match(userApi, /url:\s*'\/profile\/tag-options'/, 'getProfileTagOptions must use the public tag catalog endpoint')
-assert.match(userApi, /skipAuth:\s*true/, 'getProfileTagOptions must not attach unnecessary authentication')
+// 标签目录自 461c19a 起随前端发布：mock/profile-tags.uts 由 scripts/sync-profile-tags.py
+// 从后端 app/core/profile_tags.py 生成，编辑页不再请求目录接口（与 test-personal-tags 同一口径）。
+const tagOptionsApi = userApi.split('export async function getProfileTagOptions()')[1].split('export async function updateOwnProfile')[0]
+assert.match(tagOptionsApi, /okRes\(mockProfileTagOptions\)/, 'getProfileTagOptions must serve the bundled catalog synced from backend constants')
+assert.doesNotMatch(tagOptionsApi, /request\(/, 'getProfileTagOptions must not fetch its catalog from the backend')
 assert.match(messageApi, /export async function getChatSessionId\b/, 'api/message.uts must implement getChatSessionId')
 assert.match(messageApi, /getChatPermission\(targetUserId, subject\)/, 'chat-session lookup must preserve the mutual-consent gate')
 

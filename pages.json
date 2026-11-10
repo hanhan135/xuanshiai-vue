@@ -45,26 +45,6 @@
         "navigationBarTitleText": "注册",
         "navigationStyle": "custom"
       }
-    },
-    {
-      "path": "pages/parent/parent",
-      "style": {
-        "navigationBarTitleText": "父母端",
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/parent/user-detail",
-      "style": {
-        "navigationBarTitleText": "资料详情",
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/emotion-lab/emotion-lab",
-      "style": {
-        "navigationBarTitleText": "情感实验室"
-      }
     }
   ],
   "globalStyle": {
@@ -104,6 +84,36 @@
   },
   "uniIdRouter": {},
   "subPackages": [
+    {
+      "root": "pagesSub/emotionLab",
+      "pages": [
+        {
+          "path": "emotion-lab",
+          "style": {
+            "navigationBarTitleText": "情感实验室"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pagesSub/parent",
+      "pages": [
+        {
+          "path": "parent",
+          "style": {
+            "navigationBarTitleText": "父母端",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "user-detail",
+          "style": {
+            "navigationBarTitleText": "资料详情",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
     {
       "root": "pagesSub/community",
       "pages": [
@@ -214,6 +224,12 @@
           }
         },
         {
+          "path": "rank",
+          "style": {
+            "navigationBarTitleText": "红娘排行榜"
+          }
+        },
+        {
           "path": "payment",
           "style": {
             "navigationBarTitleText": "确认付款"
@@ -300,6 +316,13 @@
           "path": "certification",
           "style": {
             "navigationBarTitleText": "我的认证"
+          }
+        },
+        {
+          "path": "unlock-history",
+          "style": {
+            "navigationBarTitleText": "解锁记录",
+            "navigationStyle": "custom"
           }
         },
         {
@@ -410,15 +433,15 @@
         },
         {
           "path": "my-portrait-master",
-          "style": { "navigationBarTitleText": "墨相师", "navigationStyle": "custom" }
+          "style": { "navigationBarTitleText": "知遇", "navigationStyle": "custom" }
         },
         {
           "path": "my-portrait-result",
-          "style": { "navigationBarTitleText": "画像成稿", "navigationStyle": "custom" }
+          "style": { "navigationBarTitleText": "我的画像成稿", "navigationStyle": "custom" }
         },
         {
           "path": "my-portrait-archive",
-          "style": { "navigationBarTitleText": "我的墨相档案", "navigationStyle": "custom" }
+          "style": { "navigationBarTitleText": "我的画像档案", "navigationStyle": "custom" }
         }
       ]
     },

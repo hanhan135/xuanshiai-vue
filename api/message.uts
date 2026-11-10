@@ -19,14 +19,17 @@ import {
   respondMockContactExchange
 } from '@/mock/message.uts'
 
-const DEFAULT_PEER_AVATAR = '/static/portraits/profile-woman-main.webp'
+// 兜底头像必须按性别区分：旧实现无条件回退一张女性图，
+// 导致男性会话对象在聊天页显示女性头像，且与会话列表（不回退）不一致。
+const DEFAULT_PEER_AVATAR_MALE = '/static/portraits/profile-man-light.webp'
+const DEFAULT_PEER_AVATAR_FEMALE = '/static/portraits/profile-woman-main.webp'
 const DEFAULT_ME_AVATAR = '/static/portraits/profile-man-light.webp'
 /** 消息切片独立使用可变 Mock，避免受全局联调开关影响。 */
 /** 普通用户消息中心与普通文字聊天使用 FastAPI；父母端仍由 subject fail-closed 保护。 */
 export const MESSAGE_USE_MOCK = false
 export const CHAT_USE_MOCK = false
-/** 联系方式交换尚未有对应 FastAPI 路由，继续隔离在本地 Mock。 */
-export const CONTACT_EXCHANGE_USE_MOCK = true
+/** 普通用户联系方式交换使用会话结构化请求；父母端仍保持隔离。 */
+export const CONTACT_EXCHANGE_USE_MOCK = false
 export const CHAT_MEDIA_USE_MOCK = true
 
 export type MessageSubject = {
@@ -511,7 +514,7 @@ function mapConversationItem(item: any): any {
     sessionId: sessionId,
     userId: Number(target.user_id != null ? target.user_id : 0),
     name: target.nickname != null && target.nickname != '' ? '' + target.nickname : '用户',
-    avatar: target.avatar != null ? resolveMediaUrl(target.avatar) : '',
+    avatar: resolvePeerAvatar(target),
     lastMessage: item != null && item.last_message != null ? '' + item.last_message : '',
     time: item != null && item.last_message_time != null ? '' + item.last_message_time : '',
     unreadCount: Number(item != null && item.unread_count != null ? item.unread_count : 0),
@@ -548,8 +551,10 @@ function mapApplicationItem(item: any, direction: string): any {
       ? (item != null && item.from_user_id != null ? item.from_user_id : 0)
       : (item != null && item.to_user_id != null ? item.to_user_id : 0)),
     name: user.nickname != null && user.nickname != '' ? '' + user.nickname : '用户',
+    age: user.age != null ? '' + user.age : '',
+    city: user.city_code != null && user.city_code != '' ? '' + user.city_code : '未填写城市',
     avatar: user.avatar != null ? resolveMediaUrl(user.avatar) : '',
-    message: item != null && item.message != null && item.message != '' ? '' + item.message : '想和你认真认识',
+    message: item != null && item.message != null && item.message != '' ? '' + item.message : '未填写附言',
     status: status,
     statusText: applicationStatusText(status),
     createdAt: item != null && item.created_at != null ? '' + item.created_at : '',
@@ -723,11 +728,19 @@ function currentChatUserId(): number {
   }
 }
 
+/**
+ * 后端 chat_message.type（建表注释）：
+ * 1 文本 / 2 图片 / 3 语音 / 4 视频 / 5 小程序卡片 / 6 系统消息。
+ * type=6 是「申请认识通过」时由后端自动写入的问候，必须单独识别，
+ * 否则会被当成对方发来的一条普通文本，既没有系统语义也破坏了对话归属。
+ */
 function chatMessageTypeFromBackend(value: any): string {
   const type = Number(value)
   if (type == 2) return 'image'
   if (type == 3) return 'voice'
   if (type == 4) return 'video'
+  if (type == 5) return 'card'
+  if (type == 6) return 'system'
   return 'text'
 }
 
@@ -852,6 +865,42 @@ async function markChatSessionRead(sessionId: number, subjectContext: any): Prom
   return okResponse({ success: true, sessionId: sessionId })
 }
 
+/** 会话操作只接受服务端 session_id；父母端暂无真实会话接口。 */
+export async function markConversationRead(sessionId: number, subject: MessageSubject | null = null) {
+  const context = resolveMessageSubject(subject)
+  if (context.valid != true) return messageSubjectFailure(context)
+  const unavailable = chatBackendUnavailable(context)
+  if (unavailable != null) return unavailable
+  if (MESSAGE_USE_MOCK) return failResponse('模拟会话不支持单独已读', 'CHAT_READ_NOT_AVAILABLE')
+  return markChatSessionRead(sessionId, context)
+}
+
+async function updateChatSession(sessionId: number, suffix: string, method: string, failure: string, subject: MessageSubject | null): Promise<any> {
+  const context = resolveMessageSubject(subject)
+  if (context.valid != true) return messageSubjectFailure(context)
+  const unavailable = chatBackendUnavailable(context)
+  if (unavailable != null) return unavailable
+  if (!isPositiveInteger(sessionId)) return failResponse('聊天会话标识无效', 'INVALID_CHAT_SESSION')
+  if (MESSAGE_USE_MOCK) return failResponse('模拟会话不支持该操作', 'CHAT_SESSION_MUTATION_NOT_AVAILABLE')
+  const res = normalizeBusinessResponse(await messageRequest({
+    url: '/chat/sessions/' + sessionId + suffix,
+    method: method
+  }))
+  if (res == null || res.success != true) return res ?? failResponse(failure)
+  return okResponse({ sessionId: sessionId })
+}
+
+export async function setChatSessionPinned(sessionId: number, pinned: boolean, subject: MessageSubject | null = null) {
+  return updateChatSession(sessionId, '/pin', pinned ? 'PUT' : 'DELETE', '置顶操作失败', subject)
+}
+
+export async function hideChatSession(sessionId: number, subject: MessageSubject | null = null) {
+  return updateChatSession(sessionId, '', 'DELETE', '隐藏会话失败', subject)
+}
+
+export async function restoreChatSession(sessionId: number, subject: MessageSubject | null = null) {
+  return updateChatSession(sessionId, '/restore', 'POST', '恢复会话失败', subject)
+}
 /** 将全部可见会话逐一标为已读；失败时不虚报成功。 */
 export async function markAllMessagesRead(subject: MessageSubject | null = null) {
   const subjectContext = resolveMessageSubject(subject)
@@ -911,6 +960,57 @@ export async function getMessageList(
   )
 }
 
+/** 头像裸路径 → 可访问 URL；只有空串/空值才回退默认图（`??` 兜不住空串）。 */
+function resolveAvatarUrl(raw: any, fallback: string): string {
+  if (raw == null) return fallback
+  const text = ('' + raw).trim()
+  if (text == '') return fallback
+  const resolved = resolveMediaUrl(text)
+  return resolved != '' ? resolved : fallback
+}
+
+/**
+ * 会话对象头像的唯一解析入口（会话列表 / 聊天记录 / 消息中心共用）。
+ *
+ * 优先级：avatar_thumb → avatar → 按性别兜底。
+ * 后端 `SocialUser` 同时下发 `avatar`/`avatar_thumb`/`gender`
+ * （app/schemas/social.py:11-17），所以缺头像时可以按性别选兜底图，
+ * 不必再退回一张写死的女性照片（那会让男性会话对象显示成女性）。
+ */
+function resolvePeerAvatar(target: any): string {
+  const t = target != null ? target : {}
+  const thumb = resolveMediaUrl(t.avatar_thumb != null ? '' + t.avatar_thumb : '')
+  if (thumb != '') return thumb
+  const full = resolveMediaUrl(t.avatar != null ? '' + t.avatar : '')
+  if (full != '') return full
+  const gender = Number(t.gender != null ? t.gender : 0)
+  if (gender == 2) return DEFAULT_PEER_AVATAR_FEMALE
+  return DEFAULT_PEER_AVATAR_MALE
+}
+
+let cachedMyAvatarUrl = ''
+
+/**
+ * 己方头像：取一次 `/auth/me` 的 avatar 并缓存，历史消息与新发消息共用。
+ * 曾经己方头像写死 `profile-man-light.webp`，导致女性账号也显示男头像。
+ */
+export async function getMyAvatarUrl(): Promise<string> {
+  if (cachedMyAvatarUrl != '') return cachedMyAvatarUrl
+  if (CHAT_USE_MOCK) {
+    cachedMyAvatarUrl = DEFAULT_ME_AVATAR
+    return cachedMyAvatarUrl
+  }
+  const res = await messageRequest({ url: '/auth/me', method: 'GET' })
+  const raw = res != null && res.success == true && res.data != null ? res.data.avatar : null
+  cachedMyAvatarUrl = resolveAvatarUrl(raw, DEFAULT_ME_AVATAR)
+  return cachedMyAvatarUrl
+}
+
+/** 清空己方头像缓存（切换账号/退出登录时调用）。 */
+export function resetMyAvatarCache(): void {
+  cachedMyAvatarUrl = ''
+}
+
 /** Fetch a real chat history through the authenticated session-scoped FastAPI route. */
 export async function getChatMessages(
   userId: number,
@@ -942,7 +1042,8 @@ export async function getChatMessages(
   if (!Array.isArray(rows)) return protectSubjectResponse(failResponse('聊天记录响应无效', 'INVALID_CHAT_RESPONSE', rows), subjectContext)
   const currentUserId = currentChatUserId()
   if (!isPositiveInteger(currentUserId)) return protectSubjectResponse(failResponse('登录用户信息已失效，请重新登录', 'AUTH_REQUIRED'), subjectContext)
-  const peerAvatar = sessionRes.data.target?.avatar ?? DEFAULT_PEER_AVATAR
+  const myAvatar = await getMyAvatarUrl()
+  const peerAvatar = resolvePeerAvatar(sessionRes.data.target)
   const messages = rows.map((row: any) => {
     const isMine = Number(row?.from_user_id ?? 0) == currentUserId
     const type = chatMessageTypeFromBackend(row?.type)
@@ -955,8 +1056,8 @@ export async function getChatMessages(
       time: row?.created_at ?? '',
       showTime: false,
       isMine: isMine,
-      avatar: isMine ? DEFAULT_ME_AVATAR : peerAvatar,
-      senderAvatar: isMine ? DEFAULT_ME_AVATAR : peerAvatar,
+      avatar: isMine ? myAvatar : peerAvatar,
+      senderAvatar: isMine ? myAvatar : peerAvatar,
       revoked: row?.revoked === true || row?.is_recalled === true,
       status: isMine ? 'sent' : ''
     }
@@ -975,7 +1076,8 @@ export async function sendMessage(
   type: string = 'text',
   clientMessageId: string = '',
   subject: MessageSubject | null = null,
-  mediaId: number | null = null
+  mediaId: number | null = null,
+  quoteMessageId: number | null = null
 ) {
   const subjectContext = resolveMessageSubject(subject)
   if (subjectContext.valid != true) return messageSubjectFailure(subjectContext)
@@ -1010,7 +1112,12 @@ export async function sendMessage(
   const response = normalizeBusinessResponse(await messageRequest({
     url: '/chat/sessions/' + sessionId + '/messages',
     method: 'POST',
-    data: { type: 1, content: content.trim(), client_message_id: resolvedClientMessageId }
+    data: {
+      type: 1,
+      content: content.trim(),
+      client_message_id: resolvedClientMessageId,
+      quote_message_id: quoteMessageId != null && quoteMessageId > 0 ? quoteMessageId : null
+    }
   }))
   if (response == null || response.success != true) {
     if (response != null && Number(response.code) == 409) {
@@ -1082,6 +1189,20 @@ export async function uploadChatMedia(
   return failResponse('聊天媒体上传契约尚未开放', 'CHAT_MEDIA_NOT_AVAILABLE')
 }
 
+/** 仅自己隐藏一条消息；对方不受影响。 */
+export async function hideMessageForMe(messageId: number, subject: MessageSubject | null = null) {
+  const subjectContext = resolveMessageSubject(subject)
+  if (subjectContext.valid != true) return messageSubjectFailure(subjectContext)
+  const parentBackendFailure = parentBackendUnavailable(subjectContext)
+  if (parentBackendFailure != null) return parentBackendFailure
+  if (!isPositiveInteger(messageId)) return failResponse('无效的消息', 'INVALID_MESSAGE')
+  const response = normalizeBusinessResponse(await messageRequest({
+    url: '/chat/messages/' + messageId + '/for-me',
+    method: 'DELETE'
+  }))
+  return protectSubjectResponse(response, subjectContext)
+}
+
 export async function revokeMessage(
   messageId: number,
   clientCommandId: string,
@@ -1106,6 +1227,47 @@ export async function revokeMessage(
   return okResponse({ messageId: messageId, revoked: true, clientCommandId: commandId })
 }
 
+/** 仅映射联系方式请求；无论服务端版本如何，待确认的值都不交给页面。 */
+function mapContactExchange(row: any, viewerId: number): any {
+  if (row == null || (row.request_type != 'PHONE' && row.request_type != 'WECHAT')) return null
+  const requesterId = Number(row.requester_id)
+  const responderId = Number(row.responder_id)
+  if (!isPositiveInteger(Number(row.id)) || !isPositiveInteger(Number(row.session_id)) ||
+    !isPositiveInteger(requesterId) || !isPositiveInteger(responderId) ||
+    (requesterId != viewerId && responderId != viewerId)) return null
+  let status = String(row.status).toLowerCase()
+  if (['pending', 'accepted', 'rejected', 'withdrawn', 'expired'].indexOf(status) < 0) return null
+  if (status == 'pending' && row.expire_at != null) {
+    // 服务端 MySQL UTC datetime 序列化没有时区后缀，不能按设备本地时区解释。
+    const rawExpiry = String(row.expire_at)
+    const expiry = /[zZ]$|[+-]\d{2}:\d{2}$/.test(rawExpiry) ? rawExpiry : rawExpiry + 'Z'
+    const expiresAt = Date.parse(expiry)
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) status = 'expired'
+  }
+  const payload = row.payload
+  const value = status == 'accepted' && payload != null && typeof payload.contact_value == 'string'
+    ? String(payload.contact_value).trim() : ''
+  return {
+    id: Number(row.id),
+    sessionId: Number(row.session_id),
+    contactType: row.request_type == 'PHONE' ? 'phone' : 'wechat',
+    status: status,
+    requestedByMe: requesterId == viewerId,
+    contactValue: value != '' ? value : null
+  }
+}
+
+function contactExchangeResponse(res: any, viewerId: number, sessionId: number = 0): any {
+  if (Number(uni.getStorageSync(CURRENT_USER_ID_KEY)) != viewerId) return failResponse('登录状态已变化，请重新打开会话', 'AUTH_CHANGED')
+  const normalized = normalizeBusinessResponse(res)
+  if (normalized == null || normalized.success != true) return normalized
+  const exchange = mapContactExchange(businessData(normalized), viewerId)
+  if (exchange == null || (sessionId > 0 && exchange.sessionId != sessionId)) {
+    return failResponse('联系方式请求响应无效', 'INVALID_CONTACT_EXCHANGE_RESPONSE')
+  }
+  return okResponse(exchange)
+}
+
 export async function getContactExchanges(
   userId: number,
   subject: MessageSubject | null = null
@@ -1119,7 +1281,26 @@ export async function getContactExchanges(
     const result = getMockContactExchanges(userId, subjectContext.key)
     return result.success == true ? okResponse(result.list) : failResponse(result.message, result.code, result)
   }
-  return failResponse('联系方式交换后端契约尚未开放', 'CONTACT_EXCHANGE_NOT_AVAILABLE')
+  const viewerId = Number(uni.getStorageSync(CURRENT_USER_ID_KEY))
+  if (!isPositiveInteger(viewerId)) return failResponse('请先登录', 'AUTH_REQUIRED')
+  const sessionRes = await getChatSessionId(userId, subject)
+  if (sessionRes == null || sessionRes.success != true || sessionRes.data == null) return sessionRes
+  const sessionId = Number(sessionRes.data.id)
+  const res = normalizeBusinessResponse(await messageRequest({
+    url: '/chat/sessions/' + sessionId + '/requests', method: 'GET'
+  }))
+  if (Number(uni.getStorageSync(CURRENT_USER_ID_KEY)) != viewerId) return failResponse('登录状态已变化，请重新打开会话', 'AUTH_CHANGED')
+  if (res == null || res.success != true) return res
+  const rows = businessData(res)
+  if (!Array.isArray(rows)) return failResponse('联系方式状态响应无效', 'INVALID_CONTACT_EXCHANGE_RESPONSE')
+  const exchanges: any[] = []
+  for (const row of rows) {
+    if (row == null || (row.request_type != 'PHONE' && row.request_type != 'WECHAT')) continue
+    const exchange = mapContactExchange(row, viewerId)
+    if (exchange == null || exchange.sessionId != sessionId) return failResponse('联系方式状态响应无效', 'INVALID_CONTACT_EXCHANGE_RESPONSE')
+    exchanges.push(exchange)
+  }
+  return okResponse(exchanges)
 }
 
 export async function createContactExchange(
@@ -1141,7 +1322,25 @@ export async function createContactExchange(
     const result = createMockContactExchange(userId, contactType, contactValue, commandId, subjectContext.key)
     return result.success == true ? okResponse(result.exchange) : failResponse(result.message, result.code, result)
   }
-  return failResponse('联系方式交换后端契约尚未开放', 'CONTACT_EXCHANGE_NOT_AVAILABLE')
+  const value = contactValue.trim()
+  if (contactType == 'wechat' && !/^[a-zA-Z][a-zA-Z0-9_-]{5,19}$/.test(value)) {
+    return failResponse('请输入正确的微信号（6–20位，以字母开头）', 'INVALID_CONTACT_VALUE')
+  }
+  const viewerId = Number(uni.getStorageSync(CURRENT_USER_ID_KEY))
+  if (!isPositiveInteger(viewerId)) return failResponse('请先登录', 'AUTH_REQUIRED')
+  const sessionRes = await getChatSessionId(userId, subject)
+  if (sessionRes == null || sessionRes.success != true || sessionRes.data == null) return sessionRes
+  const sessionId = Number(sessionRes.data.id)
+  if (Number(uni.getStorageSync(CURRENT_USER_ID_KEY)) != viewerId) return failResponse('登录状态已变化，请重新打开会话', 'AUTH_CHANGED')
+  // 手机号由服务端读取当前账号绑定号码，不允许客户端替用户填写。
+  const payload: any = contactType == 'wechat' ? { contact_value: value } : null
+  const res = await messageRequest({
+    url: '/chat/sessions/' + sessionId + '/requests',
+    method: 'POST',
+    data: { request_type: contactType == 'phone' ? 'PHONE' : 'WECHAT', payload: payload },
+    headers: { 'Idempotency-Key': commandId }
+  })
+  return contactExchangeResponse(res, viewerId, sessionId)
 }
 
 export async function respondContactExchange(
@@ -1162,7 +1361,15 @@ export async function respondContactExchange(
     const result = respondMockContactExchange(exchangeId, action, commandId, subjectContext.key)
     return result.success == true ? okResponse(result.exchange) : failResponse(result.message, result.code, result)
   }
-  return failResponse('联系方式交换后端契约尚未开放', 'CONTACT_EXCHANGE_NOT_AVAILABLE')
+  const viewerId = Number(uni.getStorageSync(CURRENT_USER_ID_KEY))
+  if (!isPositiveInteger(viewerId)) return failResponse('请先登录', 'AUTH_REQUIRED')
+  const res = await messageRequest({
+    url: '/chat/session-requests/' + exchangeId,
+    method: 'PATCH',
+    data: { action: action == 'accept' ? 'ACCEPT' : 'REJECT' },
+    headers: { 'Idempotency-Key': commandId }
+  })
+  return contactExchangeResponse(res, viewerId)
 }
 
 /** Compatibility alias retained for callers of the former placeholder export. */

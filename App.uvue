@@ -16,13 +16,13 @@
 		const currentPage = pages.length > 0 ? pages[pages.length - 1] : null
 		const route = currentPage != null && currentPage.route != null ? String(currentPage.route) : ''
 		if (
-			route == '' || route == 'pages/parent/parent' || route == 'pages/parent/user-detail' ||
-			route == 'pages/profile/certification' || route == 'pagesSub/chat/detail' ||
+			route == '' || route == 'pagesSub/parent/parent' || route == 'pagesSub/parent/user-detail' ||
+			route == 'pagesSub/profileExtra/certification' || route == 'pagesSub/chat/detail' ||
 			route == 'pages/auth/login' || route == 'pages/auth/register' ||
 			route == 'pagesSub/userExtra/onboarding/profile'
 		) return
 		parentRouteRedirecting = true
-		uni.reLaunch({ url: '/pages/parent/parent', complete: () => { parentRouteRedirecting = false } })
+		uni.reLaunch({ url: '/pagesSub/parent/parent', complete: () => { parentRouteRedirecting = false } })
 	}
 
 	const tryAutoEnterFastApiCommunity = (): boolean => {
@@ -164,6 +164,9 @@
 		--match-deep: #154A45;
 		--match-coral: #C95C58;
 		--match-line: #DBE4DF;
+		/* 交握的心素材原色，牵线卡照片边框与它同色 */
+		--clasp-indigo: #3B3CA9;
+		--clasp-teal: #00E0C2;
 		--match-shadow: 0 12px 28px rgba(27, 91, 86, 0.09);
 		--shortcut-application: #ECEBF8;
 		--shortcut-plane: #DDF1F5;

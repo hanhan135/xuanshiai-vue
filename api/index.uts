@@ -1,7 +1,14 @@
-﻿/**
+/**
  * API 统一导出
  * import { getRecommendUser, getMessageList } from '@/api'
  */
+
+// 画像指标与独立角色扮演
+export { getPortraitMetricHistory } from './ai-profile-metrics.uts'
+export { getRoleplayScenes, getRoleplayTurns, submitRoleplayTurn, confirmRoleplayInterest } from './ai-roleplay.uts'
+
+// 配置开关（页面只允许从 '@/api' 取，禁止直接引 api/config.uts）
+export { EMOTION_LAB_USE_MOCK } from './config.uts'
 
 // 认证相关
 export {
@@ -13,18 +20,18 @@ export {
   loginByPhone,
   loginByWechat,
   bindPhone,
+  changePhone,
+  createPhoneChangeKey,
   submitRealname,
   getUserCertifications,
   submitEducationCertification,
   submitSinglePledgeCertification,
-  logout
+  logout,
+  refreshAccessToken
 } from './auth.uts'
 
 // 用户相关
 export {
-  getRecommendUser,
-  getRecommendUsers,
-  getSquareUsers,
   getUserDetail,
   getMeProfile,
   getOwnProfile,
@@ -33,22 +40,21 @@ export {
   updateOwnNickname,
   getOwnPreferences,
   updateOwnPreferences,
+  verifyFace,
   uploadUserProfileMedia,
   deleteUserProfilePhoto,
   applyToMeet,
   likeUser,
   getMyLikedProfiles,
-  getLikedUsers,
-  getChatFeatureUnlocks,
-  unlockChatFeature,
-  getUserProfileUnlockStatus,
-  unlockUserProfile
+  getLikedUsers
 } from './user.uts'
 
 // 首页与我的页面的发现数据
 export {
   getDiscoveryRecommendations,
+  getDiscoveryFilterOptions,
   getDiscoveryPlaza,
+  getUserCardPreview,
   getProfileOverview,
   getBrowseHistory,
   getVisitors,
@@ -64,13 +70,25 @@ export {
   acceptDiscoveryApplication,
   rejectDiscoveryApplication
 } from './discovery.uts'
+// 择偶偏好（详情页「Ta 的理想型」）
+export { getUserPartnerPreference } from './preference.uts'
+export { getPointProducts, getPointsSummary, getMyQuotas, redeemPointProduct, dailyCheckin, getMyInvites } from './points.uts'
+// AI 资料卡成稿出口
+export { summarizeProfileCard, getProfileCardDraft, applyProfileCardDraft, waitForProfileCardTask } from './ai-profile-card.uts'
 
+// AI 三类推荐（M07）
 export {
   getMembershipStatus,
   createMembershipOrder,
-  getMembershipOrder,
-  testPayOrder
+  getMembershipOrder
 } from './membership.uts'
+
+// 微信支付（预支付 / requestPayment / 轮询）
+export {
+  createPrepay,
+  requestWechatPayment,
+  pollUntil
+} from './payment.uts'
 
 // 消息相关
 export {
@@ -80,6 +98,7 @@ export {
   sendMessage,
   uploadChatMedia,
   revokeMessage,
+  hideMessageForMe,
   handleContactExchangeRequest,
   getContactExchanges,
   createContactExchange,
@@ -89,7 +108,13 @@ export {
   getConversationPage,
   getApplicationPage,
   getChatPermission,
-  markAllMessagesRead
+  markAllMessagesRead,
+  markConversationRead,
+  setChatSessionPinned,
+  hideChatSession,
+  restoreChatSession,
+  getMyAvatarUrl,
+  resetMyAvatarCache
 } from './message.uts'
 export {
   ADVISOR_SCENARIOS,
@@ -102,13 +127,40 @@ export {
   advisorErrorMessage
 } from './ai-advisor.uts'
 
-export { generateIdealPartner } from './ai-search.uts'
+export {
+  getCompatibility,
+  recomputeCompatibility,
+  waitForCompatibilityTask
+} from './ai-compatibility.uts'
+
+export {
+  getAiCapabilities,
+  isAiSearchEnabled
+} from './ai-capabilities.uts'
+
+export {
+  createSearchDraft,
+  getSearchDraft,
+  patchSearchDraft,
+  confirmSearchDraft,
+  waitForSearchTask,
+  getSearchSnapshotResults,
+  getSearchSuggestions,
+  generateSearchSuggestions,
+  searchResultItems,
+  searchNextCursor,
+  searchHasMore,
+  searchDraftConditions,
+  searchDraftUnknown,
+  searchDraftConflicts,
+  searchDraftRevision
+} from './ai-search.uts'
 
 export {
   LIVE_STATUSES, liveStatusLabel, liveErrorMessage, getLiveSessions, getLiveSession, getMyLiveReservation,
   reserveLiveSession, cancelLiveReservation, submitLiveDeviceCheck, checkInLiveSession,
   respondLiveInvitation, leaveLiveStage, createLiveIdempotencyKey, createLiveInteraction,
-  reportLiveUser, getLiveRtcTicket, connectLiveEvents
+  reportLiveUser, getLiveRtcTicket, getLiveWsTicket, connectLiveEvents
 } from './live.uts'
 
 export type {
@@ -142,6 +194,7 @@ export type {
 // 情感实验室相关
 export {
   getEmotionLabSummary,
+  getEmotionLabOfflineSummary,
   getEmotionLabMatches,
   startMbtiAssessment,
   saveMbtiAnswer,
@@ -187,6 +240,8 @@ export {
   getMyActivities,
   getCommunityBanners,
   getFixedCommunityBanner,
+  getFixedTopicBanner,
+  getFixedActivityBanner,
   ensureCommunityBanners,
   getCommunityNotifications,
   getOfficialCommunityActivities,
@@ -225,7 +280,10 @@ export {
   respondPaperPlaneContactExchange,
   readPaperPlaneConversation,
   getPaperPlaneProfileUnlock,
+  getPaperPlaneProfileUnlockHistory,
   unlockPaperPlaneProfile,
+  getPaperPlaneCatchSummary,
+  catchPaperPlane,
   PAPER_PLANE_PROFILE_UNLOCK_COST,
   endPaperPlaneConversation,
   createCommunityCreateKey,
@@ -276,6 +334,7 @@ export {
 // 爆灯相关
 export {
   SPOTLIGHT_AMOUNT,
+  sendSuperlike,
   paySpotlight
 } from './spotlight.uts'
 
@@ -295,7 +354,10 @@ export {
   addPromoterLead,
   createPromoterWithdrawal,
   getMatchmakerReviewMembers,
+  pickupMatchmakerMember,
   getMatchmakerWorkspaceProfile,
+  getMatchmakerWorkspaceHomepage,
+  updateMatchmakerWorkspaceHomepage,
   getMatchmakerWorkspaceLeads,
   getWorkspaceLeadFollowUps,
   addWorkspaceLeadFollowUp,
@@ -308,10 +370,19 @@ export {
   createWorkspaceLead,
   getMatchmakerWorkspaceIntroductions,
   getMatchmakerWorkspaceMeetingRequests,
+  getMatchmakerWorkspaceCommissionEntries,
+  getMatchmakerWorkspaceOfflineIncome,
+  getMatchmakerWorkspaceIdentity,
+  getMatchmakerWorkspaceGoodNews,
+  getMatchmakerWorkspaceGoodNewsPennants,
+  uploadWorkspaceGoodNewsPhoto,
+  createMatchmakerWorkspaceGoodNews,
   updateMatchmakerMeetingStatus,
   scheduleMatchmakerMeeting,
+  createMatchmakerMeeting,
   updateMatchmakerMeetingRecordStatus,
   updateMatchmakerIntroductionStatus,
+  viewMatchmakerIntroductionContact,
   createMatchmakerIntroduction,
   deleteMatchmakerMeetingRequest,
   createPartnerTeamQrcode,
@@ -430,3 +501,33 @@ export type {
   MemoryRevokeGrantResponse,
   MemoryLiftSuppressionResponse
 } from './ai-memory.uts'
+
+// 红娘喜讯（会员端）
+export {
+  GOOD_NEWS_MAX_IMAGES,
+  GOOD_NEWS_DEFAULT_STAGES,
+  formatGoodNewsDuration,
+  goodNewsVerificationLabel,
+  goodNewsReportStatusLabel,
+  normalizeGoodNewsConfig,
+  normalizeGoodNewsItem,
+  normalizeGoodNewsReport,
+  buildGoodNewsReportPayload,
+  validateGoodNewsReport,
+  newGoodNewsIdempotencyKey,
+  getGoodNewsConfig,
+  getGoodNewsList,
+  getGoodNewsDetail,
+  blessGoodNews,
+  createGoodNewsReport,
+  getMyGoodNewsReports,
+  submitGoodNewsFeedback,
+  uploadGoodNewsPhoto
+} from './good-news.uts'
+
+export type {
+  GoodNewsStage,
+  GoodNewsConfig,
+  GoodNewsItem,
+  GoodNewsReportItem
+} from './good-news.uts'

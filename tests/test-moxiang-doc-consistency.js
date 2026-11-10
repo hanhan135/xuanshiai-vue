@@ -12,11 +12,14 @@ const path = require('node:path')
 
 const root = path.resolve(__dirname, '..')
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), 'utf8')
-const workspace = path.resolve(root, '..')
-
+// 本地优先核对工作区权威全文；干净检出读取随提交版本化、带来源及摘要的完整快照。
+// 快照缺失、摘要不符或本地源文档漂移均失败，不能 SKIP 或改指向旧仓内镜像。
+const { load } = require('../scripts/authoritative-docs.cjs')
+const { docs, source } = load()
+const product = docs['PRODUCT.md']
+const design = docs['DESIGN.md']
+console.log(`INFO authoritative docs source=${source}`)
 const drawer = read('utils', 'moxiang-poster-drawer.uts')
-const product = fs.readFileSync(path.join(workspace, 'PRODUCT.md'), 'utf8')
-const design = fs.readFileSync(path.join(workspace, 'DESIGN.md'), 'utf8')
 
 /** 从 MOXIANG_POSTER_THEMES 中抽出 key 与 name（顺序即定义顺序）。 */
 function themesInCode() {

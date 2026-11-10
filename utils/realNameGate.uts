@@ -1,12 +1,14 @@
 /**
-	 * 社区 / 申请认识 · 实名门槛
-	 * 产品覆盖：常规社区互动、申请认识、参与话题及带话题发布均仅要求实名通过
-	 * 双重认证（实名 + 学历过审）仅作展示加分，不作为话题门槛
-	 * 浏览、举报、拉黑不要求实名
-	 *
-	 * 状态枚举（定版）：passed | missing | reviewing | rejected | revoked
-	 * 兼容旧值：pending→reviewing，failed→rejected
-	 */
+ * 社区 / 申请认识 · 认证门槛
+ * 产品覆盖（与 PRODUCT.md §互动门槛 一致）：
+ * - 仅实名通过：常规社区互动（点赞 / 关注 / 评论 / 收藏 / 活动报名 / 纸飞机）、申请认识、参与话题
+ * - 实名通过 + 人脸通过：发布动态（含带话题发布），见 guardCommunityVerification
+ * - 双重认证（实名 + 学历过审）仅作展示加分，不作为任何操作门槛
+ * - 浏览、举报、拉黑不要求实名
+ *
+ * 状态枚举（定版）：passed | missing | reviewing | rejected | revoked
+ * 兼容旧值：pending→reviewing，failed→rejected
+ */
 
 import { getMeProfile } from '@/api/user.uts'
 
@@ -23,6 +25,7 @@ export type GateAction =
   | 'activitySignup'
   | 'paperPlane'
   | 'apply'
+  | 'acceptApply'
 
 const ACTION_LABELS: Record<string, string> = {
   publish: '发布动态',
@@ -33,7 +36,8 @@ const ACTION_LABELS: Record<string, string> = {
   topicJoin: '加入话题',
   activitySignup: '报名活动',
   paperPlane: '使用纸飞机',
-  apply: '申请认识'
+  apply: '申请认识',
+  acceptApply: '回应认识申请'
 }
 
 /** 归一化历史状态值 */
@@ -103,14 +107,16 @@ export async function ensureRealName(action: GateAction | string = 'publish') {
     }
     const label = actionLabel(action)
     let message = `完成实名认证后即可${label}`
-    if (action == 'apply') {
+    // 申请认识与回应认识申请同属「建立关系」类动作：文案结构一致，只换动词。
+    if (action == 'apply' || action == 'acceptApply') {
+      const verb = action == 'acceptApply' ? '回应认识申请' : '申请认识'
       message = '需要实名认证'
       if (status == 'reviewing') {
-        message = '实名认证审核中，通过后即可申请认识'
+        message = `实名认证审核中，通过后即可${verb}`
       } else if (status == 'rejected') {
-        message = '实名认证未通过，请重新认证后再申请认识'
+        message = `实名认证未通过，请重新认证后再${verb}`
       } else if (status == 'revoked') {
-        message = '实名认证已撤销，请重新认证后再申请认识'
+        message = `实名认证已撤销，请重新认证后再${verb}`
       }
     } else if (status == 'reviewing') {
       message = `实名认证审核中，通过后即可${label}`
@@ -153,7 +159,8 @@ export function resolveEducationStatus(profile: any): EducationStatus {
 
 /**
  * 拉取当前用户并校验实名和学历认证是否均已通过。
- * 仅用于双重认证展示 / 预留场景；话题参与与带话题发布已改回 ensureRealName。
+ * 仅用于双重认证展示 / 预留场景。
+ * 操作门槛请用：常规互动与参与话题 → ensureRealName；发布动态 → guardCommunityVerification。
  */
 export async function ensureDualVerification(action: GateAction | string = 'topicJoin') {
   const realNameResult = await ensureRealName(action)
@@ -222,7 +229,7 @@ export async function guardRealName(action: GateAction | string = 'publish'): Pr
   uni.showModal({
     title: '需要实名认证',
     content: result.message,
-    confirmText: action == 'apply' ? '去认证' : '去实名',
+    confirmText: action == 'apply' || action == 'acceptApply' ? '去认证' : '去实名',
     cancelText: '稍后再说',
     success: (res) => {
       if (res.confirm) {

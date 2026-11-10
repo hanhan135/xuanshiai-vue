@@ -130,7 +130,7 @@
 						<text class="qr-title">微信扫码咨询</text>
 						<text class="qr-subtitle">添加客服微信，备注"推广红娘入驻咨询"</text>
 						<view class="qr-image-wrap">
-							<image class="qr-image" src="/static/qrcodes/kefu-wechat.png" mode="aspectFit"></image>
+							<image class="qr-image" src="/static/qrcodes/kefu-wechat.webp" mode="aspectFit"></image>
 						</view>
 						<text class="qr-tip">长按识别二维码添加</text>
 					</view>
@@ -212,7 +212,7 @@ const guideToRequiredVerification = (message: string) => {
 		content: needsPhone ? '绑定手机号后，还需要完成实名认证才可提交申请。' : '实名认证审核通过后即可提交申请。',
 		confirmText: '去完成',
 		success: (modal: any) => {
-			if (modal.confirm) uni.navigateTo({ url: '/pages/profile/certification?focus=' + (needsPhone ? 'phone' : 'realname') + '&returnTo=promoter' })
+			if (modal.confirm) uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + (needsPhone ? 'phone' : 'realname') + '&returnTo=promoter', fail: () => { uni.showToast({ title: '认证页打开失败，请稍后重试', icon: 'none' }) } })
 		}
 	})
 }

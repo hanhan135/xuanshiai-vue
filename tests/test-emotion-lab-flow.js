@@ -7,7 +7,7 @@ const mockPath = path.join(root, 'mock/emotionLab.uts')
 const questionBankPath = path.join(root, 'mock/mbtiQuestionBank.uts')
 const apiPath = path.join(root, 'api/emotionLab.uts')
 const apiIndexPath = path.join(root, 'api/index.uts')
-const pagePath = path.join(root, 'pages/emotion-lab/emotion-lab.uvue')
+const pagePath = path.join(root, 'pagesSub/emotionLab/emotion-lab.uvue')
 const userEditPath = path.join(root, 'pages/user/edit.uvue')
 const userMockPath = path.join(root, 'mock/user.uts')
 const authApiPath = path.join(root, 'api/auth.uts')
@@ -641,14 +641,27 @@ async function run() {
   assert.strictEqual(discarded.status, 'discarded')
 
   const api = fs.readFileSync(apiPath, 'utf8')
-  assert.ok(api.includes('export const EMOTION_LAB_USE_MOCK = true'), 'API should expose its module mock boundary')
+  // 2026-10-26：开关迁到 api/config.uts 集中管理；2026-11-10 后端就绪后切到真实接口。
+  const apiConfig = fs.readFileSync(path.join(__dirname, '..', 'api', 'config.uts'), 'utf8')
+  assert.ok(
+    apiConfig.includes('export const EMOTION_LAB_USE_MOCK = false'),
+    'config.uts should own the emotion-lab mock boundary'
+  )
+  assert.ok(
+    /import\s*\{[^}]*EMOTION_LAB_USE_MOCK[^}]*\}\s*from\s*['"]\.\/config\.uts['"]/.test(api),
+    'emotionLab API should consume the mock boundary from config.uts'
+  )
   assert.ok(api.includes('configureEmotionLabMockRuntime'), 'API should configure the cross-platform storage boundary')
   assert.ok(
     api.includes('uni.getStorageSync(CURRENT_USER_ID_KEY)'),
     'API should resolve emotion state from the shared authenticated user id key'
   )
   assert.ok(api.includes('syncMockMeMbtiProfileData'), 'API should use the unified Mock user profile writer')
-  assert.ok(api.includes('EMOTION_LAB_SUBJECT_REQUIRED'), 'API should fail closed when xsa_user_id is missing')
+  // 2026-10-26：未登录不再整页报错，改为「访客主体可做题，保存时才要求登录」。
+  assert.ok(
+    api.includes('resolveGuestSubject'),
+    'API should degrade to a per-device guest subject instead of throwing'
+  )
   assert.ok(!api.includes("return 'mock-user:9001'"), 'API must not share a fixed fallback subject across accounts')
   assert.match(
     api,
@@ -836,7 +849,7 @@ async function run() {
 	assert.ok(userEditPage.includes('result.data.profileSource'), 'profile editor should only consume the explicit profile source')
 	assert.ok(userEditPage.includes("sourceType != 'assessment' && sourceType != 'self_reported'"), 'profile editor should reject unknown MBTI sources')
 	assert.ok(userEditPage.includes("onShow(() =>"), 'profile editor should refresh confirmed MBTI after returning from the lab')
-	assert.ok(userEditPage.includes("uni.navigateTo({ url: '/pages/emotion-lab/emotion-lab' })"), 'the MBTI profile row should use the emotion-lab setting flow')
+	assert.ok(userEditPage.includes("uni.navigateTo({ url: '/pagesSub/emotionLab/emotion-lab' })"), 'the MBTI profile row should use the emotion-lab setting flow')
 	assert.ok(!userEditPage.includes("showFieldEditor('mbti')"), 'profile editor should not keep an untracked MBTI write path')
 	assert.ok(!userEditPage.includes("formData.mbti || 'ENFJ'"), 'profile editor should not render a hard-coded fallback MBTI')
 	assert.ok(userEditPage.includes("mbti: ''"), 'profile editor should start without an unconfirmed MBTI')

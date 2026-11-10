@@ -87,6 +87,69 @@ export async function patchProfileDraft(draftId: string, actions: any[], expecte
     headers: { 'Idempotency-Key': genIdempotencyKey() }
   })
 }
+/** PATCH 草稿并允许调用方复用幂等键，保证编辑请求超时后可安全重试。 */
+export async function patchProfileDraftWithKey(draftId: string, actions: any[], expectedRevision: number, idempotencyKey: string = ''): Promise<any> {
+  return request({
+    url: '/ai/profile-drafts/' + draftId,
+    method: 'PATCH',
+    data: { expected_revision: expectedRevision, actions: actions },
+    headers: { 'Idempotency-Key': idempotencyKey != '' ? idempotencyKey : genIdempotencyKey() }
+  })
+}
+
+/** 连续画像整份确认；结果页持有同一幂等键，超时重试不会产生第二个 revision。 */
+export async function confirmProfilePreview(previewId: string, expectedRevision: number, idempotencyKey: string): Promise<any> {
+  return request({
+    url: '/ai/profile-previews/' + previewId + '/confirm',
+    method: 'POST',
+    data: { expected_revision: expectedRevision },
+    headers: { 'Idempotency-Key': idempotencyKey }
+  })
+}
+
+/** 海报公开导出：只取当前 personal 正式版本已采用的公开字段（不含心理洞察）。 */
+export async function getPublicProfileCardExport(revisionId: number): Promise<any> {
+  return request({
+    url: '/ai/profile-card/export?revision_id=' + revisionId,
+    method: 'GET'
+  })
+}
+
+/** 将编辑器字符串恢复为字段原有 value_json 类型，无法安全恢复时返回 null。 */
+export function coerceProfileFieldValue(valueJson: any, editorText: string): any {
+  const text = editorText != null ? String(editorText) : ''
+  if (typeof valueJson == 'number') {
+    if (text.trim() == '') return null
+    const n = Number(text)
+    return Number.isFinite(n) ? n : null
+  }
+  if (typeof valueJson == 'boolean') {
+    if (text == 'true' || text == '是' || text == '有') return true
+    if (text == 'false' || text == '否' || text == '无') return false
+    return null
+  }
+  if (Array.isArray(valueJson)) {
+    if (text.trim() == '') return []
+    if (text.trim().charAt(0) == '[') {
+      try {
+        const parsed = JSON.parse(text)
+        return Array.isArray(parsed) ? parsed : null
+      } catch (e) {
+        return null
+      }
+    }
+    return text.split(/[,，、\n]/).map((item: string): string => item.trim()).filter((item: string): boolean => item != '')
+  }
+  if (valueJson != null && typeof valueJson == 'object') {
+    try {
+      const parsed = JSON.parse(text)
+      return parsed != null && typeof parsed == 'object' && !Array.isArray(parsed) ? parsed : null
+    } catch (e) {
+      return null
+    }
+  }
+  return text
+}
 
 /** 构造单个字段确认动作 */
 export function fieldAction(fieldKey: string, action: string, value: any = null, expectedRevision: number = 0): any {
@@ -97,8 +160,8 @@ export function fieldAction(fieldKey: string, action: string, value: any = null,
 
 /**
  * 发布已确认字段。
- * expected_revision 走 query 参数；新版结果页同时传入用户实际确认过的 preview_id。
- * previewId 为空时保留旧调用链兼容。
+ * expected_revision 走 query 参数；仅旧兼容结果页可发布。
+ * continuous_v2 必须走 confirmProfilePreview，服务端拒绝旧接口绕过。
  */
 export async function publishProfileDraft(draftId: string, expectedRevision: number, previewId: string = ''): Promise<any> {
   return request({
@@ -191,6 +254,7 @@ export async function pollTaskUntilTerminal(taskId: string, maxAttempts: number 
 /** 映射后端错误码到用户可读文案 */
 export function mapProfileError(code: string, fallback: string): string {
   if (code == 'AI_FEATURE_DISABLED') return 'AI 画像功能当前不可用'
+  if (code == 'AI_OUTPUT_INVALID') return 'AI 返回格式异常，已自动重试；本次未扣次数，请稍后再试'
   if (code == 'AI_CONSENT_REQUIRED') return '需要授权后才能使用画像功能'
   if (code == 'AI_CONSENT_VERSION_CONFLICT') return '授权信息已更新,请重试'
   if (code == 'AI_INPUT_INVALID') return '输入内容有误,请检查后重试'
@@ -247,19 +311,24 @@ export async function revokeProfileTextConsent(expectedPrivacyRevision: number):
 /**
  * 纸飞机草稿 AI 润色预览。只提交当前输入，不保存、不发送，也不自动替换草稿。
  */
-export async function polishPaperPlaneText(content: string, field: string, style: string = 'natural'): Promise<any> {
+export async function polishPaperPlaneText(content: string, field: string, style: string = 'natural', maxLength: number = 300): Promise<any> {
   const original = content != null ? ('' + content).trim() : ''
   if (original == '') return { success: false, data: null, code: 422, message: '请输入需要润色的内容' }
-  const normalizedField = field == 'idealPartner' ? 'ideal_partner' : 'self_introduction'
+  const normalizedMaxLength = Math.max(50, Math.min(500, maxLength))
   const res = await request({
     url: '/ai/profile/polish',
     method: 'POST',
-    data: { content: original, field: normalizedField, style: style != '' ? style : 'natural', max_length: 300 },
+    // field 之前被函数签名接收却从未发送，后端若按场景分 prompt 就拿不到上下文，
+    // 表现为"润色前后没差别"。这里一并提交（后端不认识时会被忽略，不构成破坏性变更）。
+    data: { content: original, field: field != null ? '' + field : '', style: style != '' ? style : 'natural', max_length: normalizedMaxLength },
     mockData: { original: original, polished: original, style: style != '' ? style : 'natural', changed_points: [] }
   })
   if (!res.success) {
     const code = res.code != null ? Number(res.code) : 0
-    const message = code == 401
+    const bizCode = res.businessCode != null ? '' + res.businessCode : ''
+    const message = bizCode == 'AI_OUTPUT_INVALID'
+      ? 'AI 返回格式异常，已自动重试；本次未扣次数，请稍后再试'
+      : code == 401
       ? '请先登录后再使用 AI 润色'
       : code == 402
         ? 'AI 润色次数已用完，请稍后再试'
@@ -272,7 +341,9 @@ export async function polishPaperPlaneText(content: string, field: string, style
   }
   const raw = res.data != null ? res.data : {}
   const polished = raw.polished != null && ('' + raw.polished).trim() != '' ? ('' + raw.polished).trim() : original
-  return { success: true, data: { original: original, polished: polished, field: field, style: raw.style != null ? raw.style : style, changedPoints: raw.changed_points != null ? raw.changed_points : [] }, code: 0, message: 'success' }
+  const fallback = raw.fallback != null ? '' + raw.fallback : ''
+  const changed = raw.changed != null ? raw.changed === true && polished != original : polished != original
+  return { success: true, data: { original: original, polished: polished, changed: changed, fallback: fallback, field: field, style: raw.style != null ? raw.style : style, changedPoints: raw.changed_points != null ? raw.changed_points : [] }, code: 0, message: 'success' }
 }
 
 /** AI 用心度评审待办条目 */

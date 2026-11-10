@@ -80,7 +80,13 @@
 						<text class="time-text">{{ message.time }}</text>
 					</view>
 
-					<view class="message-wrapper" :class="message.isMine ? 'mine' : 'other'">
+					<!-- 系统消息（后端 type=6）：申请认识通过时自动写入的问候。
+					     居中浅底、无头像、无气泡尾，也不参与长按撤回/引用。 -->
+					<view class="system-divider" v-if="message.type === 'system'">
+						<text class="system-divider-text">{{ message.content }}</text>
+					</view>
+
+					<view class="message-wrapper" v-else :class="message.isMine ? 'mine' : 'other'">
 						<view
 							class="avatar protected-avatar"
 							v-if="!message.isMine && isParentMode"
@@ -92,9 +98,14 @@
 							class="avatar"
 							:src="message.avatar"
 							mode="aspectFill"
-							v-else-if="!message.isMine"
+							v-else-if="!message.isMine && message.avatar != ''"
 							@click="openPeerProfile"
 						></image>
+						<!-- 对方头像缺失时不再回退到写死的女性图（会让男性会话对象显示成女性），
+						     改为中性占位块；正常链路下 message.avatar 已由 resolvePeerAvatar 兜底。 -->
+						<view class="avatar avatar-fallback" v-else-if="!message.isMine" @click="openPeerProfile">
+							<text class="avatar-fallback-text">TA</text>
+						</view>
 
 							<view class="bubble-column" :class="{ mine: message.isMine }">
 								<view
@@ -105,7 +116,7 @@
 									<view class="ai-source-dot"></view>
 									<text class="ai-source-text">{{ getAiMessageLabel(message) }}</text>
 								</view>
-								<view class="message-bubble" :class="[message.type, getAiMessageTone(message)]">
+								<view class="message-bubble" :class="[message.type, getAiMessageTone(message)]" @longpress="openMessageMenu(message)">
 									<text class="revoked-content" v-if="message.revoked == true">消息已撤回</text>
 									<view class="protected-content" v-else-if="isParentMode && message.protectedContent">
 										<text class="protected-content-text">内容已保护</text>
@@ -130,11 +141,6 @@
 									<view class="ai-handoff-dot"></view>
 									<text>已将问题转交给本人 · 不会通知对方</text>
 								</view>
-								<text
-									v-if="!isParentMode && message.isMine && message.id > 0 && message.status == 'sent' && message.revoked != true"
-									class="revoke-action"
-									@click="requestRevokeMessage(message)"
-								>撤回</text>
 							<text class="message-status text-muted" v-if="message.isMine && message.status === 'sending'">发送中...</text>
 								<text
 									class="message-status failed"
@@ -161,6 +167,10 @@
 			</scroll-view>
 
 			<view class="input-bar" :class="{ expanded: showMore && !isAiAvatarMode, 'ai-mode': isAiAvatarMode && !isParentMode }">
+				<view v-if="quotedMessage != null && !isAiAvatarMode" class="quote-preview">
+					<text class="quote-preview-text">引用：{{ quotedMessage.content }}</text>
+					<text class="quote-preview-close" @click="clearQuotedMessage">✕</text>
+				</view>
 				<view class="input-wrapper">
 					<input
 						class="input"
@@ -231,6 +241,7 @@
 				:target-user-id="userId"
 				:initial-message="aiAdvisorInitialMessage"
 				@close="aiAdvisorVisible = false"
+				@adopt="applyAdvisorDraft"
 			/>
 
 			<XsaSheet v-if="!isParentMode && !isAiAvatarMode" :visible="contactVisible" title="联系方式交换" @close="closeContactExchange">
@@ -240,7 +251,7 @@
 						<button class="contact-type" :class="{ selected: contactType == 'phone' }" @click="contactType = 'phone'">手机号</button>
 						<button class="contact-type" :class="{ selected: contactType == 'wechat' }" @click="contactType = 'wechat'">微信号</button>
 					</view>
-					<input v-if="contactType == 'wechat'" class="contact-input" :value="contactValue" @input="onContactValueInput" placeholder="输入你的微信号" maxlength="64" />
+					<input v-if="contactType == 'wechat'" class="contact-input" :value="contactValue" @input="onContactValueInput" placeholder="输入你的微信号" maxlength="20" />
 					<text v-else class="contact-phone-hint">将使用当前账号已绑定的手机号</text>
 					<button class="contact-send" :disabled="contactSubmitting" @click="submitContactExchange">{{ contactSubmitting ? '正在发送...' : '发起交换请求' }}</button>
 					<text v-if="contactError != ''" class="contact-error">{{ contactError }}</text>
@@ -263,24 +274,45 @@
 					</view>
 				</view>
 			</XsaSheet>
+
+			<XsaModal
+				:visible="voicePreviewVisible"
+				title="录音预览"
+				cancel-text="重录"
+				confirm-text="发送"
+				@close="closeVoicePreview"
+				@cancel="rerecordVoice"
+				@confirm="sendVoicePreview"
+			>
+				<view style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+					<text>录完可以先试听，确认后发送。</text>
+					<button class="voice-preview-play" @click="toggleVoicePreviewPlay">{{ voicePreviewPlaying ? '停止试听' : '试听录音' }}</button>
+					<text style="color: #7A8286; font-size: 13px;" @click="closeVoicePreview">取消本次录音</text>
+				</view>
+			</XsaModal>
 		</view>
 </template>
 
 <script setup lang="uts">
 	import XsaButton from '@/components/XsaButton.uvue'
 	import XsaReportSheet from '@/components/XsaReportSheet.uvue'
-	import XsaAiAdvisorSheet from '@/components/XsaAiAdvisorSheet.uvue'
+	import XsaAiAdvisorSheet from '@/pagesSub/chat/components/XsaAiAdvisorSheet.uvue'
 	import XsaZhiyuMark from '@/components/XsaZhiyuMark.uvue'
 	import XsaSheet from '@/components/XsaSheet.uvue'
+	import XsaModal from '@/components/XsaModal.uvue'
 	import type { MessageSubject, ParentContext } from '@/api'
 	import {
 		getChatMessages,
 		getChatPermission,
+		getChatSessionId,
+		getMembershipStatus,
+		getMyAvatarUrl,
 		getParentAccessGate,
 		getParentContext,
 		sendMessage as sendMessageApi,
 		uploadChatMedia,
 		revokeMessage,
+		hideMessageForMe,
 		getContactExchanges,
 		createContactExchange,
 		respondContactExchange,
@@ -289,11 +321,14 @@
 		getAiAvatarConversation,
 		sendAiAvatarMessage,
 		resolveAiAvatarHandoffs,
-		clearAiAvatarConversation
+		clearAiAvatarConversation,
+		submitAdvisorFeedback,
+		getAiCapabilities
 	} from '@/api'
-
+	import { getCurrentUserVipStatus, setCurrentUserVipStatus } from '@/utils/quota.uts'
 	const messages = ref([] as any[])
 	const inputText = ref('')
+	const quotedMessage = ref(null as any)
 	const showMore = ref(false)
 	const scrollToView = ref('')
 	const loading = ref(false)
@@ -319,6 +354,10 @@
 	const permissionError = ref('双方同意后才能开始聊天')
 	const sendingText = ref(false)
 	const voiceRecording = ref(false)
+	const voicePreviewVisible = ref(false)
+	const voicePreviewPath = ref('')
+	const voicePreviewPlaying = ref(false)
+	let voicePreviewAudio: any = null
 	const contactVisible = ref(false)
 	const contactLoading = ref(false)
 	const contactSubmitting = ref(false)
@@ -326,6 +365,8 @@
 	const contactType = ref('phone')
 	const contactValue = ref('')
 	const contactExchanges = ref([] as any[])
+	// 己方头像：取真实资料头像，取不到才回退默认图（旧版写死男头像，女性账号会显示错）。
+	const myAvatar = ref('/static/portraits/profile-man-light.webp')
 	let clientMessageSequence = 0
 	let permissionRequestSequence = 0
 	let historyRequestSequence = 0
@@ -338,9 +379,25 @@
 	let voiceRecorder: any = null
 	let discardVoiceRecording = false
 	let aiHandoffTimer: any = null
+	// 页面可见性：离开页面必须停止待补答轮询，返回时再恢复。
+	const aiAvatarPageVisible = ref(true)
+	// 同一条逻辑请求的幂等键与目标：响应丢失后重试必须复用，避免重复提问。
+	let aiAvatarRequestKey = ''
+	let aiAvatarRequestTargetId = 0
+	let aiAvatarRequestContent = ''
+	let aiAvatarRequestCounter = 0
+	let aiAvatarSendSequence = 0
+	let peerTitleApplied = false
+	let messageMenuOpenedAt = 0
+
+	const refreshMyAvatar = async () => {
+		const url = await getMyAvatarUrl()
+		if (url != null && url != '') myAvatar.value = url
+	}
 
 	onMounted(() => {
 		setupVoiceRecorder()
+		refreshMyAvatar()
 		const pages = getCurrentPages()
 		const currentPage = pages[pages.length - 1]
 		const options = currentPage.options
@@ -373,6 +430,7 @@
 	})
 
 	onShow(() => {
+		aiAvatarPageVisible.value = true
 		if (isAiAvatarMode.value) {
 			refreshAiAvatarHistory()
 			return
@@ -380,16 +438,20 @@
 		if (userId.value > 0) verifyChatPermission()
 	})
 
+	onHide(() => {
+		aiAvatarPageVisible.value = false
+		cancelAiHandoffPolling()
+	})
+
 	onUnmounted(() => {
-		if (aiHandoffTimer != null) {
-			clearTimeout(aiHandoffTimer)
-			aiHandoffTimer = null
-		}
+		aiAvatarPageVisible.value = false
+		cancelAiHandoffPolling()
 		if (voiceRecorder != null && voiceRecording.value) {
 			discardVoiceRecording = true
 			voiceRecorder.stop()
 		}
 		voiceRecording.value = false
+		stopVoicePreviewAudio()
 	})
 
 	const retryHistory = () => {
@@ -407,14 +469,17 @@
 			showTime: message.showTime == true || index == 0,
 			avatar: message.avatar != null && String(message.avatar).length > 0
 				? String(message.avatar)
-				: (message.isMine == true ? '/static/portraits/profile-man-light.webp' : '/static/portraits/profile-woman-main.webp'),
+				: (message.isMine == true ? myAvatar.value : ''),
 			status: 'sent'
 		}))
 	}
 
 	const getAiMessageLabel = (msg: any): string => {
-		if (msg != null && msg.source === 'owner-answer') return '本人补充 · 模拟'
-		if (msg != null && msg.source === 'mock-person') return '本人回答 · 模拟'
+		if (msg == null) return 'AI 分身'
+		if (msg.source === 'owner-answer') return '本人补充'
+		if (msg.source === 'mock-person') return '本人回答 · 模拟'
+		if (msg.handoffStatus === 'pending' || msg.handoff_status === 'pending') return '资料不足，待本人补充'
+		if (msg.source === 'real-ai' || msg.source === 'ai-avatar-server' || msg.source === 'system') return 'AI 分身'
 		return 'AI 分身'
 	}
 
@@ -425,29 +490,40 @@
 		return 'ai'
 	}
 
-	const scheduleAiHandoff = (rows: any[]) => {
-		if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
-		if (aiHandoffTimer != null) clearTimeout(aiHandoffTimer)
-		let dueAt = 0
+	// 待本人补答的刷新调度：只在页面可见且确有未回答问题时才排程，离开页面立即取消。
+	// 现行接口只在消息上返回 handoffStatus（没有 dueAt），因此按固定间隔轮询现有 GET；
+	// 没有待补答项时不排程，避免后台空转。
+	const AI_HANDOFF_POLL_INTERVAL = 8000
+	const hasPendingOwnerHandoff = (rows: any[]): boolean => {
 		for (let index = 0; index < rows.length; index++) {
 			const message = rows[index]
-			if (message.handoffStatus === 'pending' && message.handoffDueAt != null) {
-				const candidate = Number(message.handoffDueAt)
-				if (dueAt == 0 || candidate < dueAt) dueAt = candidate
-			}
+			if (message == null || message.isMine == true) continue
+			if (message.handoffStatus === 'pending' || message.handoff_status === 'pending') return true
 		}
-		if (dueAt == 0) return
-		const delay = Math.max(350, dueAt - Date.now())
+		return false
+	}
+	const cancelAiHandoffPolling = () => {
+		if (aiHandoffTimer != null) {
+			clearTimeout(aiHandoffTimer)
+			aiHandoffTimer = null
+		}
+	}
+	const scheduleAiHandoff = (rows: any[]) => {
+		cancelAiHandoffPolling()
+		if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
+		if (aiAvatarPageVisible.value != true) return
+		if (!hasPendingOwnerHandoff(rows)) return
 		aiHandoffTimer = setTimeout(async () => {
 			aiHandoffTimer = null
 			if (!isAiAvatarMode.value || aiAvatarProfile.value == null) return
+			if (aiAvatarPageVisible.value != true) return
 			const resolved = await resolveAiAvatarHandoffs(userId.value, aiAvatarProfile.value)
 			if (resolved.success && resolved.data != null) {
 				messages.value = mapAiAvatarMessages(resolved.data as any[])
 				scrollToBottom()
 				scheduleAiHandoff(resolved.data as any[])
 			}
-		}, delay)
+		}, AI_HANDOFF_POLL_INTERVAL)
 	}
 
 	const loadAiAvatarMode = async () => {
@@ -503,14 +579,13 @@
 		if (!isAiAvatarMode.value || aiAvatarSending.value || aiAvatarProfile.value == null) return
 		uni.showModal({
 			title: '清空 AI 分身记录',
-			content: '清空后将无法在当前设备查看这段对话，确定继续吗？',
+			// 该操作删除的是服务端保存的会话记录（同账号在其他设备同样看不到），
+			// 不能只说"当前设备"，否则用户会以为只是本机缓存。
+			content: '清空后会同时删除服务端保存的这段对话记录，同一账号在其他设备也无法再查看，确定继续吗？',
 			confirmText: '清空',
-		success: async (result: any) => {
+			success: async (result: any) => {
 				if (result.confirm !== true) return
-				if (aiHandoffTimer != null) {
-					clearTimeout(aiHandoffTimer)
-					aiHandoffTimer = null
-				}
+				cancelAiHandoffPolling()
 				const cleared = await clearAiAvatarConversation(userId.value)
 				if (!cleared.success) {
 					uni.showToast({ title: responseMessage(cleared, '清空失败'), icon: 'none' })
@@ -519,6 +594,7 @@
 				const history = await getAiAvatarConversation(userId.value, aiAvatarProfile.value)
 				if (history.success && history.data != null) {
 					messages.value = mapAiAvatarMessages(history.data as any[])
+					scheduleAiHandoff(history.data as any[])
 					scrollToBottom()
 				}
 				uni.showToast({ title: '记录已清空', icon: 'success' })
@@ -536,19 +612,40 @@
 		if (!isAiAvatarMode.value || aiAvatarSending.value || aiAvatarProfile.value == null) return
 		const question = content.trim()
 		if (question.length == 0) return
+		// 同一逻辑请求固定目标、内容与幂等键：响应丢失后重试必须复用同一把键，
+		// 服务端才不会把它当成新问题重复回答。切换对象时作废该请求身份。
+		const targetId = userId.value
+		if (aiAvatarRequestKey == '' || aiAvatarRequestTargetId != targetId || aiAvatarRequestContent != question) {
+			// 逻辑请求身份用单调递增序号生成：同一逻辑请求复用同一把键，
+			// 新的逻辑请求必然取到新键；不在页面里使用随机数。
+			aiAvatarRequestCounter += 1
+			aiAvatarRequestKey = 'ai-avatar-' + targetId + '-' + String(aiAvatarRequestCounter)
+			aiAvatarRequestTargetId = targetId
+			aiAvatarRequestContent = question
+		}
+		const requestKey = aiAvatarRequestKey
+		aiAvatarSendSequence += 1
+		const sendSequence = aiAvatarSendSequence
 		aiAvatarSending.value = true
-		inputText.value = ''
 		try {
-			const res = await sendAiAvatarMessage(userId.value, question, aiAvatarProfile.value)
+			const res = await sendAiAvatarMessage(targetId, question, aiAvatarProfile.value, requestKey)
+			// 发送期间切换对象或页面已离开：旧响应不得写入新对象的会话。
+			if (sendSequence != aiAvatarSendSequence || userId.value != targetId || !isAiAvatarMode.value) return
 			if (!res.success || res.data == null) {
+				// 发送失败保留输入内容，保持同一幂等键，用户可直接重试。
+				inputText.value = question
 				uni.showToast({ title: responseMessage(res, '发送失败，请重试'), icon: 'none' })
 				return
 			}
+			aiAvatarRequestKey = ''
+			aiAvatarRequestContent = ''
+			inputText.value = ''
 			const rows = res.data.messages as any[]
 			messages.value = mapAiAvatarMessages(rows)
 			scheduleAiHandoff(rows)
 			scrollToBottom()
 		} catch (error) {
+			if (sendSequence == aiAvatarSendSequence && userId.value == targetId) inputText.value = question
 			uni.showToast({ title: '发送失败，请稍后重试', icon: 'none' })
 		} finally {
 			aiAvatarSending.value = false
@@ -727,6 +824,7 @@
 			if (res != null && res.success == true && permission != null && permission.canChat == true) {
 				chatAllowed.value = true
 				permissionError.value = ''
+				applyPeerTitle()
 				await loadChatMessages(true)
 				return
 			}
@@ -797,6 +895,20 @@
 		return requestId == historyRequestSequence &&
 			requestVersion == chatMutationVersion.value &&
 			requestSubjectKey == subjectKey(activeMessageSubject.value)
+	}
+
+	const applyPeerTitle = async () => {
+		if (peerTitleApplied || isParentMode.value || isAiAvatarMode.value) return
+		peerTitleApplied = true
+		try {
+			const subject = activeMessageSubject.value
+			const sessionRes = await getChatSessionId(userId.value, subject)
+			const target = sessionRes != null && sessionRes.data != null ? sessionRes.data.target : null
+			const nickname = target != null && target.nickname != null && String(target.nickname) != '' ? String(target.nickname) : ''
+			if (nickname != '') uni.setNavigationBarTitle({ title: nickname })
+		} catch (error) {
+			// 标题设置失败不阻塞聊天主流程
+		}
 	}
 
 	const loadChatMessages = async (force: boolean = false): Promise<boolean> => {
@@ -984,7 +1096,8 @@
 				message.type,
 					message.clientMessageId,
 					subject,
-					message.mediaId != null ? Number(message.mediaId) : null
+					message.mediaId != null ? Number(message.mediaId) : null,
+					message.quoteMessageId != null && message.quoteMessageId > 0 ? Number(message.quoteMessageId) : null
 			)
 			if (handleSubjectUnauthorizedResponse(res, expectedSubjectKey)) return
 			if (!isDeliveryAttemptCurrent(message, attemptId, expectedVersion, expectedSubjectKey)) return
@@ -1028,12 +1141,14 @@
 			time: getCurrentTime(),
 			showTime: false,
 			isMine: true,
-			avatar: isParentMode.value ? '' : '/static/portraits/profile-man-light.webp',
+			avatar: isParentMode.value ? '' : myAvatar.value,
 			status: 'queued',
 			errorMessage: '',
-			subjectKey: subjectKey(subject)
+			subjectKey: subjectKey(subject),
+			quoteMessageId: quotedMessage.value != null && quotedMessage.value.id > 0 ? Number(quotedMessage.value.id) : 0
 		}
 		messages.value.push(message)
+		quotedMessage.value = null
 		inputText.value = ''
 		scrollToBottom()
 		try {
@@ -1065,7 +1180,7 @@
 				time: getCurrentTime(),
 				showTime: false,
 				isMine: true,
-				avatar: '/static/portraits/profile-man-light.webp',
+				avatar: myAvatar.value,
 				status: 'sending',
 				errorMessage: '',
 				subjectKey: subjectKey(subject)
@@ -1126,13 +1241,65 @@
 					return
 				}
 				const path = res != null && res.tempFilePath != null ? '' + res.tempFilePath : ''
-				if (path != '') sendMediaFile(path, 'voice')
+				if (path != '') {
+					voicePreviewPath.value = path
+					voicePreviewVisible.value = true
+				}
 			})
 			voiceRecorder.onError(() => {
 				voiceRecording.value = false
 				uni.showToast({ title: '录音失败，请检查麦克风权限', icon: 'none' })
 			})
 			// #endif
+		}
+
+		const stopVoicePreviewAudio = () => {
+			if (voicePreviewAudio != null) {
+				try { voicePreviewAudio.stop() } catch (e) {}
+				try { voicePreviewAudio.destroy() } catch (e) {}
+				voicePreviewAudio = null
+			}
+			voicePreviewPlaying.value = false
+		}
+
+		const toggleVoicePreviewPlay = () => {
+			if (voicePreviewPlaying.value) {
+				stopVoicePreviewAudio()
+				return
+			}
+			if (voicePreviewPath.value == '') return
+			voicePreviewAudio = uni.createInnerAudioContext()
+			voicePreviewAudio.src = voicePreviewPath.value
+			voicePreviewAudio.onEnded(() => { voicePreviewPlaying.value = false })
+			voicePreviewAudio.onError(() => {
+				stopVoicePreviewAudio()
+				uni.showToast({ title: '试听失败，请重录', icon: 'none' })
+			})
+			voicePreviewAudio.play()
+			voicePreviewPlaying.value = true
+		}
+
+		const closeVoicePreview = () => {
+			stopVoicePreviewAudio()
+			voicePreviewVisible.value = false
+			voicePreviewPath.value = ''
+		}
+
+		const rerecordVoice = () => {
+			closeVoicePreview()
+			// #ifdef MP-WEIXIN
+			if (voiceRecorder != null) {
+				discardVoiceRecording = false
+				voiceRecording.value = true
+				voiceRecorder.start({ duration: 60000, format: 'mp3' })
+			}
+			// #endif
+		}
+
+		const sendVoicePreview = () => {
+			const path = voicePreviewPath.value
+			closeVoicePreview()
+			if (path != '') sendMediaFile(path, 'voice')
 		}
 
 		const toggleVoiceRecording = () => {
@@ -1163,19 +1330,22 @@
 			if (isParentMode.value || !chatAllowed.value) return
 			const subject = activeMessageSubject.value
 			if (subject == null) return
+			const version = chatMutationVersion.value
 			contactLoading.value = true
 			contactError.value = ''
+			contactExchanges.value = []
 			try {
 				const res = await getContactExchanges(userId.value, subject)
+				if (version != chatMutationVersion.value) return
 				if (res != null && res.success == true && Array.isArray(res.data)) {
 					contactExchanges.value = res.data
 					return
 				}
 				contactError.value = responseMessage(res, '联系方式状态加载失败')
 			} catch (error) {
-				contactError.value = '联系方式状态加载失败'
+				if (version == chatMutationVersion.value) contactError.value = '联系方式状态加载失败'
 			} finally {
-				contactLoading.value = false
+				if (version == chatMutationVersion.value) contactLoading.value = false
 			}
 		}
 
@@ -1196,53 +1366,114 @@
 		}
 
 		const contactExchangeStatus = (exchange: any): string => {
-			if (exchange.status == 'accepted') return '已确认，双方可见'
+			if (exchange.status == 'accepted') return exchange.contactValue ? '已确认，双方可见' : '已确认，暂无可展示的联系方式'
 			if (exchange.status == 'rejected') return '对方未同意'
+			if (exchange.status == 'expired') return '请求已过期，请重新发起'
+			if (exchange.status == 'withdrawn') return '请求已撤回'
 			return exchange.requestedByMe == true ? '等待对方确认' : '等待你的确认'
 		}
 
 		const submitContactExchange = async () => {
-			if (contactSubmitting.value || isParentMode.value) return
+			if (contactSubmitting.value || isParentMode.value || !chatAllowed.value) return
 			const subject = activeMessageSubject.value
 			if (subject == null) return
+			const version = chatMutationVersion.value
 			contactSubmitting.value = true
 			contactError.value = ''
 			try {
 				const res = await createContactExchange(
 					userId.value, contactType.value, contactValue.value.trim(), contactCommandId('create'), subject
 				)
+				if (version != chatMutationVersion.value) return
 				if (res == null || res.success != true) {
 					contactError.value = responseMessage(res, '联系方式请求发送失败')
 					return
 				}
 				contactValue.value = ''
 				await loadContactExchanges()
+			} catch (error) {
+				if (version == chatMutationVersion.value) contactError.value = '联系方式请求发送失败，请刷新状态后重试'
 			} finally {
-				contactSubmitting.value = false
+				if (version == chatMutationVersion.value) contactSubmitting.value = false
 			}
 		}
 
 		const respondToContactExchange = async (exchange: any, action: string) => {
-			if (contactSubmitting.value || exchange == null || isParentMode.value) return
+			if (contactSubmitting.value || exchange == null || isParentMode.value || !chatAllowed.value) return
 			const subject = activeMessageSubject.value
 			if (subject == null) return
+			const version = chatMutationVersion.value
 			contactSubmitting.value = true
 			contactError.value = ''
 			try {
 				const res = await respondContactExchange(Number(exchange.id), action, contactCommandId(action, Number(exchange.id)), subject)
+				if (version != chatMutationVersion.value) return
 				if (res == null || res.success != true) {
 					contactError.value = responseMessage(res, '联系方式请求处理失败')
 					return
 				}
 				await loadContactExchanges()
+			} catch (error) {
+				if (version == chatMutationVersion.value) contactError.value = '联系方式请求处理失败，请刷新状态后重试'
 			} finally {
-				contactSubmitting.value = false
+				if (version == chatMutationVersion.value) contactSubmitting.value = false
 			}
 		}
 
 		const copyContactValue = (value: string) => {
 			uni.setClipboardData({ data: value, success: () => uni.showToast({ title: '已复制', icon: 'success' }) })
 		}
+
+		const copyMessageContent = (message: any) => {
+			const text = message != null && message.content != null ? String(message.content) : ''
+			if (text == '') return
+			uni.setClipboardData({ data: text, success: () => uni.showToast({ title: '已复制', icon: 'none' }) })
+		}
+
+		const reEditMessage = (message: any) => {
+			if (isParentMode.value || message == null || message.type !== 'text') return
+			inputText.value = message.content != null ? String(message.content) : ''
+		}
+
+		const openMessageMenu = (message: any) => {
+			if (isParentMode.value || message == null || message.type === 'system' || message.revoked === true) return
+			const items: string[] = []
+			if (message.type === 'text' && message.content != null && String(message.content).length > 0) items.push('复制')
+			if (message.isMine === true && message.type === 'text' && message.status === 'sent') items.push('重新编辑')
+			if (message.id > 0 && message.revoked !== true) items.push('引用')
+			if (message.isMine === true && message.id > 0 && message.status === 'sent' && message.revoked !== true) items.push('撤回')
+			if (message.id > 0) items.push('仅自己删除')
+			if (items.length === 0) return
+			messageMenuOpenedAt = Date.now()
+			uni.showActionSheet({
+				itemList: items,
+				success: (res: any) => {
+					const tapIndex = res != null ? Number(res.tapIndex) : -1
+					if (tapIndex < 0 || tapIndex >= items.length) return
+					const action = items[tapIndex]
+					if (action === '复制') copyMessageContent(message)
+					else if (action === '重新编辑') reEditMessage(message)
+					else if (action === '引用') quotedMessage.value = message
+					else if (action === '撤回') requestRevokeMessage(message)
+					else if (action === '仅自己删除') hideMessageForMeLocally(message)
+				}
+			})
+		}
+
+		const hideMessageForMeLocally = async (message: any) => {
+			if (isParentMode.value || message == null || message.id <= 0) return
+			const subject = activeMessageSubject.value
+			if (subject == null) return
+			const res = await hideMessageForMe(Number(message.id), subject)
+			if (res != null && res.success == true) {
+				const next = messages.value.filter((item: any) => item !== message)
+				messages.value = next
+				return
+			}
+			uni.showToast({ title: responseMessage(res, '删除失败，请重试'), icon: 'none' })
+		}
+
+		const clearQuotedMessage = () => { quotedMessage.value = null }
 
 		const requestRevokeMessage = (message: any) => {
 			if (isParentMode.value || message == null || message.id <= 0 || message.revoked == true) return
@@ -1267,7 +1498,9 @@
 		}
 
 		const previewImage = (url: string) => {
-		const images = messages.value
+			// 长按菜单弹出后，部分端会补发一次 tap；这里吞掉紧随其后的图片预览。
+			if (Date.now() - messageMenuOpenedAt < 600) return
+			const images = messages.value
 			.filter((message: any) => message.type === 'image')
 			.map((message: any) => message.content)
 		uni.previewImage({ current: url, urls: images })
@@ -1289,10 +1522,13 @@
 			return
 		}
 		if (isParentMode.value) {
-			uni.navigateTo({ url: '/pages/parent/user-detail?id=' + userId.value })
+			uni.navigateTo({ url: '/pagesSub/parent/user-detail?id=' + userId.value })
 			return
 		}
-			uni.navigateTo({ url: '/pages/user/detail?userId=' + userId.value })
+		uni.navigateTo({
+			url: '/pagesSub/userExtra/user/detail?userId=' + userId.value,
+			fail: () => uni.showToast({ title: '资料页打开失败，请重试', icon: 'none' })
+		})
 	}
 
 	const openChatReport = () => {
@@ -1301,9 +1537,46 @@
 		reportVisible.value = true
 	}
 
-	const openAiAdvisor = () => {
+	const openAiAdvisor = async () => {
 		if (isParentMode.value || isAiAvatarMode.value) return
 		closeMoreMenu()
+		try {
+			const capabilities = await getAiCapabilities()
+			const advisorEnabled = capabilities != null && capabilities.success == true && capabilities.data != null && capabilities.data.advisor == true
+			if (!advisorEnabled) {
+				uni.showToast({ title: 'AI 军师暂未开放', icon: 'none' })
+				return
+			}
+		} catch (e) {
+			uni.showToast({ title: 'AI 军师暂未开放', icon: 'none' })
+			return
+		}
+		let advisorVip = false
+		try {
+			const membership = await getMembershipStatus()
+			if (membership != null && membership.success == true && membership.data != null) {
+				advisorVip = membership.data.is_vip === true || membership.data.isVip === true
+				// 会员态以服务端为准回写本地缓存，与首页/会员页同源。
+				setCurrentUserVipStatus(advisorVip)
+			} else {
+				// 会员状态读取失败时退回本地缓存，不把有效会员误判成非会员。
+				advisorVip = getCurrentUserVipStatus()
+			}
+		} catch (error) {
+			advisorVip = getCurrentUserVipStatus()
+		}
+		if (!advisorVip) {
+			uni.showModal({
+				title: '知遇 · AI 军师',
+				content: 'AI 军师仅对有效会员开放。',
+				confirmText: '了解会员',
+				cancelText: '暂不',
+				success: (result: any) => {
+					if (result != null && result.confirm === true) uni.navigateTo({ url: '/pagesSub/profileExtra/vip' })
+				}
+			})
+			return
+		}
 		let latestPeerMessage = ''
 		const rows = messages.value as any[]
 		for (let index = rows.length - 1; index >= 0; index--) {
@@ -1313,8 +1586,26 @@
 				break
 			}
 		}
-		aiAdvisorInitialMessage.value = latestPeerMessage.length > 0 ? latestPeerMessage : inputText.value.trim()
+		aiAdvisorInitialMessage.value = latestPeerMessage
 		aiAdvisorVisible.value = true
+	}
+
+	const applyAdvisorDraft = (content: string, messageId?: number) => {
+		const text = content != null ? String(content).trim() : ''
+		if (text.length == 0 || isParentMode.value || isAiAvatarMode.value) return
+		const markUsed = () => { if (messageId != null && Number(messageId) > 0) submitAdvisorFeedback(Number(messageId), 'used').then((_result: any) => {}); aiAdvisorVisible.value = false }
+		const current = inputText.value.trim()
+		if (current.length > 0 && current != text) {
+			uni.showModal({
+				title: '替换当前草稿',
+				content: '输入框已有内容。填入这条建议会替换它，不会自动发送。',
+				confirmText: '替换',
+				success: (result: any) => { if (result.confirm === true) { inputText.value = text; markUsed() } }
+			})
+			return
+		}
+		inputText.value = text
+		markUsed()
 	}
 
 	const scrollToBottom = () => {
@@ -1387,6 +1678,21 @@
 		cursor: pointer;
 	}
 
+	/* 对方头像缺失时的中性占位（不猜测性别，也不复用本人头像） */
+	.avatar-fallback {
+		background: var(--warm);
+		border: 1px solid var(--line);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.avatar-fallback-text {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--muted);
+	}
+
 	.protected-avatar {
 		background: var(--warm);
 		border: 1px solid var(--line);
@@ -1424,6 +1730,25 @@
 		.text-content { font-size: 15px; line-height: 1.4; }
 		.protected-content-text { color: var(--muted); font-size: 13px; line-height: 1.5; }
 
+	/* 系统消息：居中浅底小字，视觉权重低于普通气泡，不抢对话内容。 */
+	.system-divider {
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		padding: 6px 40px;
+	}
+
+	.system-divider-text {
+		max-width: 100%;
+		padding: 5px 12px;
+		border-radius: 8px;
+		background-color: var(--warm);
+		color: var(--muted);
+		font-size: 12px;
+		line-height: 1.5;
+		text-align: center;
+	}
+
 	.message-status { margin-top: 4px; font-size: 11px; }
 	.message-status.failed { color: var(--accent2); }
 	.message-status.retryable { text-decoration: underline; }
@@ -1432,14 +1757,6 @@
 		display: block;
 		font-size: 13px;
 		line-height: 1.5;
-		color: var(--muted);
-	}
-
-	.revoke-action {
-		min-height: 32px;
-		margin-top: 2px;
-		font-size: 11px;
-		line-height: 32px;
 		color: var(--muted);
 	}
 
@@ -1929,4 +2246,38 @@
 	}
 
 	.chat-page.ai-avatar-mode .ai-disclaimer { text-align: center; }
+
+	.voice-preview-play {
+		padding: 8px 24px;
+		border-radius: 20px;
+		background: var(--sage);
+		color: var(--paper);
+		font-size: 14px;
+	}
+
+	.quote-preview {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 6px 12px;
+		margin-bottom: 6px;
+		border-radius: 10px;
+		background: var(--warm);
+	}
+
+	.quote-preview-text {
+		flex: 1;
+		font-size: 12px;
+		color: var(--ink2);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.quote-preview-close {
+		font-size: 14px;
+		color: var(--muted);
+	}
 	</style>

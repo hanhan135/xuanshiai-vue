@@ -31,14 +31,15 @@ const history = read('pagesSub/profileExtra/history.uvue')
 const visitors = read('pagesSub/profileExtra/visitors.uvue')
 const discoveryApi = read('api/discovery.uts')
 
-check('首页环形分对 null 显示 --（区分真实 0 分与无评分）', () => {
-  assert.ok(index.includes('if (user.matchScore == null) return \'--\''), 'aiScoreText must handle null')
+check('首页不把推荐分伪装成合拍结果，改为打开正式参考', () => {
+  assert.ok(!index.includes("const aiScoreText = computed((): string => '--')"), 'temporary ring sentinel must be removed')
   assert.ok(!index.includes('{{ currentRecommendUser.matchScore }}%'), 'raw matchScore interpolation must not return')
+  assert.ok(index.includes('查看双向合拍参考'), 'home card must open the formal compatibility reference')
 })
 
-check('首页不再硬编码 MBTI 契合文案，改用后端 match_reason', () => {
+check('首页不再硬编码 MBTI 契合文案，改用服务端推荐理由', () => {
   assert.ok(!index.includes('MBTI高度契合'), 'fabricated MBTI copy must stay removed')
-  assert.ok(index.includes('currentRecommendUser.matchReason'), 'match_reason rendering must exist')
+  assert.ok(index.includes('recommendationReason'), 'recommendation reason rendering must exist')
 })
 
 check('首页认证标签由 certification_tags 驱动且可隐藏', () => {
@@ -48,14 +49,23 @@ check('首页认证标签由 certification_tags 驱动且可隐藏', () => {
   assert.ok(!index.includes('>头像</text>'), 'hardcoded 头像认证 must not return')
 })
 
-check('AI 匹配度弹窗不使用本地 mock 解析、不伪造 MBTI 类型', () => {
+check('资料合拍只读取正式 compatibility，不使用 legacy 分数或本地 mock', () => {
+  assert.ok(sheet.includes("getCompatibility(targetId)"), 'sheet must read compatibility by target user')
+  assert.ok(sheet.includes('waitForCompatibilityTask'), '202 compatibility task must be polled')
+  assert.ok(sheet.includes("result.status == 'ready'"), 'only ready results may render')
+  assert.ok(sheet.includes('result.display_eligible == true'), 'display eligibility must gate restricted values')
+  assert.ok(!sheet.includes('props.score'), 'sheet must not read legacy score prop')
   assert.ok(!sheet.includes('getMbtiPairAnalysis'), 'mock analysis import must stay removed')
   assert.ok(!sheet.includes("'ENTP'"), 'fake ENTP default must stay removed')
-  assert.ok(sheet.includes('state-unavailable'), 'unavailable state block must exist')
-  assert.ok(sheet.includes('props.score == null'), 'scoreText must distinguish missing from real zero')
+  assert.ok(sheet.includes('演示模式没有正式合拍结果'), 'mock mode must not claim a formal result')
 })
 
-check('分数免责文案不声称"已确认"（legacy-rule-v1 基于表单字段）', () => {
+check('首页和详情复用正式资料合拍组件', () => {
+  assert.ok(index.includes('<XsaAiMatchSheet'), 'home must use the formal compatibility sheet')
+  assert.ok(detail.includes('<XsaAiMatchSheet'), 'detail must use the same formal compatibility sheet')
+  assert.ok(detail.includes(':target-user-id="user.id"'), 'detail must pass the current target')
+})
+check('分数免责文案不声称"已确认"', () => {
   assert.ok(!sheet.includes('已确认资料'), 'sheet tip must not overclaim confirmed data')
   assert.ok(!detail.includes('已确认资料'), 'detail tip must not overclaim confirmed data')
 })
@@ -72,8 +82,9 @@ check('match_score 不再解释为人气，缺失显示 --', () => {
   assert.ok(history.includes("'--'") && visitors.includes("'--'"), 'missing score renders --')
 })
 
-check('详情页区分真实 0 分与无评分', () => {
-  assert.ok(detail.includes('user.matchAvailable'), 'detail must gate on matchAvailable')
+check('详情页不再渲染旧合拍分，统一使用正式组件', () => {
+  assert.ok(detail.includes('<XsaAiMatchSheet'), 'detail must use the formal compatibility sheet')
+  assert.ok(!detail.includes('{{ user.match'), 'detail must not render the legacy match score')
 })
 
 check('mapCard 缺分回退为 null 而非 0', () => {

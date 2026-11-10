@@ -9,9 +9,40 @@ import {
   API_CONFIG,
   MOCK_DELAY,
   getAccessToken,
+  getRefreshToken,
+  setAuthTokens,
   clearAuthTokens,
+  CURRENT_USER_ID_KEY,
+  ONBOARDING_MODE_KEY,
+  ONBOARDING_COMPLETED_KEY,
   buildApiUrl
 } from './config.uts'
+import { debugLog } from '@/utils/debug-log.uts'
+
+let loginRedirectPending = false
+
+/** 401 续期失败后统一回登录页；登录页自身与静默请求不触发。 */
+function redirectToLoginAfterAuthFailure() {
+  if (loginRedirectPending) return
+  let route = ''
+  try {
+    const pages = getCurrentPages()
+    if (pages.length > 0) {
+      const current = pages[pages.length - 1] as any
+      route = current != null && current.route != null ? '' + current.route : ''
+    }
+  } catch (e) {
+    // 页面栈不可用时仍尝试跳转
+  }
+  if (route == 'pages/auth/login') return
+  loginRedirectPending = true
+  uni.reLaunch({
+    url: '/pages/auth/login',
+    complete: () => {
+      setTimeout(() => { loginRedirectPending = false }, 800)
+    }
+  })
+}
 
 /**
  * 统一请求方法
@@ -41,12 +72,12 @@ function buildMockFallback(method: string, url: string): any {
 }
 
 async function mockRequest(options: any) {
-  console.log('📦 [Mock Request]', options.url, options.data)
+  debugLog('[Mock Request]', options.url)
   await sleep(MOCK_DELAY)
   const mockMethod = options.method != null ? ('' + options.method).toUpperCase() : 'GET'
   // 未配置 mockData 的接口：走兜底空结构而不是返回 null
   if (options.mockData == null) {
-    console.log('⚠️ [Mock] 未配置 mockData，返回兜底空结构：', mockMethod, options.url)
+    debugLog('[Mock] 未配置 mockData，返回兜底空结构：', mockMethod, options.url)
     return {
       success: true,
       data: buildMockFallback(mockMethod, options.url != null ? '' + options.url : ''),
@@ -75,19 +106,178 @@ async function mockRequest(options: any) {
   }
 }
 
-function extractDetail(data: any): string {
-  if (data == null) return '请求失败'
-  if (typeof data === 'string') return data
-  if (data.detail != null) {
-    if (typeof data.detail === 'string') return data.detail
-    if (Array.isArray(data.detail) && data.detail.length > 0) {
-      const first = data.detail[0]
-      if (first != null && first.msg != null) return '' + first.msg
-      return JSON.stringify(data.detail)
+/**
+ * 从后端错误响应里提取结构化业务错误。
+ * 后端对 AI 等能力使用 { code, message, request_id, retryable } 的 detail 对象，
+ * 只取 message 会丢掉业务码，导致前端无法按原因分流展示。
+ */
+function extractBusinessError(data: any): any {
+  const empty: any = { code: '', message: '', requestId: '', retryable: true }
+  if (data == null || typeof data != 'object') return empty
+  const detail = data.detail
+  if (detail != null && typeof detail == 'object' && !Array.isArray(detail)) {
+    return {
+      code: detail.code != null ? '' + detail.code : '',
+      message: detail.message != null ? '' + detail.message : '',
+      requestId: detail.request_id != null ? '' + detail.request_id : '',
+      retryable: detail.retryable !== false
     }
   }
-  if (data.message != null) return '' + data.message
+  return empty
+}
+
+/** 从响应头取 request-id，用于线上排障时定位单次请求。 */
+function extractHeaderRequestId(res: any): string {
+  try {
+    const header = res != null ? res.header : null
+    if (header != null && typeof header == 'object') {
+      const value = header['x-request-id'] != null ? header['x-request-id'] : header['X-Request-Id']
+      if (value != null) return '' + value
+    }
+  } catch (e) {
+    // 忽略
+  }
+  return ''
+}
+
+// —— 登录态自动续期 ——
+// 单飞缓存：并发 401 共用同一次刷新，避免用同一旧 refresh_token 连打两次
+// （后端刷新为 rotation，旧 refresh_token 成功后立即作废，第二次必 401）。
+let refreshingPromise: Promise<any> | null = null
+
+/**
+ * 用 refresh_token 换新 access_token。原生 uni.request 直连，不走 request 封装，
+ * 防止刷新请求自身再触发 401 续期造成递归。
+ */
+function doRefresh(): Promise<any> {
+  const refreshToken = getRefreshToken()
+  if (refreshToken == '') return Promise.resolve({ success: false, code: 401 })
+  return new Promise((resolve) => {
+    uni.request({
+      url: buildApiUrl('/auth/refresh'),
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: { refresh_token: refreshToken },
+      success: (res: any) => {
+        const status = res.statusCode != null ? Number(res.statusCode) : 0
+        const raw = res.data
+        if (status >= 200 && status < 300 && raw != null && raw.access_token != null) {
+          setAuthTokens('' + raw.access_token, raw.refresh_token != null ? '' + raw.refresh_token : '')
+          if (raw.user_id != null) {
+            try { uni.setStorageSync(CURRENT_USER_ID_KEY, raw.user_id) } catch (e) {}
+          }
+          resolve({ success: true, code: status })
+        } else {
+          resolve({ success: false, code: status })
+        }
+      },
+      fail: () => resolve({ success: false, code: -1 })
+    })
+  })
+}
+
+function refreshOnce(): Promise<any> {
+  if (refreshingPromise == null) {
+    refreshingPromise = doRefresh().finally(() => { refreshingPromise = null })
+  }
+  return refreshingPromise
+}
+
+/** 对外手动刷新入口（供 auth.uts re-export 或未来主动续期场景复用）。 */
+export async function refreshAccessToken(): Promise<any> {
+  return refreshOnce()
+}
+
+/**
+ * FastAPI 的 404/405 等默认响应体是 `{"detail":"Not Found"}` 这类英文短语，
+ * 直接上屏会变成「暂时无法加载 / Not Found」，既有实现细节泄漏也不好懂。
+ * 这里只做「已知框架短语」的中文归一，业务 message 一律原样保留。
+ */
+function normalizeFrameworkText(raw: string): string {
+  const text = raw != null ? raw.trim() : ''
+  if (text == '') return ''
+  const key = text.toLowerCase()
+  if (key == 'not found') return '服务暂时不可用，请稍后重试'
+  if (key == 'internal server error') return '服务开小差了，请稍后重试'
+  if (key == 'method not allowed') return '请求方式不被支持'
+  if (key == 'bad request') return '请求参数有误'
+  if (key == 'unauthorized') return '登录状态已失效，请重新登录'
+  if (key == 'forbidden') return '暂无操作权限'
+  if (key == 'unprocessable entity') return '提交内容不完整'
+  return text
+}
+
+/** 校验类 detail（FastAPI 422）逐项是 {type, loc, msg}，msg 仍是英文，按 type 归类。 */
+function validationMessage(item: any): string {
+  if (item == null) return ''
+  const type = item.type != null ? ('' + item.type).toLowerCase() : ''
+  if (type == 'missing') return '提交内容不完整'
+  if (type == 'string_too_short' || type == 'too_short') return '填写内容过短'
+  if (type == 'string_too_long' || type == 'too_long') return '填写内容过长'
+  if (type == 'greater_than_equal' || type == 'less_than_equal' || type == 'greater_than' || type == 'less_than') return '数值超出允许范围'
+  if (type.indexOf('int') == 0 || type.indexOf('float') == 0 || type.indexOf('decimal') == 0) return '请填写有效的数字'
+  return item.msg != null ? normalizeFrameworkText('' + item.msg) : ''
+}
+
+function extractDetail(data: any): string {
+  if (data == null) return '请求失败'
+  if (typeof data == 'string') return normalizeFrameworkText(data)
+  if (data.detail != null) {
+    if (typeof data.detail === 'string') return normalizeFrameworkText(data.detail)
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      const first = data.detail[0]
+      const localized = validationMessage(first)
+      if (localized != '') return localized
+      return '提交内容不完整'
+    }
+    // 对象形态的 detail：优先取后端给出的 message，别再回落到「请求失败」
+    if (typeof data.detail === 'object' && data.detail.message != null) {
+      return '' + data.detail.message
+    }
+  }
+  if (data.message != null) return normalizeFrameworkText('' + data.message)
   return '请求失败'
+}
+
+/** 代理错误页、数据库异常和调试堆栈只用于排查，不能作为业务提示上屏。 */
+function safeErrorMessage(data: any, status: number): string {
+  const message = extractDetail(data)
+  const text = message.toLowerCase()
+  const isDiagnostic = message.length > 500 || text.indexOf('traceback') >= 0 ||
+    text.indexOf('exceptiongroup') >= 0 || text.indexOf('sqlalchemy.') >= 0 ||
+    text.indexOf('operationalerror') >= 0 || text.indexOf('[sql:') >= 0 ||
+    text.indexOf('stack trace') >= 0 || text.indexOf('<!doctype') >= 0 ||
+    text.indexOf('<html') >= 0 || text.indexOf('file "') >= 0
+  if (isDiagnostic) return '服务暂时异常，请稍后重试'
+  if (status >= 500 && (message == '' || message == '请求失败')) return '服务暂时异常，请稍后重试'
+  return message
+}
+
+/** 只提取异常类型、数据库错误号及缺失标识符，不输出堆栈、SQL参数、电话或凭据。 */
+function serverDiagnostic(data: any): string {
+  const text = typeof data == 'string' ? data : extractDetail(data)
+  const parts: string[] = []
+  const errorType = text.match(/\b(OperationalError|ProgrammingError|IntegrityError|ValidationError|ResponseValidationError|AttributeError|TypeError|ValueError)\b/)
+  if (errorType != null) parts.push('类型=' + errorType[1])
+  const missingColumn = text.match(/Unknown column ['"`]([A-Za-z_][A-Za-z0-9_.]*)['"`]/i)
+  if (missingColumn != null) parts.push('缺少字段=' + missingColumn[1])
+  const missingTable = text.match(/Table ['"`]([A-Za-z_][A-Za-z0-9_.]*)['"`] doesn't exist/i)
+  if (missingTable != null) parts.push('缺少表=' + missingTable[1])
+  const databaseCode = text.match(/(?:OperationalError|ProgrammingError|IntegrityError)[^\n]{0,40}?\((\d{4}),/)
+  if (databaseCode != null) parts.push('数据库错误号=' + databaseCode[1])
+  return parts.length > 0 ? parts.join('，') : '未识别到异常类型，需查看远端服务日志'
+}
+
+function logServerDiagnostic(data: any, status: number, path: string, requestId: string): string {
+  if (status < 500) return ''
+  try {
+    const info: any = (uni as any).getAccountInfoSync()
+    if (info == null || info.miniProgram == null || info.miniProgram.envVersion != 'develop') return ''
+    const diagnostic = '[服务端故障] ' + path.split('?')[0] + '，HTTP=' + status + '，请求编号=' + requestId + '，' + serverDiagnostic(data)
+    console.warn(diagnostic)
+    return diagnostic
+  } catch (e) {}
+  return ''
 }
 
 async function httpRequest(options: any) {
@@ -139,7 +329,7 @@ async function httpRequest(options: any) {
     body = data != null ? data : {}
   }
 
-  console.log('🌐 [HTTP Request]', method, url)
+  debugLog('[HTTP Request]', method, url)
 
   return new Promise((resolve) => {
     uni.request({
@@ -148,7 +338,7 @@ async function httpRequest(options: any) {
       data: body,
       header: headers,
       timeout: timeout,
-      success: (res: any) => {
+      success: async (res: any) => {
         const status = res.statusCode != null ? (res.statusCode as number) : 0
         const raw = res.data
         if (status == 204) {
@@ -165,14 +355,40 @@ async function httpRequest(options: any) {
           return
         }
         if (status == 401) {
+          // 会话过期：先尝试静默续期并重放一次；刷新请求自身(skipAuth) / 已重放过，
+          // 不再刷新，避免递归与死循环。
+          if (options.skipAuth != true && options.__retried != true) {
+            try {
+              const refreshed = await refreshOnce()
+              if (refreshed != null && refreshed.success === true) {
+                resolve(await httpRequest({ ...options, __retried: true }))
+                return
+              }
+            } catch (e) {
+              // 刷新异常视同失败，继续走清凭证。
+            }
+          }
+          // 401 = 会话过期，不是新账号：清凭证，但保留已完成的引导状态，
+          // 避免用户重登后被重新推回 onboarding（parent 模式还会丢路由依据）。
+          const preserved = snapshotOnboardingState()
           clearAuthTokens()
+          restoreOnboardingState(preserved)
+          if (options.skipAuth != true) redirectToLoginAfterAuthFailure()
         }
-        const message = extractDetail(raw)
+        const message = safeErrorMessage(raw, status)
+        const biz = extractBusinessError(raw)
+        const headerRequestId = extractHeaderRequestId(res)
+        const diagnostic = logServerDiagnostic(raw, status, urlPath, biz.requestId != '' ? biz.requestId : headerRequestId)
         resolve({
           success: false,
           data: raw,
           code: status,
-          message: message
+          message: message,
+          // 以下三个字段向后兼容新增：现有调用方只读 success/data/code/message。
+          businessCode: biz.code,
+          diagnostic: diagnostic,
+          requestId: biz.requestId != '' ? biz.requestId : headerRequestId,
+          retryable: biz.retryable
         })
       },
       fail: (err: any) => {
@@ -190,4 +406,36 @@ async function httpRequest(options: any) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 401 只应清会话凭证，不应重置「已完成引导」这类持久状态。
+ * clearAuthTokens() 的清空范围是既有契约（有测试守护），这里用快照在清空后恢复。
+ * 返回 [onboarding_mode, onboarding_completed]，任一项为空串表示原本就没有。
+ */
+function snapshotOnboardingState(): string[] {
+  const values: string[] = []
+  let mode = ''
+  let completed = ''
+  try {
+    const rawMode = uni.getStorageSync(ONBOARDING_MODE_KEY)
+    if (rawMode != null) mode = String(rawMode)
+  } catch (e) {}
+  try {
+    const rawDone = uni.getStorageSync(ONBOARDING_COMPLETED_KEY)
+    if (rawDone != null) completed = String(rawDone)
+  } catch (e) {}
+  values.push(mode)
+  values.push(completed)
+  return values
+}
+
+function restoreOnboardingState(preserved: string[]) {
+  if (preserved.length < 2) return
+  try {
+    if (preserved[0] != '') uni.setStorageSync(ONBOARDING_MODE_KEY, preserved[0])
+  } catch (e) {}
+  try {
+    if (preserved[1] != '') uni.setStorageSync(ONBOARDING_COMPLETED_KEY, preserved[1])
+  } catch (e) {}
 }

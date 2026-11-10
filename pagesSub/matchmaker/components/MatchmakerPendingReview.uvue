@@ -1,0 +1,1588 @@
+<template>
+  <view class="pr-shell">
+
+    <!-- ============ 列表视图 ============ -->
+    <view v-if="subview == ''" class="pr-main">
+      <scroll-view scroll-x class="pr-tabs" :show-scrollbar="false">
+        <view class="pr-tabs-row">
+          <view v-for="tab in tabs" :key="tab.key" class="pr-tab" :class="{ active: activeTab == tab.key }" @tap="selectTab(tab.key)">
+            <text>{{ tab.label }}</text>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="pr-search">
+        <text class="pr-search-icon">⌕</text>
+        <input class="pr-search-input" placeholder="请输入昵称/编号/姓名/手机号" placeholder-class="pr-search-ph" :value="keyword" confirm-type="search" @input="onKeyword" @confirm="loadMembers" />
+      </view>
+
+      <scroll-view scroll-y class="pr-list" :show-scrollbar="false" @scrolltolower="loadMoreMembers">
+        <view v-if="loading" class="state-card"><text>正在加载资料数据…</text></view>
+        <view v-else-if="errorMessage != ''" class="state-card">
+          <text>{{ errorMessage }}</text>
+          <view class="state-action" @tap="loadMembers"><text>重新加载</text></view>
+        </view>
+        <view v-else-if="members.length == 0" class="state-card"><text>{{ emptyText }}</text></view>
+
+          <view v-for="member in members" :key="member.user_id" class="mcard" :id="'mcard-' + member.user_id" @tap="openMemberProfile(member)">
+          <view class="mcard-body">
+            <view class="mcard-ava" :class="member.gender == 1 ? 'male' : 'female'">
+              <image v-if="member.avatar" :src="avatarSrc(member.avatar)" mode="aspectFill" />
+              <text v-else>{{ avatarText(member.nickname) }}</text>
+              <view class="mcard-ava-badge"><text>{{ member.gender == 1 ? '♂' : (member.gender == 2 ? '♀' : '') }}</text></view>
+            </view>
+            <view class="mcard-info">
+              <view class="mcard-name-row">
+                <text class="mcard-name">{{ member.nickname }}</text>
+                <view class="realname-tag" :class="member.realname_status == 2 ? 'ok' : ''"><text>{{ member.realname_status == 2 ? '已实名' : '未实名' }}</text></view>
+                <view class="mcard-vip" v-if="isVipMember(member)"><text>VIP</text></view>
+              </view>
+              <view class="mcard-sub">
+                <text class="mcard-no">编号：G{{ member.user_id }}</text>
+                <view v-if="member.created_at != null && String(member.created_at).length > 0" class="mcard-reg">
+                  <text class="mcard-sub-dot">·</text>
+                  <text>登记：{{ formatTime(member.created_at) }}</text>
+                </view>
+              </view>
+              <text class="mcard-meta">{{ memberMeta(member) }}</text>
+              <view class="mcard-owner" @tap.stop="openAssign(member)">
+                <text class="mcard-owner-glyph">❥</text>
+                <text class="mcard-owner-label">跟进服务：</text>
+                <text class="mcard-owner-value">{{ member.matchmaker_name || '待分派' }}</text>
+              </view>
+            </view>
+            <view class="mcard-side">
+              <view class="mcard-status" :class="'st-' + member.review_status.toLowerCase()" @tap.stop="openReview(member)">
+                <text>{{ reviewLabel(member.review_status) }}</text>
+                <text class="mcard-status-dot">●</text>
+              </view>
+              <view class="mcard-ark"><text class="mcard-ark-glyph">◈</text><text>公开档案</text></view>
+              <view class="mcard-profile-entry" @tap.stop="openMemberProfile(member)"><text>会员主页 ›</text></view>
+            </view>
+          </view>
+
+          <text v-if="member.abandoned && member.abandoned_reason" class="mcard-reason">弃海原因：{{ member.abandoned_reason }}</text>
+
+          <view class="mcard-actions">
+            <view :id="'more-trigger-' + member.user_id" class="act-more" @tap.stop="toggleMenu(member, $event)"><text>更多</text></view>
+            <view class="act" @tap.stop="openContact(member)"><text>联系</text></view>
+            <view class="act" @tap.stop="openFollowUps(member)"><text>跟进({{ member.followCount || 0 }})</text></view>
+            <view class="act" @tap.stop="copyProfile(member)"><text>复制资料</text></view>
+            <view class="act" @tap.stop="onEditProfile(member)"><text>编辑资料</text></view>
+          </view>
+
+        </view>
+        <view v-if="hasMoreMembers" class="state-card" @tap="loadMoreMembers"><text>{{ loadingMoreMembers ? '加载中…' : '加载更多' }}</text></view>
+      </scroll-view>
+
+      <view class="review-float-actions">
+        <view class="fab-enter" @tap="onEnterMember"><text class="fab-enter-glyph">✎</text><text>录入</text></view>
+        <view class="fab-filter" @tap="onFilter"><text class="fab-filter-glyph">☲</text><text>筛选</text></view>
+      </view>
+    </view>
+
+    <!-- 页面级筛选抽屉，放在滚动列表之外，避免被列表或卡片裁切。 -->
+    <view v-if="filterVisible" class="filter-layer">
+      <view class="filter-mask" @tap="closeMemberFilter"></view>
+      <view class="filter-drawer" @tap.stop>
+        <view class="filter-head">
+          <view>
+            <text class="filter-title">条件筛选</text>
+            <text class="filter-subtitle">按会员资料缩小查看范围</text>
+          </view>
+          <view class="filter-close" @tap="closeMemberFilter"><text>✕</text></view>
+        </view>
+        <scroll-view scroll-y class="filter-scroll" :show-scrollbar="false">
+          <view v-for="row in filterRows" :key="row.key" class="filter-row">
+            <picker v-if="row.key == 'residence' || row.key == 'hometown' || row.key == 'household'" mode="region" @change="selectFilterRegion(row.key, $event)">
+              <view class="filter-row-summary"><text class="filter-label">{{ row.label }}</text><view class="filter-current"><text>{{ memberFilter[row.key] || '不限' }}</text><text class="filter-chevron">›</text></view></view>
+            </picker>
+            <view v-else class="filter-row-summary" @tap="toggleMemberFilter(row.key)">
+              <text class="filter-label">{{ row.label }}</text>
+              <view class="filter-current"><text>{{ filterValueText(row.key) }}</text><text class="filter-chevron">›</text></view>
+            </view>
+            <view v-if="expandedFilterKey == row.key && isRangeFilter(row.key)" class="filter-range">
+              <text class="filter-range-hint">选择{{ row.label }}范围</text>
+              <view class="filter-range-controls">
+                <picker :range="rangeValues(row.key)" :value="rangeBoundIndex(row.key, 'min')" @change="setRangeBound(row.key, 'min', $event)"><view class="filter-range-input"><text>{{ rangeBoundText(row.key, 'min') }}</text></view></picker>
+                <text class="filter-range-separator">—</text>
+                <picker :range="rangeValues(row.key)" :value="rangeBoundIndex(row.key, 'max')" @change="setRangeBound(row.key, 'max', $event)"><view class="filter-range-input"><text>{{ rangeBoundText(row.key, 'max') }}</text></view></picker>
+                <view class="filter-range-apply" @tap="applyRange(row.key)"><text>确定</text></view>
+              </view>
+            </view>
+            <view v-else-if="expandedFilterKey == row.key" class="filter-options">
+              <view v-for="option in row.options" :key="row.key + option.value" class="filter-option" :class="{ selected: memberFilter[row.key] == option.value }" @tap="selectMemberFilter(row.key, option.value)">
+                <text>{{ option.label }}</text>
+              </view>
+            </view>
+          </view>
+          <text class="filter-data-note">收入保密与未填写暂无法区分。</text>
+        </scroll-view>
+        <view class="filter-footer">
+          <view class="filter-reset" @tap="resetMemberFilter"><text>重置</text></view>
+          <view class="filter-confirm" @tap="confirmMemberFilter"><text>确定</text></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 页面级菜单不受 scroll-view 裁切，坐标取自点击事件。 -->
+    <view v-if="menuForId != 0 && menuMember != null" class="more-layer" @tap="closeMenu">
+      <view class="more-pop" :style="{ left: menuLeft + 'px', top: menuTop + 'px' }" @tap.stop>
+        <view v-if="activeTab == 'REJECTED'" class="more-item last" @tap="pickupMember(menuMember)"><text>{{ pickupLoading ? '捞取中…' : '我要捞取' }}</text></view>
+        <template v-else>
+        <view class="more-item" @tap="openIntroductions(menuMember)"><text>牵线({{ menuMember.introCount || 0 }})</text></view>
+        <view class="more-item" @tap="openMatch(menuMember)"><text>匹配</text></view>
+        <view class="more-item" @tap="openNote(menuMember)"><text>红娘说</text></view>
+        <view class="more-item" :class="{ last: !canReview }" @tap="openAssign(menuMember)"><text>修改红娘</text></view>
+        <view v-if="canReview" class="more-item last" @tap="onAbandonEntry(menuMember)"><text>{{ menuMember.abandoned ? '已弃海' : '移入弃海' }}</text></view>
+        </template>
+      </view>
+    </view>
+
+    <!-- ============ 子页：牵线记录 ============ -->
+    <view v-else-if="subview == 'introductions' && selected != null" class="subpage">
+      <view class="subpage-head">
+        <text class="subpage-title">会员 {{ selected.nickname }} 的牵线记录</text>
+        <view class="subpage-close" @tap="closeSubpage"><text>✕</text></view>
+      </view>
+      <view class="seg">
+        <view class="seg-item" :class="{ on: introTab == 'OUTGOING' }" @tap="selectIntroTab('OUTGOING')"><text>主动牵线</text></view>
+        <view class="seg-item" :class="{ on: introTab == 'INCOMING' }" @tap="selectIntroTab('INCOMING')"><text>被动牵线</text></view>
+      </view>
+      <scroll-view scroll-y class="subpage-list" :show-scrollbar="false">
+        <view v-if="introLoading" class="state-card"><text>正在加载牵线记录…</text></view>
+        <view v-else-if="visibleIntroductions.length == 0" class="state-card"><text>暂无牵线记录</text></view>
+        <view v-for="row in visibleIntroductions" :key="row.id" class="intro-row">
+          <view class="intro-ava"><text>{{ avatarText(row.counterpart_nickname) }}</text></view>
+          <view class="intro-copy">
+            <text class="intro-name">{{ row.counterpart_nickname }}</text>
+            <text class="intro-sub">编号：G{{ row.counterpart_user_id }} · {{ row.direction == 'OUTGOING' ? '把本会员介绍给 TA' : '把 TA 介绍给本会员' }}</text>
+          </view>
+          <view class="intro-right">
+            <text class="intro-status" :class="'ms-' + introStatusTone(row.status)">{{ introStatusLabel(row.status) }}</text>
+            <text class="intro-time">{{ formatTime(row.created_at) }}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ============ 子页：匹配 ============ -->
+    <view v-else-if="subview == 'match' && selected != null" class="subpage">
+      <view class="subpage-head">
+        <text class="subpage-title">匹配合适的人</text>
+        <view class="subpage-close" @tap="closeSubpage"><text>✕</text></view>
+      </view>
+      <scroll-view scroll-y class="subpage-list" :show-scrollbar="false">
+        <view class="match-member">
+          <view class="match-member-ava"><image v-if="selected.avatar" :src="avatarSrc(selected.avatar)" mode="aspectFill" /><text v-else>{{ avatarText(selected.nickname) }}</text></view>
+          <view class="match-member-copy">
+            <view class="mcard-name-row"><text class="mcard-name">{{ selected.nickname }}</text><text class="match-member-no">会员(G{{ selected.user_id }})</text></view>
+            <text class="mcard-meta">{{ memberMeta(selected) }}</text>
+          </view>
+        </view>
+
+        <view class="match-pref">
+          <text class="match-pref-title">根据该会员的择偶要求：</text>
+          <view class="match-pref-chips">
+            <view v-for="chip in preferenceChips" :key="chip" class="match-chip"><text>{{ chip }}</text></view>
+          </view>
+        </view>
+
+        <view class="match-tip">
+          <text class="match-tip-title">温馨提示</text>
+          <text class="match-tip-copy">状态为"停止相亲"、"已经脱单"的会员资料不会显示在匹配结果中。</text>
+        </view>
+
+        <view v-if="matchLoading" class="state-card"><text>正在匹配合适人选…</text></view>
+        <view v-else-if="candidates.length == 0" class="state-card"><text>暂无符合条件的会员资料</text></view>
+        <view v-for="row in candidates" :key="row.user_id" class="candidate-card">
+          <view class="mcard-body">
+            <view class="mcard-ava" :class="row.gender == 1 ? 'male' : 'female'">
+              <image v-if="row.avatar" :src="avatarSrc(row.avatar)" mode="aspectFill" />
+              <text v-else>{{ avatarText(row.nickname) }}</text>
+            </view>
+            <view class="mcard-info">
+              <view class="mcard-name-row"><text class="mcard-name">{{ row.nickname }}</text></view>
+              <text class="cand-no">编号:G{{ row.user_id }}</text>
+              <view class="mcard-owner"><text class="mcard-owner-glyph">❥</text><text class="mcard-owner-label">服务红娘：</text><text class="mcard-owner-value">{{ row.matchmaker_name || '待分派' }}</text></view>
+            </view>
+            <view class="cand-ark"><text>公开相亲</text></view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- ============ 红娘说 / 修改红娘 / 弃因 / 联系 / 跟进 面板 ============ -->
+    <view v-if="sheet != ''" class="overlay" @tap="closeSheet">
+      <view class="panel" @tap.stop>
+        <view v-if="sheet != 'assign'" class="panel-head">
+          <text class="panel-title">{{ sheetTitle }}</text>
+          <view class="panel-close" @tap="closeSheet"><text>✕</text></view>
+        </view>
+
+        <view v-if="sheet == 'note' && selected != null" class="panel-body">
+          <textarea class="panel-textarea" maxlength="200" placeholder="请输入一段红娘对该会员的评价，本信息公开展示，限制200汉字" :value="noteDraft" @input="onNoteDraft" />
+          <view class="panel-submit" @tap="submitNote"><text>提交</text></view>
+        </view>
+
+        <view v-else-if="sheet == 'assign' && selected != null" class="panel-body">
+          <view class="assign-head">
+            <text class="assign-cancel" @tap="closeSheet">取消</text>
+            <text class="assign-title">修改红娘</text>
+            <view class="assign-confirm" @tap="submitAssign"><text>确认</text></view>
+          </view>
+          <view v-if="assignLoading" class="state-inline"><text>正在加载红娘名单…</text></view>
+          <view v-for="option in assignOptions" :key="option.user_id" class="assign-row" :class="{ disabled: option.user_id == (selected.matchmaker_id || 0), picked: assignTarget == option.user_id }" @tap="pickAssign(option)">
+            <text>{{ option.display_name }}</text>
+            <text v-if="option.user_id == (selected.matchmaker_id || 0)" class="assign-current">当前</text>
+          </view>
+        </view>
+
+        <view v-else-if="sheet == 'abandonReason' && selected != null" class="panel-body">
+          <textarea class="panel-textarea" maxlength="100" placeholder="请输入弃海原因" :value="abandonReason" @input="onAbandonReason" />
+          <text class="panel-counter">已输入 {{ abandonReason.length }}/100字</text>
+          <view class="panel-submit" @tap="submitAbandon"><text>确定提交</text></view>
+        </view>
+
+        <view v-else-if="sheet == 'review' && selected != null" class="panel-body">
+          <view class="review-fee-row">
+            <text class="review-fee-label">审核费：</text>
+            <text class="review-fee-value">免审核费</text>
+            <text class="review-fee-time">{{ formatTime(selected.created_at) }}</text>
+          </view>
+          <view class="review-status-row">
+            <view v-for="option in reviewOptions" :key="option.value" class="review-chip" :class="{ picked: reviewStatus == option.value }" @tap="pickReviewStatus(option.value)">
+              <text>{{ option.label }}</text>
+            </view>
+          </view>
+          <view v-if="reviewStatus == 'REJECTED'" class="review-reject-area">
+            <textarea class="review-reason" maxlength="30" placeholder="请输入审核不通过原因，限30个字" :value="reviewReason" @input="onReviewReason" />
+            <text class="review-template-title">从模板选择：</text>
+            <view v-for="(tpl, index) in reviewReasonTemplates" :key="index" class="review-template" @tap="applyReviewTemplate(tpl)"><text>{{ tpl }}</text></view>
+          </view>
+          <view class="panel-submit review-submit" @tap="submitReview"><text>提交</text></view>
+        </view>
+
+        <view v-else-if="sheet == 'followups' && selected != null" class="panel-body">
+          <view v-for="item in followUps" :key="item.id" class="fu-row">
+            <text class="fu-method">{{ followMethodLabel(item.method) }}</text>
+            <text class="fu-content">{{ item.content }}</text>
+            <text class="fu-time">{{ formatTime(item.created_at) }}</text>
+          </view>
+          <view v-if="followUps.length == 0" class="state-inline"><text>暂无服务跟进</text></view>
+          <textarea class="panel-textarea" maxlength="2000" placeholder="记录本次服务跟进" :value="followContent" @input="onFollowContent" />
+          <view class="panel-submit" @tap="submitFollowUp"><text>新增跟进</text></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 移入弃海确认弹窗 -->
+    <view v-if="modal == 'abandon' && selected != null" class="modal-mask" @tap="closeModal">
+      <view class="modal-card" @tap.stop>
+        <text class="modal-copy">移入弃海后，该会员将显示在「弃海」列表，公开资料审核将标记为「审核不通过」，需修改资料后重新提交审核。</text>
+        <view class="modal-actions">
+          <view class="modal-btn" @tap="closeModal"><text>取消</text></view>
+          <view class="modal-btn strong" @tap="confirmAbandon"><text>确认弃海</text></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 复制资料弹窗（样板：授权卡结构——图标块 + 居中标题/说明 + 分隔线 + 左右双胶囊）。
+         先把要复制的文本列出来，「修改」只改这段文本，不回写会员在库中的资料。 -->
+    <view v-if="copyVisible" class="cpd-mask" @tap="closeCopyProfile">
+      <view class="cpd-card" @tap.stop>
+        <view class="cpd-icon"><text class="cpd-icon-glyph">◈</text></view>
+        <text class="cpd-title">复制会员资料</text>
+        <text class="cpd-subtitle">确认下方文本后再复制，可先修改。</text>
+
+        <view v-if="copyLoading" class="cpd-body">
+          <view class="cpd-state"><text>正在加载资料…</text></view>
+        </view>
+        <view v-else-if="copyEditing" class="cpd-body cpd-editor">
+          <textarea class="cpd-textarea" maxlength="2000" :value="copyText" @input="onCopyText" />
+          <text class="cpd-note">这里的修改只影响要复制的文本，不会改动该会员的资料。</text>
+        </view>
+        <scroll-view v-else scroll-y class="cpd-body" :show-scrollbar="false">
+          <view class="cpd-lines">
+            <text v-if="copyError != ''" class="cpd-error">{{ copyError }}</text>
+            <view v-if="copyError != ''" class="cpd-retry" @tap="retryCopyLoad"><text>重新加载</text></view>
+            <text v-for="(line, index) in copyLines" :key="index" class="cpd-line">{{ line }}</text>
+          </view>
+        </scroll-view>
+
+        <view class="cpd-footer">
+          <view class="cpd-btn" @tap="toggleCopyEdit"><text>{{ copyEditing ? '预览' : '修改' }}</text></view>
+          <view class="cpd-btn primary" :class="{ disabled: copyLoading }" @tap="confirmCopyProfile"><text>{{ copyCopied ? '已复制 ✓' : '一键复制' }}</text></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 查看联系方式弹窗由父页面（become-matchmaker）统一渲染，这里只上抛会员，避免重复实现弹层。 -->
+  </view>
+</template>
+
+<script setup lang="uts">
+import { watch } from 'vue'
+import {
+  assignMatchmakerMemberMatchmaker,
+  createMatchmakerMemberFollowUp,
+  getMatchmakerMemberFollowUps,
+  getMatchmakerMemberMatchCandidates,
+  getMatchmakerMemberMatchHistory,
+  getMatchmakerMemberMatchmakers,
+  getMatchmakerMemberNote,
+  getMatchmakerMemberProfile,
+  getMatchmakerReviewMembers,
+  getMatchmakerWorkspaceProfile,
+  updateMatchmakerMemberNote,
+  updateMatchmakerReviewMember
+} from '@/api'
+import { abandonMemberRecord, pickupAbandonedMemberRecord } from '@/api/matchmaker.uts'
+import { resolveMediaUrl } from '@/api/config.uts'
+
+interface Props {
+  snapshot: any;
+  initialTab?: string;
+  refreshToken?: number;
+}
+const props = defineProps<Props>()
+const emit = defineEmits<{ servedCount: [count: number], contact: [member: any], entry: [] }>()
+
+const tabs = [
+  { key: '', label: '全部' },
+  { key: 'PENDING', label: '待审' },
+  { key: 'mine', label: '我的' },
+  { key: 'REJECTED', label: '弃海' },
+  { key: 'vip_online', label: '线上VIP' },
+  { key: 'vip_offline', label: '线下VIP' }
+]
+
+const activeTab = ref(props.initialTab == 'mine' ? 'mine' : (props.initialTab == '' ? '' : 'PENDING'))
+const keyword = ref('')
+const loading = ref(false)
+const errorMessage = ref('')
+const members = ref<any[]>([])
+const rawMembers = ref<any[]>([])
+const selfUserId = ref(0)
+// 公开资料审核只对总店（SUPER）红娘开放，后端同口径返回 403。
+const canReview = ref(false)
+
+const filterVisible = ref(false)
+const expandedFilterKey = ref('')
+const rangeDraftMin = ref('')
+const rangeDraftMax = ref('')
+const options = (values: string[]): any[] => [{ label: '不限', value: '' }, ...values.map((value: string): any => ({ label: value, value: value }))]
+const provinces = ['北京市','天津市','河北省','山西省','内蒙古自治区','辽宁省','吉林省','黑龙江省','上海市','江苏省','浙江省','安徽省','福建省','江西省','山东省','河南省','湖北省','湖南省','广东省','广西壮族自治区','海南省','重庆市','四川省','贵州省','云南省','西藏自治区','陕西省','甘肃省','青海省','宁夏回族自治区','新疆维吾尔自治区']
+const createMemberFilter = (): any => ({ hometown:'', residence:'', household:'', gender:'', ageRange:'', heightRange:'', weight:'', education:'', occupation:'', income:'', marital:'', housing:'', vehicle:'', smoking:'', drinking:'', ethnicity:'', religion:'', mbti:'' })
+const memberFilter = ref<any>(createMemberFilter())
+const appliedMemberFilter = ref<any>(createMemberFilter())
+const filterRows = [
+ {key:'gender',label:'性别',options:[{label:'不限',value:''},{label:'男',value:'male'},{label:'女',value:'female'}]},
+ {key:'ageRange',label:'年龄',options:[{label:'不限',value:''},{label:'20岁以下',value:'under20'},{label:'20-25岁',value:'20-25'},{label:'26-30岁',value:'26-30'},{label:'31-35岁',value:'31-35'},{label:'36-40岁',value:'36-40'},{label:'41岁以上',value:'over40'}]},
+ {key:'heightRange',label:'身高(cm)',options:[{label:'不限',value:''},{label:'160cm以下',value:'under160'},{label:'160-169cm',value:'160-169'},{label:'170-179cm',value:'170-179'},{label:'180cm及以上',value:'over180'}]},
+ {key:'weight',label:'体重(kg)',options:[{label:'不限',value:''},{label:'40kg以下',value:'under40'},{label:'40至不足50kg',value:'40-49'},{label:'50至不足60kg',value:'50-59'},{label:'60至不足70kg',value:'60-69'},{label:'70至不足80kg',value:'70-79'},{label:'80kg及以上',value:'over80'}]},
+ {key:'residence',label:'现居地',options:options(provinces)}, {key:'hometown',label:'家乡',options:options(provinces)}, {key:'household',label:'户口',options:options(provinces)},
+ {key:'education',label:'学历',options:[{label:'不限',value:''},{label:'高中及以下',value:'highschool'},{label:'大专',value:'college'},{label:'本科',value:'bachelor'},{label:'硕士',value:'masters'},{label:'博士',value:'doctor'}]},
+ {key:'marital',label:'婚姻状况',options:[{label:'不限',value:''},{label:'未婚',value:'1'},{label:'离异',value:'2'},{label:'丧偶',value:'3'}]},
+ {key:'occupation',label:'职业',options:options(['私企员工','央企/国企','事业单位/公务员','外企员工','自由职业','创业者/个体','教师','医生','律师','金融从业','互联网/IT','制造业','服务业','在校学生'])},
+ {key:'income',label:'收入（年）',options:[{label:'不限',value:''},{label:'小于10w',value:'under10'},{label:'10-20w',value:'10-20'},{label:'30-50w',value:'30-50'},{label:'50-100w',value:'50-100'},{label:'100w以上',value:'over100'}]},
+ {key:'mbti',label:'MBTI',options:options(['INTJ','INTP','ENTJ','ENTP','INFJ','INFP','ENFJ','ENFP','ISTJ','ISFJ','ESTJ','ESFJ','ISTP','ISFP','ESTP','ESFP'])},
+ {key:'housing',label:'购房',options:options(['已购房','未购房','与父母同住'])}, {key:'vehicle',label:'购车',options:options(['已购车','未购车'])},
+ {key:'ethnicity',label:'民族',options:options(['汉族','回族','满族','蒙古族','壮族','维吾尔族','藏族','苗族','彝族','其他'])},
+ {key:'smoking',label:'吸烟',options:options(['不吸烟','偶尔吸烟','经常吸烟'])}, {key:'drinking',label:'喝酒',options:options(['不饮酒','社交场合饮酒','经常饮酒'])}, {key:'religion',label:'宗教',options:options(['无宗教信仰','佛教','基督教','伊斯兰教','道教','其他'])}
+]
+const memberPage = ref(1)
+const hasMoreMembers = ref(false)
+const loadingMoreMembers = ref(false)
+
+const subview = ref('')
+const selected = ref<any>(null)
+
+const introTab = ref('OUTGOING')
+const introLoading = ref(false)
+const introductions = ref<any[]>([])
+
+const matchLoading = ref(false)
+const candidates = ref<any[]>([])
+const preference = ref<any>(null)
+
+const sheet = ref('')
+const noteDraft = ref('')
+const assignOptions = ref<any[]>([])
+const assignLoading = ref(false)
+const assignTarget = ref(0)
+const abandonReason = ref('')
+const pendingAbandon = ref(false)
+const followUps = ref<any[]>([])
+const followContent = ref('')
+
+const reviewStatus = ref('')
+const reviewReason = ref('')
+const reviewSubmitting = ref(false)
+const reviewOptions = [
+  { value: 'PENDING', label: '待审核' },
+  { value: 'PASSED', label: '审核通过' },
+  { value: 'REJECTED', label: '审核不通过' },
+  { value: 'STORE_VERIFIED', label: '已到店核验' }
+]
+const reviewReasonTemplates = [
+  '照片不符合要求，请上传真人照片',
+  '部分资料不真实，请修改后再次提交审核',
+  '未实名认证，请完成实名认证后再次提交审核',
+  '没有支付资料审核费'
+]
+
+const modal = ref('')
+const menuForId = ref(0)
+const pickupLoading = ref(false)
+const menuLeft = ref(8)
+const menuTop = ref(8)
+const menuMember = computed(() => {
+  const id = menuForId.value
+  if (id == 0) return null
+  return (members.value as any[]).find((item: any) => Number(item.user_id) == id) || null
+})
+
+const notify = (message: string) => uni.showToast({ title: message, icon: 'none' })
+
+const emptyText = computed(() => {
+  if (activeTab.value == 'PENDING') return '暂无待审核的会员资料'
+  if (activeTab.value == 'REJECTED') return '暂无弃海的会员资料'
+  if (activeTab.value == 'vip_online') return '暂无线上VIP会员'
+  if (activeTab.value == 'vip_offline') return '暂无线下VIP会员'
+  return '当前没有符合条件的会员资料'
+})
+
+const sheetTitle = computed(() => {
+  if (sheet.value == 'note') return '红娘说'
+  if (sheet.value == 'abandonReason') return '弃海原因'
+  if (sheet.value == 'followups') return '服务跟进'
+  if (sheet.value == 'review') return '审核状态'
+  return ''
+})
+
+const visibleIntroductions = computed(() => {
+  return (introductions.value as any[]).filter((row: any) => row.direction == introTab.value)
+})
+
+const preferenceChips = computed(() => {
+  const chips: string[] = []
+  const pref = preference.value
+  if (pref != null && pref.age_min != null && pref.age_max != null) chips.push('年龄' + pref.age_min + '-' + pref.age_max)
+  else chips.push('年龄不限')
+  if (pref != null && pref.height_min != null && pref.height_max != null) chips.push('身高' + pref.height_min + '-' + pref.height_max)
+  else chips.push('身高不限')
+  if (pref != null && pref.income_min != null) chips.push('收入' + pref.income_min + '以上')
+  else chips.push('收入不限')
+  if (pref != null && pref.education_min != null) chips.push(educationLabel(Number(pref.education_min)))
+  else chips.push('学历不限')
+  return chips
+})
+
+/* ---------- 工具 ---------- */
+const formatTime = (value: any): string => value == null ? '' : String(value).replace('T', ' ').substring(0, 19)
+// 服务端头像下发裸相对路径：/static/ 是小程序包内资源，/storage/ 只在后端磁盘上。
+// 直接绑给 image 会被按包内路径解析，上传头像必然加载不出，还把首字兜底一起顶掉了。
+const avatarSrc = (value: any): string => resolveMediaUrl(value)
+const avatarText = (name: any): string => {
+  const text = name != null ? String(name).trim() : ''
+  return text.length > 0 ? text.substring(0, 1) : '会'
+}
+const ageText = (birthday: any): string => {
+  if (birthday == null) return ''
+  const text = String(birthday)
+  if (text.length < 4) return ''
+  const birth = parseInt(text.substring(0, 4))
+  if (isNaN(birth)) return ''
+  return String(new Date().getFullYear() - birth) + '岁'
+}
+// 与后端 users.is_married 编码一致：1 未婚 2 离异 3 丧偶，4-7 是离异的细分档。
+const marriedText = (value: any): string => {
+  const status = value != null ? Number(value) : -1
+  if (status == 1) return '未婚'
+  if (status == 2) return '离异'
+  if (status == 3) return '丧偶'
+  if (status == 4) return '离婚未育'
+  if (status == 5) return '离异未带孩'
+  if (status == 6) return '离异带女孩'
+  if (status == 7) return '离异带男孩'
+  return '婚况未填'
+}
+const educationLabel = (code: number): string => {
+  if (code == 1) return '博士及以上'
+  if (code == 2) return '硕士及以上'
+  if (code == 3) return '本科及以上'
+  if (code == 4) return '大专及以上'
+  if (code == 5) return '高中及以上'
+  return '学历不限'
+}
+const memberMeta = (member: any): string => {
+  const parts: string[] = []
+  parts.push(marriedText(member.is_married))
+  let age = ageText(member.birthday)
+  if (age.length == 0 && member.age != null && Number(member.age) > 0) age = String(Number(member.age)) + '岁'
+  if (age.length > 0) parts.push(age)
+  if (member.education != null && String(member.education).length > 0) parts.push(String(member.education))
+  else if (member.job != null && String(member.job).length > 0) parts.push(String(member.job))
+  if (member.height != null) parts.push(String(member.height) + 'cm')
+  return parts.join(' · ')
+}
+const reviewLabel = (status: string): string => status == 'PASSED' ? '已通过' : (status == 'REJECTED' ? '未通过' : (status == 'STORE_VERIFIED' ? '已到店核验' : '待审核'))
+const isVipMember = (member: any): boolean => {
+  if (member == null) return false
+  const value = member.is_vip
+  return value === true || value == 1
+}
+const introStatusLabel = (status: any): string => {
+  const value = String(status)
+  if (value == 'IN_PROGRESS') return '牵线中'
+  if (value == 'SUCCEEDED') return '牵线成功'
+  if (value == 'FAILED') return '牵线失败'
+  return '待牵线'
+}
+const introStatusTone = (status: any): string => {
+  const value = String(status)
+  if (value == 'IN_PROGRESS') return 'progress'
+  if (value == 'SUCCEEDED') return 'succeeded'
+  if (value == 'FAILED') return 'failed'
+  return 'pending'
+}
+const followMethodLabel = (method: string): string => method == 'PHONE' ? '电话' : (method == 'WECHAT' ? '微信' : (method == 'VISIT' ? '面谈' : '其他'))
+const onKeyword = (event: any) => { keyword.value = event.detail.value }
+const onNoteDraft = (event: any) => { noteDraft.value = event.detail.value }
+const onAbandonReason = (event: any) => { abandonReason.value = event.detail.value }
+const onFollowContent = (event: any) => { followContent.value = event.detail.value }
+/* ---------- 列表加载 ---------- */
+// 「我服务的」数量以列表真实数据为准，会员数据或本人身份每次刷新后回传给门店数据简报。
+const emitServedCount = () => {
+  if (selfUserId.value == 0) return
+  const count = (rawMembers.value as any[]).filter((item: any): boolean => Number(item.matchmaker_id) == selfUserId.value).length
+  emit('servedCount', count)
+}
+
+// 红娘工作台审核队列 → 卡片字段。录入会员和自助注册会员都只在这条链路上出现，
+// 广场接口里没有他们（非 VIP、未过审），所以待审列表不能以广场为数据源。
+const memberFromWorkbench = (row: any): any => {
+  const mapped: any = {
+    user_id: Number(row.user_id || 0),
+    nickname: row.nickname != null ? String(row.nickname) : '未命名会员',
+    avatar: row.avatar != null ? String(row.avatar) : '',
+    gender: row.gender != null ? Number(row.gender) : 0,
+    age: null,
+    birthday: row.birthday != null ? String(row.birthday) : '',
+    is_married: row.is_married != null ? Number(row.is_married) : null,
+    education: row.education != null ? String(row.education) : '',
+    job: row.job != null ? String(row.job) : '',
+    height: row.height != null ? Number(row.height) : null,
+    income: null,
+    residence: row.residence != null ? String(row.residence) : '',
+    hometown: row.hometown != null ? String(row.hometown) : '',
+    realname_status: row.realname_status != null ? Number(row.realname_status) : 0,
+    review_status: row.review_status != null ? String(row.review_status) : 'PENDING',
+    review_reason: row.review_reason != null ? String(row.review_reason) : null,
+    abandoned: row.abandoned === true,
+    abandoned_reason: row.abandoned_reason != null ? String(row.abandoned_reason) : null,
+    matchmaker_id: row.matchmaker_id != null ? Number(row.matchmaker_id) : 0,
+    matchmaker_name: row.matchmaker_name != null ? String(row.matchmaker_name) : '',
+    created_at: row.created_at != null ? String(row.created_at) : '',
+    followCount: 0,
+    introCount: 0,
+    profile_completion_score: row.profile_completion_score != null ? Number(row.profile_completion_score) : 0,
+    source: 'workbench'
+  }
+  return mapped
+}
+
+const loadWorkbenchMembers = async (tab: string, append: boolean = false): Promise<void> => {
+  const data: any = { page: append ? memberPage.value + 1 : 1, page_size: 30, member_pool: 'all' }
+  if (tab == 'PENDING') data['review_status'] = tab
+  if (tab == 'REJECTED') data['abandoned'] = true
+  if (keyword.value.trim().length > 0) data['search'] = keyword.value.trim()
+  const selected: any = {}
+  for (const key of Object.keys(appliedMemberFilter.value)) { const value = String(appliedMemberFilter.value[key] || ''); if (value.length > 0) selected[key] = value }
+  if (tab == 'mine') selected['mine'] = '1'
+  if (tab == 'vip_online') selected['online_vip'] = '1'
+  if (tab == 'vip_offline') selected['offline_vip'] = '1'
+  data['filters'] = JSON.stringify(selected)
+  const result = await getMatchmakerReviewMembers(data)
+  if (!result.success || result.data == null) {
+    if (!append) { rawMembers.value = []; members.value = []; hasMoreMembers.value = false }
+    errorMessage.value = result.message != null ? String(result.message) : '资料数据加载失败'
+    if ((tab == 'vip_online' || tab == 'vip_offline') && Number(result.code) == 422 && errorMessage.value == '不支持的筛选条件') {
+      errorMessage.value = '当前后端尚未支持VIP列表，请更新后端后重试'
+    }
+    return
+  }
+  if (Number(result.data.member_pool_version || 0) < 1) {
+    rawMembers.value = []
+    members.value = []
+    hasMoreMembers.value = false
+    errorMessage.value = '后端尚未支持全部会员列表，请更新后端后重试'
+    return
+  }
+  if (tab == 'REJECTED' && Number(result.data.abandonment_pool_version || 0) < 1) {
+    rawMembers.value = []
+    members.value = []
+    hasMoreMembers.value = false
+    errorMessage.value = '后端尚未支持会员弃海池，请更新后端后重试'
+    return
+  }
+  const requiredFilterVersion = tab == 'vip_offline' ? 3 : (tab == 'vip_online' ? 2 : 1)
+  if (Object.keys(selected).length > 0 && Number(result.data.filter_version || 0) < requiredFilterVersion) {
+    rawMembers.value = []
+    members.value = []
+    hasMoreMembers.value = false
+    errorMessage.value = '后端尚未支持资料筛选，请更新后端后重试'
+    return
+  }
+  const items = Array.isArray(result.data.items) ? result.data.items as any[] : []
+  const list: any[] = []
+  for (let i = 0; i < items.length; i++) {
+    const member = memberFromWorkbench(items[i])
+    if (tab == 'vip_online' || tab == 'vip_offline') member.is_vip = true
+    list.push(member)
+  }
+  memberPage.value = Number(result.data.page || 1)
+  hasMoreMembers.value = result.data.has_more === true
+  rawMembers.value = append ? [...rawMembers.value, ...list] : list
+  members.value = rawMembers.value
+  emitServedCount()
+}
+const loadMoreMembers = async () => {
+  if (loading.value || loadingMoreMembers.value || !hasMoreMembers.value) return
+  loadingMoreMembers.value = true
+  try { await loadWorkbenchMembers(activeTab.value, true) } finally { loadingMoreMembers.value = false }
+}
+
+const loadMembers = async () => {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const tab = activeTab.value
+    // 所有页签都读工作台；VIP 按管理员端订阅/签约记录筛选，与在线状态无关。
+    await loadWorkbenchMembers(tab)
+  } catch (error) {
+    rawMembers.value = []
+    members.value = []
+    errorMessage.value = '网络异常，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+const filterValueText = (key: string): string => {
+  const value = String(memberFilter.value[key] || '')
+  if (isRangeFilter(key) && value.indexOf('range:') == 0) {
+    const parts = value.split(':')
+    return (parts[1] || '不限') + ' — ' + (parts[2] || '不限')
+  }
+  const row = (filterRows as any[]).find((item: any) => item.key == key)
+  if (row == null) return '不限'
+  const option = (row.options as any[]).find((item: any) => item.value == memberFilter.value[key])
+  return option != null ? String(option.label) : '不限'
+}
+
+const toggleMemberFilter = (key: string) => {
+  expandedFilterKey.value = expandedFilterKey.value == key ? '' : key
+  if (expandedFilterKey.value == key && isRangeFilter(key)) {
+    const value = String(memberFilter.value[key] || '')
+    const parts = value.indexOf('range:') == 0 ? value.split(':') : []
+    rangeDraftMin.value = parts.length > 1 ? parts[1] : ''
+    rangeDraftMax.value = parts.length > 2 ? parts[2] : ''
+  }
+}
+
+const isRangeFilter = (key: string): boolean => key == 'ageRange' || key == 'heightRange' || key == 'weight'
+const rangeValues = (key: string): string[] => {
+  const min = key == 'ageRange' ? 18 : (key == 'heightRange' ? 140 : 30)
+  const max = key == 'ageRange' ? 120 : (key == 'heightRange' ? 220 : 150)
+  const result: string[] = ['不限']
+  for (let i = min; i <= max; i++) result.push(String(i))
+  return result
+}
+const rangeBoundText = (_key: string, bound: string): string => {
+  const value = bound == 'min' ? rangeDraftMin.value : rangeDraftMax.value
+  return value.length > 0 ? value : '不限'
+}
+const rangeBoundIndex = (key: string, bound: string): number => {
+  const value = bound == 'min' ? rangeDraftMin.value : rangeDraftMax.value
+  const index = rangeValues(key).indexOf(value)
+  return index > 0 ? index : 0
+}
+const setRangeBound = (key: string, bound: string, event: any) => {
+  const index = Number(event.detail.value)
+  const values = rangeValues(key)
+  const value = index > 0 && index < values.length ? values[index] : ''
+  if (bound == 'min') rangeDraftMin.value = value
+  else rangeDraftMax.value = value
+}
+const applyRange = (key: string) => {
+  if (rangeDraftMin.value.length > 0 && rangeDraftMax.value.length > 0 && Number(rangeDraftMin.value) > Number(rangeDraftMax.value)) {
+    notify('下限不能大于上限')
+    return
+  }
+  memberFilter.value[key] = rangeDraftMin.value.length == 0 && rangeDraftMax.value.length == 0 ? '' : 'range:' + rangeDraftMin.value + ':' + rangeDraftMax.value
+  expandedFilterKey.value = ''
+}
+
+const selectMemberFilter = (key: string, value: string) => {
+  memberFilter.value[key] = value
+  expandedFilterKey.value = ''
+}
+const selectFilterRegion = (key: string, event: any) => {
+  const parts = event.detail.value as string[]
+  memberFilter.value[key] = parts.join(' ')
+}
+
+const closeMemberFilter = () => {
+  filterVisible.value = false
+  expandedFilterKey.value = ''
+}
+
+const resetMemberFilter = () => { memberFilter.value = createMemberFilter(); expandedFilterKey.value = '' }
+const confirmMemberFilter = () => { appliedMemberFilter.value = { ...memberFilter.value }; closeMemberFilter(); loadMembers() }
+
+const selectTab = (key: string) => {
+  activeTab.value = key
+  loadMembers()
+}
+
+const loadSelfProfile = async () => {
+  try {
+    const result = await getMatchmakerWorkspaceProfile()
+    if (result.success && result.data != null && result.data.user_id != null) {
+      selfUserId.value = Number(result.data.user_id)
+      canReview.value = String(result.data.level) == 'SUPER'
+      emitServedCount()
+    }
+  } catch (e) {
+  }
+}
+
+/* ---------- 更多菜单 ---------- */
+const toggleMenu = (member: any, event: any) => {
+  const id = Number(member.user_id)
+  if (menuForId.value == id) {
+    closeMenu()
+    return
+  }
+  const windowInfo = uni.getSystemInfoSync()
+  const menuWidth = 270 * windowInfo.windowWidth / 750
+  const menuHeight = (activeTab.value == 'REJECTED' ? 1 : (canReview.value ? 5 : 4)) * 84 * windowInfo.windowWidth / 750
+  let tapX = 0
+  let tapY = 0
+  if (event != null && event.detail != null) {
+    if (event.detail.x != null) tapX = Number(event.detail.x)
+    if (event.detail.y != null) tapY = Number(event.detail.y)
+  }
+  if ((tapX <= 0 || tapY <= 0) && event != null && event.touches != null && event.touches.length > 0) {
+    const touch = event.touches[0]
+    if (tapX <= 0 && touch.clientX != null) tapX = Number(touch.clientX)
+    if (tapY <= 0 && touch.clientY != null) tapY = Number(touch.clientY)
+  }
+  // tap 坐标以屏幕为准；保底值只在极少数旧端未提供坐标时使用。
+  if (tapX <= 0) tapX = 56 * windowInfo.windowWidth / 375
+  if (tapY <= 0) tapY = windowInfo.windowHeight / 2
+  const maxLeft = Math.max(8, windowInfo.windowWidth - menuWidth - 8)
+  menuLeft.value = Math.min(maxLeft, Math.max(8, tapX - 26))
+  const maxTop = Math.max(8, windowInfo.windowHeight - menuHeight - 8)
+  const aboveTop = tapY - menuHeight - 28
+  menuTop.value = aboveTop >= 8 ? aboveTop : Math.min(maxTop, tapY + 28)
+  menuForId.value = id
+  if (activeTab.value != 'REJECTED' && !(member.introCount > 0)) loadIntroCount(member)
+}
+const closeMenu = () => { menuForId.value = 0 }
+
+const pickupMember = async (member: any) => {
+  if (pickupLoading.value || member == null) return
+  pickupLoading.value = true
+  try {
+    const result = await pickupAbandonedMemberRecord(String(member.user_id))
+    if (!result.success) { notify(result.message || '捞取失败，请重试'); return }
+    closeMenu()
+    notify('捞取成功，已归入我的会员')
+    await loadMembers()
+  } catch (error) { notify('捞取失败，请重试') }
+  finally { pickupLoading.value = false }
+}
+
+const loadIntroCount = async (member: any) => {
+  const result = await getMatchmakerMemberMatchHistory(String(member.user_id))
+  if (result.success && result.data != null) {
+    member.introCount = result.data.total != null ? Number(result.data.total) : 0
+  }
+}
+
+/* ---------- 子页：牵线记录 ---------- */
+const openIntroductions = (member: any) => {
+  closeMenu()
+  selected.value = member
+  subview.value = 'introductions'
+  introTab.value = 'OUTGOING'
+  introductions.value = []
+  loadIntroductions(member)
+}
+const selectIntroTab = (tab: string) => { introTab.value = tab }
+const loadIntroductions = async (member: any) => {
+  introLoading.value = true
+  const result = await getMatchmakerMemberMatchHistory(String(member.user_id))
+  if (result.success && result.data != null) {
+    introductions.value = Array.isArray(result.data.items) ? result.data.items : []
+    member.introCount = result.data.total != null ? Number(result.data.total) : 0
+  } else {
+    notify(result.message || '牵线记录加载失败')
+  }
+  introLoading.value = false
+}
+
+/* ---------- 子页：匹配 ---------- */
+const openMatch = (member: any) => {
+  closeMenu()
+  selected.value = member
+  subview.value = 'match'
+  candidates.value = []
+  preference.value = null
+  loadCandidates(member)
+}
+const loadCandidates = async (member: any) => {
+  matchLoading.value = true
+  const result = await getMatchmakerMemberMatchCandidates(String(member.user_id))
+  if (result.success && result.data != null) {
+    candidates.value = Array.isArray(result.data.items) ? result.data.items : []
+    preference.value = result.data.preference != null ? result.data.preference : null
+  } else {
+    notify(result.message || '匹配候选加载失败')
+  }
+  matchLoading.value = false
+}
+
+const closeSubpage = () => {
+  subview.value = ''
+  selected.value = null
+  introductions.value = []
+  candidates.value = []
+}
+
+/* ---------- 红娘说 ---------- */
+const openNote = (member: any) => {
+  closeMenu()
+  selected.value = member
+  noteDraft.value = ''
+  sheet.value = 'note'
+  loadNote(member)
+}
+const loadNote = async (member: any) => {
+  const result = await getMatchmakerMemberNote(String(member.user_id))
+  if (result.success && result.data != null) noteDraft.value = result.data.note != null ? String(result.data.note) : ''
+}
+const submitNote = async () => {
+  if (selected.value == null) return
+  const text = noteDraft.value.trim()
+  if (text.length == 0) {
+    notify('请输入红娘说内容')
+    return
+  }
+  if (text.length > 200) {
+    notify('红娘说最多 200 字')
+    return
+  }
+  const result = await updateMatchmakerMemberNote(String(selected.value.user_id), text)
+  if (!result.success) {
+    notify(result.message || '红娘说保存失败')
+    return
+  }
+  notify('红娘说已保存')
+  closeSheet()
+}
+
+/* ---------- 修改红娘 ---------- */
+const openAssign = (member: any) => {
+  closeMenu()
+  selected.value = member
+  assignOptions.value = []
+  assignTarget.value = member.matchmaker_id != null ? Number(member.matchmaker_id) : 0
+  sheet.value = 'assign'
+  loadAssignOptions(member)
+}
+const loadAssignOptions = async (member: any) => {
+  assignLoading.value = true
+  const result = await getMatchmakerMemberMatchmakers(String(member.user_id))
+  if (result.success && result.data != null) {
+    assignOptions.value = Array.isArray(result.data) ? result.data : []
+    if (assignTarget.value == 0 && assignOptions.value.length > 0) assignTarget.value = Number(assignOptions.value[0].user_id)
+  } else {
+    notify(result.message || '红娘名单加载失败')
+  }
+  assignLoading.value = false
+}
+const pickAssign = (option: any) => {
+  if (selected.value != null && option.user_id == (selected.value.matchmaker_id || 0)) return
+  assignTarget.value = Number(option.user_id)
+}
+const submitAssign = async () => {
+  if (selected.value == null) return
+  if (assignTarget.value == 0) {
+    notify('请选择接手的服务红娘')
+    return
+  }
+  if (assignTarget.value == (selected.value.matchmaker_id || 0)) {
+    notify('该会员已由当前红娘跟进')
+    return
+  }
+  const result = await assignMatchmakerMemberMatchmaker(String(selected.value.user_id), String(assignTarget.value))
+  if (!result.success) {
+    notify(result.message || '修改红娘失败')
+    return
+  }
+  notify('跟进红娘已更新')
+  closeSheet()
+  loadMembers()
+}
+
+/* ---------- 移入弃海 ---------- */
+const onAbandonEntry = (member: any) => {
+  closeMenu()
+  selected.value = member
+  if (member.abandoned === true) {
+    notify('该会员已在弃海列表中')
+    return
+  }
+  pendingAbandon.value = false
+  abandonReason.value = ''
+  modal.value = 'abandon'
+}
+const closeModal = () => { modal.value = '' }
+const confirmAbandon = () => {
+  modal.value = ''
+  abandonReason.value = ''
+  pendingAbandon.value = true
+  sheet.value = 'abandonReason'
+}
+const submitAbandon = async () => {
+  if (selected.value == null) return
+  const reason = abandonReason.value.trim()
+  if (reason.length == 0) {
+    notify('请填写弃海原因')
+    return
+  }
+  if (!pendingAbandon.value) {
+    closeSheet()
+    return
+  }
+  const result = await abandonMemberRecord(String(selected.value.user_id), reason)
+  if (!result.success) { notify(result.message || '移入弃海失败'); return }
+  pendingAbandon.value = false
+  notify('已弃海')
+  closeSheet()
+  loadMembers()
+}
+
+/* ---------- 审核状态 ---------- */
+const openReview = (member: any) => {
+  closeMenu()
+  if (!canReview.value) {
+    notify('仅总店红娘可审核会员资料')
+    return
+  }
+  selected.value = member
+  reviewReason.value = ''
+  reviewStatus.value = member.review_status == 'PASSED' ? 'PASSED' : (member.review_status == 'REJECTED' ? 'REJECTED' : 'PENDING')
+  sheet.value = 'review'
+}
+const pickReviewStatus = (value: string) => { reviewStatus.value = value }
+const onReviewReason = (event: any) => { reviewReason.value = event.detail.value }
+const applyReviewTemplate = (tpl: string) => { reviewReason.value = tpl }
+const submitReview = async () => {
+  if (selected.value == null || reviewSubmitting.value) return
+  if (reviewStatus.value == 'PENDING' || reviewStatus.value == '') {
+    notify('请选择审核结果')
+    return
+  }
+  // 已到店核验由线下到店流程产生；后端公开资料审核仅支持通过/不通过。
+  if (reviewStatus.value == 'STORE_VERIFIED') {
+    notify('已到店核验需到店操作，暂不支持在线设置')
+    return
+  }
+  const reason = reviewReason.value.trim()
+  if (reviewStatus.value == 'REJECTED' && reason.length == 0) {
+    notify('请填写审核不通过原因')
+    return
+  }
+  reviewSubmitting.value = true
+  try {
+    const result = await updateMatchmakerReviewMember(String(selected.value.user_id), { status: reviewStatus.value, reason: reason })
+    if (!result.success) {
+      notify(result.message || '审核结果提交失败')
+      return
+    }
+    notify('审核结果已提交')
+    closeSheet()
+    loadMembers()
+  } finally { reviewSubmitting.value = false }
+}
+
+/* ---------- 联系 / 跟进（联系弹窗由父页面统一渲染） ---------- */
+const openContact = (member: any) => {
+  closeMenu()
+  selected.value = member
+  // 会员编号校验与弹窗渲染都在父页面（become-matchmaker）统一处理。
+  emit('contact', member)
+}
+const openFollowUps = async (member: any) => {
+  closeMenu()
+  selected.value = member
+  followContent.value = ''
+  followUps.value = []
+  sheet.value = 'followups'
+  const result = await getMatchmakerMemberFollowUps(String(member.user_id))
+  if (result.success && result.data != null) {
+    followUps.value = Array.isArray(result.data.items) ? result.data.items : []
+    member.followCount = result.data.total != null ? Number(result.data.total) : 0
+  } else notify(result.message || '服务跟进加载失败')
+}
+const submitFollowUp = async () => {
+  if (selected.value == null) return
+  if (followContent.value.trim() == '') {
+    notify('请填写跟进内容')
+    return
+  }
+  const result = await createMatchmakerMemberFollowUp(String(selected.value.user_id), { method: 'OTHER', content: followContent.value.trim() })
+  if (!result.success) {
+    notify(result.message || '跟进提交失败')
+    return
+  }
+  followContent.value = ''
+  notify('服务跟进已保存')
+  const reload = await getMatchmakerMemberFollowUps(String(selected.value.user_id))
+  if (reload.success && reload.data != null) {
+    followUps.value = Array.isArray(reload.data.items) ? reload.data.items : []
+    selected.value.followCount = reload.data.total != null ? Number(reload.data.total) : 0
+  }
+}
+
+/* ---------- 复制 / 编辑 / 悬浮球（按键逻辑保留） ---------- */
+/* 复制文本口径 = 编辑资料页的「昵称 + 基础信息」全量字段，未填写留空。 */
+const copyVisible = ref(false)
+const copyLoading = ref(false)
+const copyEditing = ref(false)
+const copyCopied = ref(false)
+const copyError = ref('')
+const copyText = ref('')
+const copyLines = ref<string[]>([])
+const copyMember = ref<any>(null)
+let copyLoadSeq = 0
+
+const cpText = (value: any): string => value == null ? '' : String(value).trim()
+const cpGenderText = (value: any): string => {
+  if (cpText(value).length == 0) return ''
+  const gender = Number(value)
+  return gender == 1 ? '男' : (gender == 2 ? '女' : '')
+}
+// education_level 存储刻度 1-5，文案与编辑资料页 educationOptions 同一套。
+const cpEducationText = (value: any): string => {
+  if (value == null) return ''
+  const labels: string[] = ['高中及以下', '大专', '本科', '硕士', '博士']
+  const idx = Number(value) - 1
+  return idx >= 0 && idx < labels.length ? labels[idx] : ''
+}
+const cpMaritalText = (value: any): string => {
+  const status = value == null ? -1 : Number(value)
+  if (status == 1) return '未婚'
+  if (status == 3) return '丧偶'
+  if (status >= 2 && status <= 7) return '离异'
+  return ''
+}
+// 收入按登录问卷档位反向映射，口径与编辑资料页 incomeDisplay 一致。
+const cpIncomeText = (value: any): string => {
+  const raw = cpText(value)
+  if (raw.length == 0) return ''
+  const numeric = Number(raw)
+  if (isNaN(numeric) || numeric <= 0) return raw
+  if (numeric == 50000) return '小于10w'
+  if (numeric == 150000) return '10-20w'
+  if (numeric == 400000) return '30-50w'
+  if (numeric == 750000) return '50-100w'
+  if (numeric >= 1000000) return '100w以上'
+  const wan = numeric / 10000
+  return (wan % 1 == 0 ? '' + wan : wan.toFixed(1)) + 'w'
+}
+// 星座与编辑资料页一致：由生日推算，不独立存储。
+const cpConstellation = (value: any): string => {
+  const birthday = cpText(value)
+  if (birthday.length < 10) return ''
+  const month = Number(birthday.substring(5, 7))
+  const day = Number(birthday.substring(8, 10))
+  if (isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) return ''
+  const signs: string[] = ['摩羯', '水瓶', '双鱼', '白羊', '金牛', '双子', '巨蟹', '狮子', '处女', '天秤', '天蝎', '射手']
+  const boundaries: number[] = [20, 19, 21, 20, 21, 22, 23, 23, 23, 24, 23, 22]
+  const idx = day >= boundaries[month - 1] ? month % 12 : month - 1
+  return signs[idx] + '座'
+}
+const cpSizeText = (value: any, unit: string): string => {
+  if (cpText(value).length == 0) return ''
+  const numeric = Number(value)
+  return isNaN(numeric) || numeric <= 0 ? '' : '' + numeric + unit
+}
+const cpOccupationText = (detail: any): string => {
+  const parts: string[] = []
+  if (cpText(detail.occupation).length > 0) parts.push(cpText(detail.occupation))
+  if (cpText(detail.industry).length > 0) parts.push(cpText(detail.industry))
+  return parts.join(' · ')
+}
+const buildCopyLines = (member: any, detail: any): string[] => {
+  const d: any = detail != null ? detail : {}
+  const nickname = cpText(d.nickname)
+  const age = d.age != null && Number(d.age) > 0 ? '' + Number(d.age) + '岁' : ageText(d.birthday)
+  return [
+    '昵称：' + (nickname.length > 0 ? nickname : cpText(member.nickname)),
+    '编号：G' + String(member.user_id),
+    '性别：' + cpGenderText(d.gender),
+    '年龄：' + age,
+    '星座：' + cpConstellation(d.birthday),
+    '身高：' + cpSizeText(d.height, 'cm'),
+    '体重：' + cpSizeText(d.weight, 'kg'),
+    '学历：' + cpEducationText(d.education_level),
+    '现居地：' + cpText(d.residence_display),
+    '家乡：' + cpText(d.hometown_display),
+    '职业：' + cpOccupationText(d),
+    '公司：' + cpText(d.company),
+    '收入：' + cpIncomeText(d.income),
+    '婚姻状况：' + cpMaritalText(d.is_married),
+    'MBTI：' + cpText(d.mbti),
+    '微信号：' + cpText(d.wechat)
+  ]
+}
+const loadCopyLines = async (member: any) => {
+  const seq = ++copyLoadSeq
+  copyLoading.value = true
+  copyError.value = ''
+  copyLines.value = []
+  try {
+    const result = await getMatchmakerMemberProfile(String(member.user_id))
+    if (seq != copyLoadSeq) return
+    if (result.success && result.data != null) {
+      copyLines.value = buildCopyLines(member, result.data)
+    } else {
+      copyError.value = result.message != null ? String(result.message) : '资料加载失败'
+    }
+  } catch (e) {
+    if (seq == copyLoadSeq) copyError.value = '网络异常，请稍后重试'
+  } finally {
+    if (seq == copyLoadSeq) copyLoading.value = false
+  }
+}
+const copyProfile = (member: any) => {
+  closeMenu()
+  copyMember.value = member
+  copyVisible.value = true
+  copyEditing.value = false
+  copyCopied.value = false
+  copyText.value = ''
+  loadCopyLines(member)
+}
+const retryCopyLoad = () => {
+  if (copyMember.value != null) loadCopyLines(copyMember.value)
+}
+const closeCopyProfile = () => {
+  copyLoadSeq++
+  copyVisible.value = false
+  copyEditing.value = false
+}
+const toggleCopyEdit = () => {
+  if (copyLoading.value) return
+  if (copyEditing.value) {
+    copyLines.value = copyText.value.split('\n')
+    copyEditing.value = false
+    return
+  }
+  if (copyLines.value.length == 0) return
+  copyText.value = copyLines.value.join('\n')
+  copyEditing.value = true
+}
+const onCopyText = (event: any) => { copyText.value = event.detail.value }
+const confirmCopyProfile = () => {
+  if (copyLoading.value) return
+  const data = copyEditing.value ? copyText.value : copyLines.value.join('\n')
+  if (data.length == 0) {
+    notify('资料还没有内容可复制')
+    return
+  }
+  uni.setClipboardData({
+    data: data,
+    success: () => {
+      copyCopied.value = true
+      notify('资料已复制')
+      setTimeout(() => { copyCopied.value = false }, 2000)
+    },
+    fail: () => notify('复制失败，请重试')
+  })
+}
+const onEditProfile = (member: any) => {
+  closeMenu()
+  const id = Number(member.user_id)
+  if (id <= 0) {
+    notify('会员编号无效')
+    return
+  }
+  uni.navigateTo({
+    url: '/pagesSub/userExtra/user/edit?memberId=' + id + '&matchmakerView=1',
+    fail: () => notify('打开会员资料编辑失败')
+  })
+}
+/* 点击会员卡片直接进入会员主页（用户详情页） */
+const openMemberProfile = (member: any) => {
+  closeMenu()
+  const id = Number(member.user_id)
+  if (id <= 0) {
+    notify('会员编号无效')
+    return
+  }
+  uni.navigateTo({
+    url: '/pagesSub/userExtra/user/detail?userId=' + id + '&matchmakerView=1',
+    fail: () => notify('打开会员主页失败')
+  })
+}
+const onEnterMember = () => {
+  closeMenu()
+  emit('entry')
+}
+const onFilter = () => {
+  closeMenu()
+  memberFilter.value = { ...appliedMemberFilter.value }
+  filterVisible.value = true
+}
+
+const closeSheet = () => {
+  sheet.value = ''
+  if (!pendingAbandon.value) selected.value = null
+}
+
+watch(() => props.refreshToken, () => { loadMembers() })
+
+onMounted(() => {
+  loadMembers()
+  loadSelfProfile()
+})
+</script>
+
+<style scoped>
+.pr-shell { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--canvas); }
+.pr-main { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* tabs：分段胶囊条。选中项只换底色与字色，字号不动，避免顶动相邻标签。 */
+.pr-tabs { flex-shrink: 0; width: 100%; padding: 20rpx 24rpx 0; box-sizing: border-box; background: var(--canvas); }
+.pr-tabs-row { display: inline-flex; flex-direction: row; padding: 8rpx; border-radius: 999rpx; background: var(--warm); }
+.pr-tab { flex-shrink: 0; height: 62rpx; padding: 0 28rpx; border-radius: 999rpx; display: flex; flex-direction: row; align-items: center; justify-content: center; }
+.pr-tab text { color: var(--muted); font-size: 24rpx; font-weight: 700; }
+.pr-tab.active { background: var(--accent2); }
+.pr-tab.active text { color: var(--paper); }
+.pr-tab:active { opacity: .82; }
+
+/* search —— 与「客源线索」同一枚暖底胶囊：无描边无投影，搜动作交给键盘搜索键 */
+.pr-search { flex-shrink: 0; margin: 18rpx 24rpx 4rpx; height: 78rpx; padding: 0 26rpx; border-radius: 999rpx; background: var(--warm); display: flex; flex-direction: row; align-items: center; gap: 14rpx; }
+.pr-search-icon { color: var(--muted); font-size: 32rpx; line-height: 1; flex-shrink: 0; }
+.pr-search-input { flex: 1; min-width: 0; height: 70rpx; font-size: 25rpx; color: var(--ink); }
+.pr-search-ph { color: var(--muted); font-size: 25rpx; }
+
+/* list */
+.pr-list { flex: 1; height: 0; padding: 14rpx 24rpx 260rpx; box-sizing: border-box; }
+.state-card { margin-bottom: 20rpx; min-height: 170rpx; padding: 24rpx; border: 1rpx solid var(--line); border-radius: 28rpx; background: var(--surface); box-shadow: var(--shadow-md); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20rpx; color: var(--muted); font-size: 24rpx; text-align: center; }
+.state-action { min-width: 160rpx; height: 60rpx; border-radius: 999rpx; background: var(--accent2); color: var(--paper); display: flex; align-items: center; justify-content: center; font-size: 22rpx; font-weight: 800; }
+.state-inline { padding: 14rpx 0; color: var(--muted); font-size: 21rpx; text-align: center; }
+
+/* member card
+ * 版式按「交易流水」参考稿：左侧色块图素 + 中间标题/次要信息两行 + 右侧彩色数值与类别标签。
+ * 内容一字未改，只是把顶部拥挤的标签条拆进正文与右栏。 */
+.mcard { position: relative; margin-bottom: 20rpx; padding: 24rpx; border: 1rpx solid var(--line); border-radius: 28rpx; background: var(--surface); box-shadow: var(--shadow-md); }
+.mcard-body { display: flex; flex-direction: row; align-items: flex-start; gap: 20rpx; }
+
+/* 右栏：审核状态按数值排版（彩色加粗在上），公开档案作类别标签，主页入口收尾。 */
+.mcard-side { width: 130rpx; flex-shrink: 0; padding-top: 2rpx; display: flex; flex-direction: column; align-items: flex-end; gap: 12rpx; }
+.mcard-status { display: flex; flex-direction: row; align-items: center; gap: 6rpx; padding: 10rpx 4rpx; margin: -10rpx -4rpx 0 0; }
+.mcard-status text { color: var(--review-orange); font-size: 27rpx; font-weight: 800; }
+.mcard-status-dot { font-size: 12rpx !important; }
+.mcard-status.st-passed text { color: var(--sage); }
+.mcard-status.st-rejected text { color: var(--match-coral); }
+.mcard-ark { display: flex; flex-direction: row; align-items: center; gap: 5rpx; }
+.mcard-ark text { color: var(--muted); font-size: 18rpx; }
+.mcard-ark-glyph { font-size: 15rpx !important; }
+.mcard-vip { padding: 4rpx 10rpx; border-radius: 8rpx; background: #b98a2b; }
+.mcard-vip text { color: var(--paper); font-size: 17rpx; font-weight: 800; }
+.mcard-profile-entry { padding: 9rpx 16rpx; border-radius: 999rpx; background: var(--accent-bg); }
+.mcard-profile-entry text { color: var(--accent2); font-size: 19rpx; font-weight: 800; }
+
+.mcard-ava { position: relative; width: 104rpx; height: 104rpx; border-radius: 30rpx; overflow: hidden; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mcard-ava image { width: 104rpx; height: 104rpx; border-radius: 30rpx; }
+.mcard-ava text { color: var(--accent2); font-size: 38rpx; font-weight: 800; }
+.mcard-ava.female { background: var(--match-blush); }
+.mcard-ava.female text { color: var(--match-coral); }
+.mcard-ava-badge { position: absolute; left: 4rpx; bottom: 4rpx; width: 32rpx; height: 32rpx; border-radius: 50%; background: var(--accent2); display: flex; align-items: center; justify-content: center; }
+.mcard-ava-badge text { color: var(--paper); font-size: 16rpx; }
+.mcard-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10rpx; }
+.mcard-name-row { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 12rpx; }
+.mcard-name { max-width: 100%; color: var(--ink); font-size: 30rpx; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.realname-tag { padding: 4rpx 12rpx; border-radius: 999rpx; background: var(--match-sky); }
+.realname-tag text { color: var(--accent); font-size: 17rpx; font-weight: 700; }
+.realname-tag.ok { background: var(--sage-soft); }
+.realname-tag.ok text { color: var(--sage); }
+/* 编号与登记时间合成一行次要信息，对应参考稿标题下的时间戳行。 */
+.mcard-sub { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; }
+.mcard-no { color: var(--muted); font-size: 19rpx; }
+.mcard-reg { display: flex; flex-direction: row; align-items: center; gap: 8rpx; }
+.mcard-reg text { color: var(--muted); font-size: 19rpx; }
+.mcard-sub-dot { color: var(--line) !important; font-size: 19rpx !important; }
+.mcard-meta { color: var(--ink2); font-size: 21rpx; line-height: 1.4; }
+.mcard-owner { display: flex; flex-direction: row; align-items: center; gap: 8rpx; }
+.mcard-owner-glyph { color: var(--match-coral); font-size: 18rpx; }
+.mcard-owner-label { color: var(--muted); font-size: 20rpx; }
+.mcard-owner-value { color: var(--ink); font-size: 20rpx; font-weight: 800; }
+.mcard-reason { display: block; margin-top: 18rpx; padding: 14rpx 18rpx; border-radius: 14rpx; background: var(--match-blush); color: var(--match-coral); font-size: 20rpx; line-height: 1.5; }
+
+.mcard-actions { margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx solid var(--warm); display: flex; flex-direction: row; align-items: center; gap: 12rpx; }
+.act-more { width: 96rpx; height: 62rpx; border: 1rpx solid var(--accent); border-radius: 999rpx; display: flex; align-items: center; justify-content: center; }
+.act-more text { color: var(--accent); font-size: 20rpx; font-weight: 800; }
+.act { flex: 1; min-width: 0; height: 62rpx; border-radius: 999rpx; background: var(--warm); display: flex; align-items: center; justify-content: center; }
+.act text { color: var(--ink2); font-size: 20rpx; }
+
+/* 筛选为页面级右侧抽屉，不受列表和卡片的 overflow 影响。 */
+.filter-layer { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 110; display: flex; flex-direction: column; justify-content: flex-end; }
+.filter-mask { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: var(--ink); opacity: .44; }
+.filter-drawer { position: relative; width: 100%; height: 82%; border-radius: 40rpx 40rpx 0 0; overflow: hidden; background: var(--canvas); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+/* 顶部留位与宿主导航带对齐（状态栏 + 88rpx），避免标题与关闭键顶进状态栏或微信胶囊。 */
+.filter-head { flex-shrink: 0; padding: 34rpx 32rpx 24rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.filter-title { display: block; color: var(--ink); font-size: 31rpx; font-weight: 800; }
+.filter-subtitle { display: block; margin-top: 7rpx; color: var(--muted); font-size: 20rpx; }
+.filter-close { width: 56rpx; height: 56rpx; border-radius: 50%; background: var(--warm); display: flex; align-items: center; justify-content: center; }
+.filter-close text { color: var(--muted); font-size: 25rpx; }
+.filter-scroll { flex: 1; height: 0; padding: 0 28rpx 30rpx; box-sizing: border-box; }
+.filter-row { margin-bottom: 12rpx; padding: 0 22rpx; border-radius: 22rpx; background: var(--surface); }
+.filter-row-summary { min-height: 94rpx; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20rpx; }
+.filter-label { color: var(--ink); font-size: 25rpx; font-weight: 700; }
+.filter-current { min-width: 0; max-width: 360rpx; display: flex; flex-direction: row; align-items: center; gap: 10rpx; }
+.filter-current text:first-child { color: var(--muted); font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-chevron { color: var(--muted) !important; font-size: 35rpx !important; line-height: 1; }
+.filter-options { padding: 0 0 22rpx; display: flex; flex-direction: row; flex-wrap: wrap; gap: 14rpx; }
+.filter-range { padding: 0 0 24rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.filter-range-hint { color: var(--muted); font-size: 21rpx; }
+.filter-range-controls { display: flex; flex-direction: row; align-items: center; gap: 12rpx; }
+.filter-range-input { min-width: 112rpx; height: 68rpx; padding: 0 18rpx; border: 1rpx solid var(--line); border-radius: 14rpx; background: var(--canvas); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.filter-range-input text, .filter-range-separator { color: var(--ink2); font-size: 23rpx; }
+.filter-range-apply { margin-left: auto; min-width: 110rpx; height: 68rpx; border-radius: 999rpx; background: var(--accent2); display: flex; align-items: center; justify-content: center; }
+.filter-range-apply text { color: var(--paper); font-size: 23rpx; font-weight: 700; }
+.filter-option { min-height: 54rpx; padding: 0 18rpx; border: 1rpx solid var(--line); border-radius: 999rpx; background: var(--paper); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.filter-option text { color: var(--ink2); font-size: 21rpx; }
+.filter-option.selected { border-color: var(--accent); background: var(--accent-bg); }
+.filter-option.selected text { color: var(--accent2); font-weight: 800; }
+.filter-data-note { display: block; padding: 28rpx 0 10rpx; color: var(--muted); font-size: 19rpx; line-height: 1.5; }
+.filter-footer { flex-shrink: 0; padding: 18rpx 28rpx calc(env(safe-area-inset-bottom) + 18rpx); border-top: 1rpx solid var(--line); background: var(--surface); display: flex; flex-direction: row; gap: 18rpx; }
+.filter-reset, .filter-confirm { height: 88rpx; border-radius: 999rpx; display: flex; align-items: center; justify-content: center; }
+.filter-reset { width: 180rpx; border: 1rpx solid var(--accent); background: var(--surface); }
+.filter-reset text { color: var(--accent2); font-size: 25rpx; font-weight: 800; }
+.filter-confirm { flex: 1; background: var(--accent2); }
+.filter-confirm text { color: var(--paper); font-size: 25rpx; font-weight: 800; }
+.filter-close:active, .filter-row-summary:active, .filter-option:active, .filter-reset:active, .filter-confirm:active { opacity: .75; }
+
+/* 页面级更多菜单在 scroll-view 之外，不会被单张卡片裁切。 */
+.more-layer { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 80; background: transparent; }
+.more-pop {
+  position: absolute;
+  z-index: 81;
+  width: 270rpx;
+  max-height: 70vh;
+  border-radius: 18rpx;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.more-item {
+  min-height: 84rpx;
+  margin: 0 18rpx;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.more-item text { color: var(--ink); font-size: 24rpx; font-weight: 700; }
+.more-item.last { border-bottom: none; }
+.more-item:active { opacity: 0.7; }
+.more-item:active { opacity: 0.7; }
+
+/* 操作组固定在视口右下方，列表滚动时始终可见。 */
+.review-float-actions { position: fixed; right: 20rpx; bottom: calc(env(safe-area-inset-bottom) + 20rpx); z-index: 75; display: flex; flex-direction: column; gap: 16rpx; }
+.fab-enter, .fab-filter { width: 104rpx; height: 104rpx; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rpx; box-shadow: var(--match-shadow); }
+.fab-enter { background: var(--accent-bg); }
+.fab-enter text { color: var(--accent2); font-size: 19rpx; font-weight: 800; }
+.fab-enter-glyph { font-size: 26rpx !important; }
+.fab-filter { background: var(--match-blush); }
+.fab-filter text { color: var(--match-coral); font-size: 19rpx; font-weight: 800; }
+.fab-filter-glyph { font-size: 26rpx !important; }
+.fab-enter:active, .fab-filter:active { opacity: 0.8; transform: scale(0.96); }
+
+/* subpages */
+.subpage { position: absolute; left: 0; top: 0; right: 0; bottom: 0; z-index: 20; background: var(--canvas); display: flex; flex-direction: column; }
+.subpage-head { flex-shrink: 0; padding: 26rpx 28rpx; border-bottom: 1rpx solid var(--line); display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.subpage-title { color: var(--ink); font-size: 28rpx; font-weight: 800; }
+.subpage-close { width: 52rpx; height: 52rpx; border-radius: 50%; background: var(--warm); display: flex; align-items: center; justify-content: center; }
+.subpage-close text { color: var(--muted); font-size: 24rpx; }
+.subpage-list { flex: 1; height: 0; padding: 20rpx 24rpx 60rpx; box-sizing: border-box; }
+
+/* member entry */
+.entry-page { z-index: 26; }
+.entry-scroll { flex: 1; height: 0; padding: 20rpx 24rpx 150rpx; box-sizing: border-box; }
+.entry-card { overflow: hidden; padding: 28rpx 24rpx 8rpx; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.entry-avatar { width: 156rpx; height: 156rpx; margin: 0 auto 28rpx; border-radius: 16rpx; overflow: hidden; background: var(--paper); display: flex; align-items: center; justify-content: center; }
+.entry-avatar image { width: 156rpx; height: 156rpx; }
+.entry-avatar-empty { display: flex; flex-direction: column; align-items: center; gap: 4rpx; color: var(--muted); font-size: 20rpx; }
+.entry-avatar-plus { color: var(--accent); font-size: 52rpx; font-weight: 300; line-height: 1; }
+.entry-row { min-height: 92rpx; border-bottom: 1rpx solid var(--line); display: flex; flex-direction: row; align-items: center; gap: 18rpx; }
+.entry-row:last-child { border-bottom: none; }
+.entry-label { flex-shrink: 0; width: 112rpx; color: var(--ink); font-size: 25rpx; font-weight: 800; }
+.entry-input { flex: 1; min-width: 0; height: 76rpx; color: var(--ink); font-size: 23rpx; text-align: right; }
+.entry-options { flex: 1; min-width: 0; display: flex; flex-direction: row; justify-content: flex-end; gap: 20rpx; }
+.entry-option { display: flex; flex-direction: row; align-items: center; gap: 7rpx; color: var(--muted); font-size: 22rpx; }
+.entry-radio { width: 24rpx; height: 24rpx; border: 2rpx solid var(--line); border-radius: 50%; box-sizing: border-box; }
+.entry-option.selected { color: var(--accent2); font-weight: 700; }
+.entry-option.selected .entry-radio { border: 7rpx solid var(--accent); }
+.entry-picker { width: 100%; }
+.entry-value { flex: 1; min-width: 0; display: flex; flex-direction: row; justify-content: flex-end; align-items: center; gap: 10rpx; color: var(--muted); font-size: 23rpx; }
+.entry-chevron { color: var(--muted); font-size: 34rpx; line-height: 1; }
+.entry-unit { color: var(--muted); font-size: 22rpx; }
+.entry-readonly { justify-content: space-between; color: var(--muted); font-size: 23rpx; }
+.entry-note { display: block; padding: 20rpx 8rpx; color: var(--muted); font-size: 20rpx; line-height: 1.6; }
+.entry-footer { flex-shrink: 0; padding: 16rpx 24rpx calc(env(safe-area-inset-bottom) + 16rpx); background: var(--surface); border-top: 1rpx solid var(--line); }
+.entry-submit { min-height: 80rpx; border-radius: 14rpx; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+.entry-submit text { color: var(--paper); font-size: 27rpx; font-weight: 800; }
+.entry-submit.disabled { opacity: .62; }
+.entry-submit:active, .entry-avatar:active, .entry-option:active { opacity: .76; transform: scale(.98); }
+
+.seg { flex-shrink: 0; margin: 20rpx 28rpx 0; height: 72rpx; border-radius: 12rpx; background: var(--warm); display: flex; flex-direction: row; padding: 6rpx; }
+.seg-item { flex: 1; border-radius: 10rpx; display: flex; align-items: center; justify-content: center; }
+.seg-item text { color: var(--muted); font-size: 23rpx; }
+.seg-item.on { background: var(--surface); box-shadow: var(--shadow-sm); }
+.seg-item.on text { color: var(--accent); font-weight: 800; }
+
+.intro-row { margin-bottom: 16rpx; padding: 20rpx; border-radius: 16rpx; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
+.intro-ava { width: 80rpx; height: 80rpx; border-radius: 24rpx; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.intro-ava text { color: var(--accent2); font-size: 28rpx; font-weight: 800; }
+.intro-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8rpx; }
+.intro-name { color: var(--ink); font-size: 25rpx; font-weight: 700; }
+.intro-sub { color: var(--muted); font-size: 19rpx; }
+.intro-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8rpx; }
+.intro-status { font-size: 19rpx; font-weight: 800; color: var(--accent); }
+.intro-status.ms-succeeded { color: var(--sage); }
+.intro-status.ms-progress { color: var(--accent2); }
+.intro-status.ms-failed { color: var(--match-coral); }
+.intro-status.ms-pending { color: var(--muted); }
+.intro-time { color: var(--muted); font-size: 18rpx; }
+
+/* match page */
+.match-member { margin-bottom: 18rpx; padding: 22rpx; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); display: flex; flex-direction: row; align-items: center; gap: 18rpx; }
+.match-member-ava { width: 92rpx; height: 92rpx; border-radius: 26rpx; background: var(--accent-bg); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.match-member-ava image { width: 92rpx; height: 92rpx; border-radius: 26rpx; }
+.match-member-ava text { color: var(--accent2); font-size: 32rpx; font-weight: 800; }
+.match-member-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9rpx; }
+.match-member-no { color: var(--muted); font-size: 19rpx; }
+.match-pref { margin-bottom: 18rpx; padding: 20rpx 22rpx; border-radius: 20rpx; background: var(--surface); box-shadow: var(--shadow-sm); }
+.match-pref-title { color: var(--ink); font-size: 23rpx; font-weight: 800; }
+.match-pref-chips { margin-top: 14rpx; display: flex; flex-direction: row; flex-wrap: wrap; gap: 12rpx; }
+.match-chip { padding: 8rpx 16rpx; border-radius: 999rpx; background: var(--accent-bg); }
+.match-chip text { color: var(--accent2); font-size: 19rpx; font-weight: 700; }
+.match-tip { margin-bottom: 18rpx; padding: 20rpx 22rpx; border-radius: 20rpx; background: var(--review-orange-soft); display: flex; flex-direction: column; gap: 8rpx; }
+.match-tip-title { color: var(--review-orange); font-size: 21rpx; font-weight: 800; }
+.match-tip-copy { color: var(--ink2); font-size: 19rpx; line-height: 1.5; }
+.candidate-card { margin-bottom: 16rpx; padding: 22rpx 24rpx; border: 1rpx solid var(--line); border-radius: 28rpx; background: var(--surface); box-shadow: var(--shadow-md); }
+.candidate-card .mcard-body { margin-top: 0; }
+.cand-no { color: var(--muted); font-size: 19rpx; }
+.cand-ark { align-self: flex-start; display: flex; flex-direction: row; align-items: center; gap: 5rpx; }
+.cand-ark text { color: var(--muted); font-size: 18rpx; }
+
+/* overlay sheets */
+.overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 90; display: flex; flex-direction: row; align-items: flex-end; }
+.overlay:before { content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: var(--ink); opacity: 0.55; }
+.panel { position: relative; z-index: 1; width: 100%; max-height: 80%; padding: 26rpx 26rpx calc(env(safe-area-inset-bottom) + 26rpx); border-radius: 24rpx 24rpx 0 0; background: var(--surface); display: flex; flex-direction: column; box-sizing: border-box; box-shadow: var(--shadow-lg); }
+.panel-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.panel-title { color: var(--ink); font-size: 29rpx; font-weight: 800; }
+.panel-close { width: 52rpx; height: 52rpx; border-radius: 50%; background: var(--warm); display: flex; align-items: center; justify-content: center; }
+.panel-close text { color: var(--muted); font-size: 24rpx; }
+.panel-body { margin-top: 22rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.panel-textarea { width: 100%; min-height: 170rpx; padding: 18rpx; border: 1rpx solid var(--line); border-radius: 14rpx; background: var(--canvas); box-sizing: border-box; color: var(--ink); font-size: 22rpx; }
+.panel-counter { align-self: flex-end; color: var(--muted); font-size: 19rpx; }
+.panel-submit { min-height: 76rpx; border-radius: 999rpx; background: var(--accent2); display: flex; align-items: center; justify-content: center; }
+.panel-submit text { color: var(--paper); font-size: 24rpx; font-weight: 800; }
+.panel-copy { color: var(--muted); font-size: 21rpx; line-height: 1.55; }
+.contact-value { padding: 24rpx; border-radius: 16rpx; background: var(--accent-bg); color: var(--ink); font-size: 30rpx; font-weight: 800; text-align: center; }
+.fu-row { padding: 16rpx; border-radius: 12rpx; background: var(--warm); display: flex; flex-direction: column; gap: 8rpx; }
+.fu-method { color: var(--accent2); font-size: 20rpx; font-weight: 800; }
+.fu-content { color: var(--ink); font-size: 21rpx; line-height: 1.5; }
+.fu-time { color: var(--muted); font-size: 18rpx; }
+
+/* assign sheet */
+.assign-head { display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 6rpx; }
+.assign-cancel { color: var(--muted); font-size: 23rpx; }
+.assign-title { color: var(--ink); font-size: 29rpx; font-weight: 800; }
+.assign-confirm { min-width: 110rpx; height: 56rpx; border-radius: 999rpx; background: var(--accent2); display: flex; align-items: center; justify-content: center; }
+.assign-confirm text { color: var(--paper); font-size: 21rpx; font-weight: 800; }
+.assign-row { min-height: 88rpx; margin: 0 4rpx; border-bottom: 1px solid var(--line); display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 12rpx; }
+.assign-row text { color: var(--ink); font-size: 24rpx; }
+.assign-row.picked text { color: var(--accent2); font-weight: 800; }
+.assign-row.disabled { opacity: 0.45; }
+.assign-current { color: var(--muted) !important; font-size: 19rpx !important; }
+
+/* review sheet */
+.review-fee-row { display: flex; flex-direction: row; align-items: center; gap: 10rpx; margin: 4rpx 4rpx 0; }
+.review-fee-label { color: var(--ink); font-size: 27rpx; font-weight: 800; }
+.review-fee-value { color: var(--sage); font-size: 27rpx; font-weight: 800; }
+.review-fee-time { color: var(--muted); font-size: 23rpx; }
+.review-status-row { display: flex; flex-direction: row; align-items: stretch; gap: 14rpx; }
+.review-chip { flex: 1; min-height: 92rpx; padding: 10rpx 8rpx; border: 1rpx solid transparent; border-radius: 16rpx; background: var(--review-soft); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.review-chip text { color: var(--ink); font-size: 24rpx; text-align: center; }
+.review-chip.picked { border-color: var(--review-purple); background: var(--review-lilac); }
+.review-chip.picked text { color: var(--review-purple); font-weight: 800; }
+.review-chip:active { opacity: 0.75; }
+.review-reject-area { display: flex; flex-direction: column; gap: 14rpx; }
+.review-reason { width: 100%; min-height: 150rpx; padding: 20rpx; border-radius: 16rpx; background: var(--review-soft); box-sizing: border-box; color: var(--ink); font-size: 23rpx; }
+.review-template-title { color: var(--ink); font-size: 25rpx; font-weight: 800; margin-top: 6rpx; }
+.review-template { min-height: 76rpx; padding: 0 22rpx; border-radius: 14rpx; background: var(--review-soft); display: flex; align-items: center; }
+.review-template text { color: var(--ink2); font-size: 22rpx; }
+.review-template:active { opacity: 0.75; }
+.review-submit { margin-top: 10rpx; background: linear-gradient(90deg, var(--review-purple), var(--review-lilac)); }
+
+/* abandon modal */
+.modal-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 95; display: flex; align-items: center; justify-content: center; }
+.modal-mask:before { content: ''; position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: var(--ink); opacity: 0.55; }
+.modal-card { position: relative; z-index: 1; width: 560rpx; padding: 40rpx 34rpx 30rpx; border-radius: 24rpx; background: var(--surface); display: flex; flex-direction: column; }
+.modal-copy { color: var(--ink); font-size: 24rpx; line-height: 1.7; text-align: center; }
+.modal-actions { margin-top: 34rpx; padding-top: 24rpx; border-top: 1px solid var(--line); display: flex; flex-direction: row; }
+.modal-btn { flex: 1; min-height: 60rpx; display: flex; align-items: center; justify-content: center; }
+.modal-btn text { color: var(--ink); font-size: 25rpx; }
+.modal-btn.strong text { color: var(--accent2); font-weight: 800; }
+.modal-btn:active { opacity: 0.7; }
+
+/* 复制资料弹窗：图标块 + 居中标题/说明 + 文本区 + 分隔线 + 左右双胶囊（配色沿用本组件 token） */
+.cpd-mask { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 100; padding: 0 56rpx; box-sizing: border-box; display: flex; flex-direction: row; align-items: center; justify-content: center; background: rgba(12, 19, 19, .46); }
+.cpd-card { width: 100%; max-width: 640rpx; padding: 40rpx 32rpx 0; border-radius: 32rpx; background: var(--surface); display: flex; flex-direction: column; box-sizing: border-box; box-shadow: var(--shadow-lg); }
+.cpd-icon { align-self: center; width: 112rpx; height: 112rpx; border-radius: 28rpx; border: 1px solid var(--line); background: linear-gradient(160deg, var(--paper), var(--warm)); display: flex; align-items: center; justify-content: center; box-shadow: 0 10rpx 24rpx rgba(12, 19, 19, .10); }
+.cpd-icon-glyph { color: var(--accent2); font-size: 48rpx; line-height: 1; }
+.cpd-title { margin-top: 24rpx; color: var(--ink); font-size: 33rpx; font-weight: 800; text-align: center; }
+.cpd-subtitle { margin-top: 10rpx; color: var(--muted); font-size: 22rpx; line-height: 1.55; text-align: center; }
+.cpd-body { margin-top: 24rpx; min-height: 116rpx; max-height: 50vh; padding: 22rpx 24rpx; border-radius: 20rpx; background: var(--canvas); box-sizing: border-box; }
+.cpd-lines { display: flex; flex-direction: column; }
+.cpd-line { color: var(--ink2); font-size: 25rpx; line-height: 46rpx; }
+.cpd-state { min-height: 72rpx; display: flex; align-items: center; justify-content: center; }
+.cpd-state text { color: var(--muted); font-size: 23rpx; }
+.cpd-error { color: #e5484d; font-size: 22rpx; line-height: 40rpx; }
+.cpd-retry { margin-top: 8rpx; align-self: flex-start; padding: 10rpx 24rpx; border-radius: 999rpx; background: var(--surface); }
+.cpd-retry text { color: var(--accent2); font-size: 22rpx; font-weight: 800; }
+.cpd-editor { display: flex; flex-direction: column; }
+.cpd-textarea { width: 100%; height: 380rpx; color: var(--ink); font-size: 25rpx; line-height: 46rpx; }
+.cpd-note { margin-top: 10rpx; color: var(--muted); font-size: 20rpx; line-height: 1.5; }
+.cpd-footer { margin-top: 28rpx; padding: 24rpx 0 32rpx; border-top: 1px solid var(--line); display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+.cpd-btn { min-width: 184rpx; height: 76rpx; padding: 0 28rpx; border-radius: 999rpx; background: var(--warm); display: flex; align-items: center; justify-content: center; box-shadow: 0 6rpx 16rpx rgba(12, 19, 19, .08); }
+.cpd-btn text { color: var(--ink); font-size: 25rpx; font-weight: 700; }
+.cpd-btn.primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); box-shadow: 0 10rpx 24rpx rgba(0, 96, 82, .24); }
+.cpd-btn.primary text { color: var(--paper); }
+.cpd-btn.primary.disabled { opacity: .55; }
+.cpd-btn:active { opacity: .8; }
+
+.mcard-status:active, .act:active, .act-more:active, .more-item:active, .panel-submit:active, .state-action:active, .seg-item:active { opacity: 0.75; }
+</style>

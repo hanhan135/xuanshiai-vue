@@ -4,13 +4,19 @@ const path = require('node:path')
 
 const frontendRoot = path.resolve(__dirname, '..')
 const messageSource = fs.readFileSync(path.join(frontendRoot, 'api/message.uts'), 'utf8')
-const messageCenterSource = fs.readFileSync(path.join(frontendRoot, 'components/XsaMessageCenter.uvue'), 'utf8')
-const backendRoot = process.env.XSA_BACKEND_ROOT != null && process.env.XSA_BACKEND_ROOT !== ''
-  ? path.resolve(frontendRoot, process.env.XSA_BACKEND_ROOT)
-  : path.resolve(frontendRoot, '..', 'xuanshiai-backend')
-const socialRoutes = fs.readFileSync(path.join(backendRoot, 'app/api/routes/social.py'), 'utf8')
-const discoveryRoutes = fs.readFileSync(path.join(backendRoot, 'app/api/routes/discovery.py'), 'utf8')
-const socialSchemas = fs.readFileSync(path.join(backendRoot, 'app/schemas/social.py'), 'utf8')
+const messageCenterSource = fs.readFileSync(path.join(frontendRoot, 'pagesSub/parent/components/XsaMessageCenter.uvue'), 'utf8')
+// 跨仓路径统一走 tests/helpers/cross-repo.cjs；后端源码不可达时显式 SKIP
+// （runner 的 SKIP 协议），不静默假装通过。
+const { readBackend } = require('./helpers/cross-repo.cjs')
+if (readBackend('app/api/routes/social.py') == null
+  || readBackend('app/api/routes/discovery.py') == null
+  || readBackend('app/schemas/social.py') == null) {
+  console.log('SKIP test-message-real-contract.js 后端源码不可达（设置 XSA_BACKEND_ROOT 可启用跨仓断言）')
+  process.exit(0)
+}
+const socialRoutes = readBackend('app/api/routes/social.py')
+const discoveryRoutes = readBackend('app/api/routes/discovery.py')
+const socialSchemas = readBackend('app/schemas/social.py')
 
 assert.match(messageSource, /export const MESSAGE_USE_MOCK = false/, '普通用户消息中心必须使用真实接口')
 assert.match(messageSource, /export const CHAT_USE_MOCK = false/, '聊天详情必须使用真实接口')
@@ -27,7 +33,9 @@ assert.match(messageSource, /PARENT_BACKEND_NOT_AVAILABLE/, '父母端未接入�
 assert.ok(messageSource.includes("url: '/chat/messages/' + messageId"), '撤回必须调用后端真实聊天消息接口')
 assert.ok(messageSource.includes("return okResponse({ messageId: messageId, revoked: true"), '后端 204 撤回成功应适配到页面响应')
 assert.doesNotMatch(messageSource, /\/message\/messages\/|\/message\/contact-exchanges/, '不能调用不存在的旧消息或联系方式接口')
-assert.match(messageSource, /CONTACT_EXCHANGE_NOT_AVAILABLE/, '未开放的联系方式真实分支必须 fail-closed')
+assert.match(messageSource, /CONTACT_EXCHANGE_USE_MOCK = false/, '联系方式必须使用真实会话请求')
+assert.ok(messageSource.includes("url: '/chat/sessions/' + sessionId + '/requests'"), '联系方式查询和发起必须使用真实 session id')
+assert.ok(messageSource.includes("url: '/chat/session-requests/' + exchangeId"), '联系方式处理必须使用结构化请求接口')
 assert.match(messageSource, /CHAT_MEDIA_NOT_AVAILABLE/, '聊天媒体上传必须 fail-closed')
 assert.match(messageCenterSource, /unreadTotal\.value = conversations\.value\.reduce/, '翻页后未读数必须保留前页贡献')
 assert.match(messageCenterSource, /incomingPendingCount\.value = incomingApplications\.value\.filter/, '翻页后待处理数必须保留前页贡献')

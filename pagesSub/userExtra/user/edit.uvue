@@ -29,10 +29,11 @@
 
 		<scroll-view v-else class="scroll-content" scroll-y enhanced show-scrollbar="false" refresher-enabled="true" :refresher-triggered="refreshing" @refresherrefresh="onPullRefresh" @refresherrestore="refreshing = false">
 			<view class="progress-section">
-				<view class="progress-header"><text class="progress-label">资料完整度</text><text class="progress-value">{{ completeness }}%</text></view>
-				<view class="progress-track"><view class="progress-fill" :style="{ width: completeness + '%' }"></view></view>
+				<view class="progress-header"><text class="progress-label">资料完整度</text><text class="progress-value">{{ completionLoaded ? completeness + '%' : '—' }}</text></view>
+				<view class="progress-track"><view class="progress-fill" :style="{ width: (completionLoaded ? completeness : 0) + '%' }"></view></view>
 				<text class="progress-hint">资料越完整，推荐权重越高，更容易遇见对的人</text>
 				<text v-if="missingCompletionSummary != ''" class="progress-missing">待完善：{{ missingCompletionSummary }}</text>
+				<!-- 27 个计分项全部来自 /completion；深度问答、学历认证不计分。 -->
 			</view>
 
 			<XsaProfileAiFirstAnalysis v-if="!isMemberEdit && aiFirstAnalysisVisible" :analyzing="aiAnalyzing" :error-message="aiError" @close="closeAiFirstAnalysis" @start="startAiFirstAnalysis" />
@@ -40,7 +41,7 @@
 
 			<view id="sec-avatar" class="section-card avatar-section ai-anchor-avatar">
 				<view class="section-heading">
-					<text class="section-title">头像{{ completionSuffix('avatar', 15) }}</text>
+					<text class="section-title">头像{{ completionSuffix('avatar') }}</text>
 					<view class="heading-actions"><view class="preview-action" @tap="onPreview"><text>主页预览</text><text class="preview-action-arrow">›</text></view><view class="pill-action" @tap="changeBackground"><text class="pill-action-text">更换背景</text><text class="pill-action-arrow">›</text></view></view>
 				</view>
 				<view class="avatar-row">
@@ -54,7 +55,7 @@
 			</view>
 
 			<view id="sec-photos" class="section-card album-card ai-anchor-photos">
-				<view class="section-heading"><text class="section-title">我的相册{{ completionSuffix('album', 8) }}</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
+				<view class="section-heading"><text class="section-title">我的相册{{ completionSuffix('album') }}</text><text class="section-caption">{{ formData.photos.length }}/9</text></view>
 				<view class="album-grid">
 					<view class="album-cell" v-for="(photo, index) in formData.photos" :key="photo.id != null ? photo.id : index">
 						<image class="album-photo" :src="photo.url" mode="aspectFill"></image>
@@ -71,7 +72,7 @@
 				</view>
 				<view class="nickname-edit-row">
 					<input class="nickname-edit-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" />
-					<view class="nickname-edit-save" @tap="saveNickname"><text>保存</text></view>
+					<view class="nickname-edit-save" @tap="saveNickname"><text>保存昵称</text></view>
 				</view>
 			</view>
 
@@ -81,19 +82,19 @@
 					<view class="pill-action" @tap="openBasicEditor"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view>
 				</view>
 				<view class="preview-list">
-					<view class="preview-row"><text class="preview-label">性别</text><text class="preview-value">{{ completionText('gender', genderText == '未选择' ? '' : genderText, '未填写', 7) }}</text></view>
-					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ completionText('birthday', agePreview == '未填写' ? '' : agePreview, '未填写', 7) }}</text></view>
+					<view class="preview-row"><text class="preview-label">性别</text><text class="preview-value">{{ completionText('gender', genderText == '未选择' ? '' : genderText, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">年龄</text><text class="preview-value">{{ completionText('birthday', agePreview == '未填写' ? '' : agePreview, '未填写') }}</text></view>
 				<view class="preview-row"><text class="preview-label">星座</text><text class="preview-value">{{ constellationText != '' ? constellationText : '未填写' }}</text></view>
-					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ completionText('height', formData.height != '' ? formData.height + ' cm' : '', '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ completionText('weight', formData.weight != '' ? formData.weight + ' kg' : '', '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ completionText('education', educationText == '未选择' ? '' : educationText, '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ completionText('location', formData.residenceCityCode, '未填写', 5) }}</text></view>
-					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ completionText('hometown', formData.hometown, '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ completionText('occupation', occupationPreview == '未填写' ? '' : occupationPreview, '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">公司</text><text class="preview-value">{{ completionText('company', formData.company, '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ completionText('income', incomePreview == '未填写' ? '' : incomePreview, '未填写', 4) }}</text></view>
-					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ completionText('marriage', maritalText == '未选择' ? '' : maritalText, '未填写', 5) }}</text></view>
-					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ completionText('mbti', formData.mbti, '未填写', 2) }}</text></view>
+					<view class="preview-row"><text class="preview-label">身高</text><text class="preview-value">{{ completionText('height', formData.height != '' ? formData.height + ' cm' : '', '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">体重</text><text class="preview-value">{{ completionText('weight', formData.weight != '' ? formData.weight + ' kg' : '', '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">学历</text><text class="preview-value">{{ completionText('education', educationText == '未选择' ? '' : educationText, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">现居地</text><text class="preview-value">{{ completionText('location', formData.residenceCityCode, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">家乡</text><text class="preview-value">{{ completionText('hometown', formData.hometown, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">职业</text><text class="preview-value">{{ completionText('occupation', occupationPreview == '未填写' ? '' : occupationPreview, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">公司</text><text class="preview-value">{{ completionText('company', formData.company, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">收入</text><text class="preview-value">{{ completionText('income', incomePreview == '未填写' ? '' : incomePreview, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">婚姻状况</text><text class="preview-value">{{ completionText('marriage', maritalText == '未选择' ? '' : maritalText, '未填写') }}</text></view>
+					<view class="preview-row"><text class="preview-label">MBTI</text><text class="preview-value">{{ completionText('mbti', formData.mbti, '未填写') }}</text></view>
 					<view class="preview-row"><text class="preview-label">微信号</text><text class="preview-value">{{ formData.wechat || '仅作为紧急联系' }}</text></view>
 				</view>
 			</view>
@@ -101,25 +102,26 @@
 			<view v-if="!isMemberEdit" class="section-card certification-card">
 				<view class="section-heading">
 					<text class="section-title">四重认证</text>
-					<text class="section-caption">已完成 {{ completedCertCount }}/4{{ completionSuffix('realname', 5, ' · 实名') }}{{ completionSuffix('single_pledge', 1, ' · 单身承诺') }}</text>
+					<text class="section-caption">已完成 {{ completedCertCount }}/4（仅实名、单身承诺计分）{{ completionSuffix('realname', ' · 实名') }}{{ completionSuffix('single_pledge', ' · 单身承诺') }}</text>
 				</view>
-				<view class="cert-row" v-for="cert in certifications" :key="cert.key">
+				<view class="cert-row" v-for="cert in certifications" :key="cert.key" @tap="goCertification(cert.key)">
 					<view class="cert-icon-wrap" :class="{ 'cert-icon-done': cert.passed }"><text class="cert-icon">{{ cert.icon }}</text></view>
 					<view class="cert-copy"><text class="cert-label">{{ cert.label }}</text><text class="cert-description">{{ cert.desc }}</text></view>
 					<view v-if="cert.passed" class="cert-done-pill"><text class="cert-done-text">已认证</text></view>
-					<view v-else class="cert-pending" @tap="goCertification(cert.key)"><text class="cert-pending-text">去认证</text></view>
+					<view v-else-if="cert.reviewing" class="cert-reviewing-pill" @tap.stop="goCertification(cert.key)"><text class="cert-reviewing-text">审核中 ›</text></view>
+					<view v-else class="cert-pending" @tap.stop="goCertification(cert.key)"><text class="cert-pending-text">去认证</text></view>
 				</view>
 			</view>
 
 			<view id="sec-self_intro" class="section-card intro-card ai-anchor-self-intro">
-				<view class="section-heading"><text class="section-title">自我介绍{{ completionSuffix('intro', 10) }}</text><view class="pill-action" @tap="saveIntroduction"><text class="pill-action-text">保存</text></view></view>
+				<view class="section-heading"><text class="section-title">关于我{{ completionSuffix('intro') }}</text><view class="heading-actions"><view v-if="!isMemberEdit" class="intro-polish-action" :class="{ disabled: introPolishing || !introHasContent }" @tap="reviewIntroPolish"><text>{{ introPolishing ? '润色中…' : 'AI 润色' }}</text></view><view class="pill-action" @tap="saveIntroduction"><text class="pill-action-text">保存</text></view></view></view>
 				<textarea class="intro-main-input" :class="{ 'has-content': introHasContent }" :value="formData.introduction" maxlength="500" placeholder="分享一下你的性格、爱好、生活态度...让TA更快了解你" @input="onInput('introduction', $event)"></textarea>
-				<text class="section-caption">超有趣的自我介绍会被更多人看见哦！完成后建议搭配照片验证</text>
-				<text v-if="!completionPassed('intro')" class="completion-warning">自我介绍：少于后台要求的 20 字</text>
+				<text class="section-caption">认真写点关于你的故事，会被更多人看见哦！完成后建议搭配照片验证</text>
+				<text v-if="!completionPassed('intro')" class="completion-warning">关于我：少于后台要求的 20 字</text>
 			</view>
 
 			<view id="sec-personal_tags" class="section-card tags-card ai-anchor-personal-tags" @tap="goTagsEdit()">
-                <view class="section-heading"><text class="section-title">兴趣标签{{ completionSuffix('personal_tags', 8) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+                <view class="section-heading"><text class="section-title">兴趣标签{{ completionSuffix('personal_tags') }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
                 <text class="section-caption">用兴趣爱好和性格特点介绍自己，最多 10 个</text>
                 <view class="tag-list">
                     <view class="tag-chip tag-accent" v-for="tag in personalDisplayTags" :key="tag"><text>{{ tag }}</text></view>
@@ -129,14 +131,14 @@
             </view>
 
 			<navigator class="section-card preference-card" url="/pagesSub/userExtra/user/preference" hover-class="none">
-				<view class="section-heading"><text class="section-title">择偶标准{{ completionSuffix('preference', 3) }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
+				<view class="section-heading"><text class="section-title">择偶标准{{ completionSuffix('preference') }}</text><view class="pill-action"><text class="pill-action-text">编辑</text><text class="pill-action-arrow">›</text></view></view>
 				<text class="section-caption">设置你期待的年龄、身高、学历和距离范围</text>
 				<view class="preference-summary"><text>{{ preferencePreview }}</text></view>
 				<text v-if="!completionPassed('preference')" class="completion-warning">择偶要求：未看到有效年龄范围</text>
 			</navigator>
 
 			<view id="sec-qa_answers" class="section-card qa-card ai-anchor-qa-answers">
-				<text class="section-title">关于我</text>
+				<text class="section-title">深度问答</text>
 				<text class="section-caption">你的回答将展示在个人主页，帮助对方更深入了解你</text>
 				<view class="qa-item" v-for="(qa, index) in qaItems" :key="qa.id" @tap="openQaEditor(index)">
 					<text class="qa-question">{{ qa.question }}</text>
@@ -147,9 +149,14 @@
 					</view>
 				</view>
 			</view>
-
-			<view class="scroll-bottom-spacer"></view>
 		</scroll-view>
+
+		<view class="page-save-bar" v-if="!loading && profileLoaded">
+			<text class="page-save-status">{{ saveStatusText }}</text>
+			<view class="page-save-button" :class="{ disabled: saving || uploadingMedia }" @tap="handleSave">
+				<text class="page-save-button-text">{{ saving ? '保存中…' : (isMemberEdit ? '保存会员资料' : '保存资料') }}</text>
+			</view>
+		</view>
 
 		<view class="sheet-overlay" v-if="detailSheetVisible" @click="detailSheetVisible = false">
 			<view class="sheet-panel" @click.stop>
@@ -162,7 +169,7 @@
 					<view v-if="editSheetMode == 'basic'">
 					<view class="sheet-row">
 						<text class="sheet-row-label">昵称</text>
-						<input class="sheet-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" /><text class="sheet-row-arrow">›</text>
+						<input class="sheet-input" :value="formData.nickname" placeholder="请输入昵称" @input="onInput('nickname', $event)" />
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
@@ -188,12 +195,12 @@
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">现居地</text>
-						<picker class="sheet-row-right" mode="region" @change="onResidenceChange"><text class="sheet-row-value">{{ formData.residenceCityCode || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+						<picker class="sheet-row-right" mode="region" :value="residenceRegionValue" @change="onResidenceChange"><text class="sheet-row-value">{{ formData.residenceCityCode || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">家乡</text>
-						<picker class="sheet-row-right" mode="region" @change="onHometownChange"><text class="sheet-row-value">{{ formData.hometown || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
+						<picker class="sheet-row-right" mode="region" :value="hometownRegionValue" @change="onHometownChange"><text class="sheet-row-value">{{ formData.hometown || '请选择' }}</text><text class="sheet-row-arrow">›</text></picker>
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
@@ -208,12 +215,16 @@
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
 						<text class="sheet-row-label">职业</text>
-						<input class="sheet-input" :value="formData.occupation" placeholder="请选择" @input="onInput('occupation', $event)" /><text class="sheet-row-arrow">›</text>
+						<picker class="sheet-row-right" mode="selector" :range="occupationOptions" :value="occupationPickerIndex" @change="onOccupationChange"><text class="sheet-row-value">{{ occupationText == '' ? '请选择' : occupationText }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view v-if="occupationPickerIndex == occupationOptions.length - 1" class="sheet-row sheet-row-sub">
+						<text class="sheet-row-label">职业名称</text>
+						<input class="sheet-input" :value="formData.occupation" placeholder="请填写你的职业" @input="onInput('occupation', $event)" />
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
-						<text class="sheet-row-label">公司</text>
-						<input class="sheet-input" :value="formData.company" placeholder="搜索公司名称" @input="onCompanyInput" /><text class="sheet-row-arrow">›</text>
+						<text class="sheet-row-label">工作单位</text>
+						<input class="sheet-input" :value="formData.company" :placeholder="detailPlaceholder('company', '搜索或填写工作单位')" @input="onCompanyInput" />
 					</view>
 					<view v-if="companySuggestions.length > 0" class="sheet-suggestion-list"><view v-for="company in companySuggestions" :key="company" class="sheet-suggestion" @tap="chooseCompany(company)"><text>{{ company }}</text></view></view>
 					<view class="sheet-divider"></view>
@@ -228,8 +239,53 @@
 					</view>
 					<view class="sheet-divider"></view>
 					<view class="sheet-row">
+						<text class="sheet-row-label">属相</text>
+						<text class="sheet-row-readonly">{{ zodiacText }}</text>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">户口</text>
+						<picker class="sheet-row-right" mode="region" :value="householdRegionValue" @change="onHouseholdChange"><text class="sheet-row-value">{{ formData.household || detailPlaceholder('household', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">购房</text>
+						<picker class="sheet-row-right" mode="selector" :range="houseOptions" @change="onHouseChange"><text class="sheet-row-value">{{ formData.house || detailPlaceholder('house', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">购车</text>
+						<picker class="sheet-row-right" mode="selector" :range="carOptions" @change="onCarChange"><text class="sheet-row-value">{{ formData.car || detailPlaceholder('car', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">毕业学校</text>
+						<input class="sheet-input" :value="formData.graduateSchool" maxlength="128" :placeholder="detailPlaceholder('school', '填写毕业学校')" @input="onInput('graduateSchool', $event)" />
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">民族</text>
+						<picker class="sheet-row-right" mode="selector" :range="ethnicityOptions" @change="onEthnicityChange"><text class="sheet-row-value">{{ formData.ethnicity || detailPlaceholder('ethnicity', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">吸烟</text>
+						<picker class="sheet-row-right" mode="selector" :range="smokingOptions" @change="onSmokingChange"><text class="sheet-row-value">{{ formData.smoking || detailPlaceholder('smoking', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">喝酒</text>
+						<picker class="sheet-row-right" mode="selector" :range="drinkingOptions" @change="onDrinkingChange"><text class="sheet-row-value">{{ formData.drinking || detailPlaceholder('drinking', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
+						<text class="sheet-row-label">宗教</text>
+						<picker class="sheet-row-right" mode="selector" :range="religionOptions" @change="onReligionChange"><text class="sheet-row-value">{{ formData.religion || detailPlaceholder('religion', '请选择') }}</text><text class="sheet-row-arrow">›</text></picker>
+					</view>
+					<view class="sheet-divider"></view>
+					<view class="sheet-row">
 						<text class="sheet-row-label">微信号</text>
-						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" /><text class="sheet-row-arrow">›</text>
+						<input class="sheet-input" :value="formData.wechat" placeholder="仅作为紧急联系" @input="onInput('wechat', $event)" />
 					</view>
 					</view>
 					<view class="sheet-bottom-spacer"></view>
@@ -252,11 +308,42 @@
 					<text class="qa-sheet-question">{{ qaEditingQuestion }}</text>
 					<textarea class="qa-sheet-textarea" :value="qaDraft" maxlength="300" placeholder="真诚的表达最能打动人..." @input="onQaDraftInput"></textarea>
 					<text class="qa-sheet-count">{{ qaDraft.length }}/300</text>
+					<text class="qa-media-title">配图（可选，最多 1 张）</text>
+					<scroll-view class="qa-media-scroll" scroll-x v-if="formData.photos.length > 0">
+						<view class="qa-media-list">
+							<view v-for="photo in formData.photos" :key="photo.id" class="qa-media-item" :class="{ selected: qaDraftMediaId == photo.id }" @tap="selectQaMedia(photo)">
+								<image class="qa-media-image" :src="photo.url" mode="aspectFill"></image>
+								<text class="qa-media-check">{{ qaDraftMediaId == photo.id ? '✓' : '' }}</text>
+							</view>
+						</view>
+					</scroll-view>
+					<text v-else class="qa-media-hint">暂无可选相册照片，请先在相册上传并通过审核。</text>
+					<text v-if="qaDraftMediaId > 0" class="qa-media-clear" @tap="clearQaMedia">移除配图</text>
 				</view>
 				<view class="sheet-footer">
 					<view class="cancel-button" @tap="closeQaEditor"><text>取消</text></view>
 					<view class="save-button" :class="{ disabled: qaSaving }" @tap="saveQaAnswer"><text>{{ qaSaving ? '保存中...' : '保存' }}</text></view>
 				</view>
+			</view>
+		</view>
+
+		<view class="sheet-overlay" v-if="introPolishVisible" @tap="closeIntroPolish">
+			<view class="sheet-panel intro-polish-panel" @tap.stop>
+				<view class="sheet-handle"></view>
+				<view class="sheet-nav"><text class="sheet-title">AI 润色预览</text><text class="sheet-close" @tap="closeIntroPolish">✕</text></view>
+				<scroll-view class="intro-polish-body" scroll-y enhanced show-scrollbar="false">
+					<text class="intro-polish-note">只会替换关于我编辑框，不会自动保存或发布。</text>
+					<text v-if="introPolishNoChange" class="intro-polish-note">未产生改写，可直接保存原文。</text>
+					<text v-if="!introPolishNoChange" class="intro-polish-label">原文</text>
+					<text v-if="!introPolishNoChange" class="intro-polish-copy">{{ introPolishOriginal }}</text>
+					<text v-if="!introPolishNoChange" class="intro-polish-label">润色后</text>
+					<text v-if="!introPolishNoChange" class="intro-polish-copy intro-polish-proposed">{{ introPolishProposed }}</text>
+					<view v-if="introPolishChangedPoints.length > 0" class="intro-polish-changes">
+						<view class="intro-polish-change-heading" @tap="introPolishChangesExpanded = !introPolishChangesExpanded"><text>本次调整</text><text>{{ introPolishChangesExpanded ? '收起' : '展开' }}</text></view>
+						<view v-if="introPolishChangesExpanded" class="intro-polish-change-list"><text v-for="(point, index) in introPolishChangedPoints" :key="index" class="intro-polish-change">• {{ point }}</text></view>
+					</view>
+				</scroll-view>
+				<view class="sheet-footer"><view class="cancel-button" @tap="closeIntroPolish"><text>继续编辑</text></view><view class="save-button" :style="{ opacity: introPolishNoChange ? 0.5 : 1 }" @tap="adoptIntroPolish"><text>{{ introPolishNoChange ? '未产生改写' : '采用到关于我' }}</text></view></view>
 			</view>
 		</view>
 
@@ -280,17 +367,21 @@
 
 <script setup lang="uts">
 	import { getOwnProfile, updateOwnProfile, updateOwnNickname, getOwnPreferences, uploadUserProfileMedia, deleteUserProfilePhoto, getMeProfile, getUserCertifications, getProfileCompletion, getAgreementVersions, acceptAgreement, getMatchmakerMemberProfile, updateMatchmakerMemberProfile, getMatchmakerMemberPreferences, getMatchmakerMemberCompletion, updateMatchmakerMemberNickname, uploadMatchmakerMemberMedia, deleteMatchmakerMemberPhoto } from '@/api'
-	import { getLatestThoughtfulness, analyzeProfileThoughtfulness, normalizeThoughtfulness, ThoughtfulnessResult } from '@/api/ai-profile.uts'
-	import XsaProfileAiCard from '@/components/XsaProfileAiCard.uvue'
-	import XsaProfileAiFirstAnalysis from '@/components/XsaProfileAiFirstAnalysis.uvue'
-	import { resolveMediaUrl } from '@/api/config.uts'
+	import { getLatestThoughtfulness, analyzeProfileThoughtfulness, normalizeThoughtfulness, polishPaperPlaneText, ThoughtfulnessResult } from '@/api/ai-profile.uts'
+	import XsaProfileAiCard from '@/pagesSub/userExtra/components/XsaProfileAiCard.uvue'
+	import XsaProfileAiFirstAnalysis from '@/pagesSub/userExtra/components/XsaProfileAiFirstAnalysis.uvue'
+	import { resolveMediaUrl, CURRENT_USER_ID_KEY } from '@/api/config.uts'
 	import { sleep } from '@/utils/sleep.uts'
-	import locationJson from '@/data/location.json'
+	import { USER_EDUCATION_OPTIONS } from '@/utils/profile-field-display.uts'
+	import { aiFailureNotice } from '@/utils/ai-error.uts'
+	import { LOCATION_TREE as locationJson } from '../data/location.uts'
 
 	const loading = ref(true)
 	const refreshing = ref(false)
 	const loadError = ref('')
 	const profileLoaded = ref(false)
+	// 统一保存的比对基线：昵称单独走接口，不进 buildProfilePayload
+	const savedNickname = ref('')
 	const saving = ref(false)
 	const uploadingMedia = ref(false)
 	const cropConfirming = ref(false)
@@ -319,8 +410,21 @@
 	}
 	const heightOptions = numericOptions(140, 220)
 	const weightOptions = numericOptions(40, 120)
-	const educationOptions = ['未选择', '高中及以下', '大专', '本科', '硕士', '博士']
+	// 学历选项与展示文案共用 utils/profile-field-display.uts 的用户资料口径（1 高中及以下 … 5 博士），
+	// 不要在此写字面量数组：历史上首页一度用了反序表，就是字典散落的直接后果。
+	const educationOptions = USER_EDUCATION_OPTIONS
+	// 与登录引导页「您从事何种工作」保持同一套枚举，最后一项「其他」允许自由填写。
+	const occupationOptions = ['请选择', '私企员工', '央企/国企', '事业单位/公务员', '外企员工', '自由职业', '创业者/个体', '教师', '医生', '律师', '金融从业', '互联网/IT', '制造业', '服务业', '在校学生', '其他']
 	const maritalOptions = ['未选择', '未婚', '离异', '丧偶']
+	// —— 详细资料选项（2026-10-27）——
+	// 后端 platform_base_data 里没有这 6 项的权威字典，存储是自由文本；
+	// 展示侧原样输出、编辑侧给固定选项，避免自建映射把历史值切成两套。
+	const houseOptions = ['未填写', '已购房', '未购房', '与父母同住']
+	const carOptions = ['未填写', '已购车', '未购车']
+	const smokingOptions = ['未填写', '不吸烟', '偶尔吸烟', '经常吸烟']
+	const drinkingOptions = ['未填写', '不饮酒', '社交场合饮酒', '经常饮酒']
+	const religionOptions = ['未填写', '无宗教信仰', '佛教', '基督教', '伊斯兰教', '道教', '其他']
+	const ethnicityOptions = ['未填写', '汉族', '回族', '满族', '蒙古族', '壮族', '维吾尔族', '藏族', '苗族', '彝族', '其他']
 	const incomeOptions = ['请选择', '小于10w', '10-20w', '30-50w', '50-100w', '100w以上', '保密']
 	const mbtiOptions = ['未选择', 'INTJ', 'INTP', 'ENTJ', 'ENTP', 'INFJ', 'INFP', 'ENFJ', 'ENFP', 'ISTJ', 'ISFJ', 'ESTJ', 'ESFJ', 'ISTP', 'ISFP', 'ESTP', 'ESFP']
 	const companyDirectory = ['腾讯', '阿里巴巴', '字节跳动', '华为', '京东', '美团', '小米', '网易', '比亚迪', '中国平安', '招商银行', '中国移动']
@@ -337,6 +441,11 @@
 		residenceApiCityCode: '',
 		residenceProvinceCode: '',
 		residenceDistrictCode: '',
+		// —— 详细资料（与 user_profile 列名一一对应；school/company 落 user_auth）——
+		zodiac: '',
+		household: '', householdProvinceCode: '', householdCityCode: '', householdDistrictCode: '',
+		house: '', car: '', smoking: '', drinking: '', ethnicity: '', religion: '',
+		graduateSchool: '',
 		hometown: '',
 		hometownProvinceCode: '',
 		hometownCityCode: '',
@@ -366,8 +475,16 @@
 		extraRequirement: ''
 	})
 	const completionScore = ref(0)
+	const completionLoaded = ref(false)
 	const completionItems = ref({} as any)
 	const usingLocalDraft = ref(false)
+	const introPolishing = ref(false)
+	const introPolishVisible = ref(false)
+	const introPolishOriginal = ref('')
+	const introPolishProposed = ref('')
+	const introPolishChangedPoints = ref([] as string[])
+	const introPolishChangesExpanded = ref(false)
+	const introPolishNoChange = ref(false)
 
 	const textValue = (value: any): string => value == null ? '' : '' + value
 	const optionalNumber = (value: any): any => {
@@ -411,13 +528,25 @@
 		for (const province of raw) {
 			if (province.name != values[0]) continue
 			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			// 微信 mode="region" 在直辖市返回 ["北京市","北京市","东城区"]，
+			// 而数据集里直辖市只有一条 city.name="市辖区"，直接用 values[1] 比对会全不匹配，
+			// 一旦返回三个空串，省市级编码一起丢，location_completed 会永久为 0（完成度卡在 95）。
+			let matched: any = null
 			for (const city of cities) {
-				if (city.name != values[1]) continue
-				const areas = Array.isArray(city.area) ? city.area as any[] : []
-				for (const area of areas) {
-					if (area.name == values[2]) return { province: '' + province.code, city: '' + city.code, district: '' + area.code }
+				if (city.name == values[1]) {
+					matched = city
+					break
 				}
 			}
+			if (matched == null && cities.length == 1) matched = cities[0]
+			if (matched == null) return { province: '' + province.code, city: '', district: '' }
+			const areas = Array.isArray(matched.area) ? matched.area as any[] : []
+			for (const area of areas) {
+				if (area.name == values[2]) return { province: '' + province.code, city: '' + matched.code, district: '' + area.code }
+			}
+			// 区县名对不上（数据集缺该区县 / 选到「其他」）时也必须保住省+市，
+			// 否则资料完成度会永久少这 5 分。
+			return { province: '' + province.code, city: '' + matched.code, district: '' }
 		}
 		return { province: '', city: '', district: '' }
 	}
@@ -437,6 +566,35 @@
 		}
 		return ''
 	}
+	/**
+	 * 把已存的省/市/区编码还原成 picker mode="region" 需要的 ["省","市","区"]。
+	 * 不回填的话，微信地区选择器每次都从"北京市/市辖区/东城区"打开，
+	 * 用户一确认就把默认值写回，表现为"现居地每次都变成北京东城"。
+	 */
+	const locationNamesByCodes = (provinceCode: any, cityCode: any, districtCode: any): string[] => {
+		const p = textValue(provinceCode)
+		const c = textValue(cityCode)
+		const d = textValue(districtCode)
+		if (p == '') return []
+		const raw = Array.isArray(locationJson) ? locationJson as any[] : []
+		for (const province of raw) {
+			if ('' + province.code != p) continue
+			const cities = Array.isArray(province.city) ? province.city as any[] : []
+			for (const city of cities) {
+				if ('' + city.code != c) continue
+				const areas = Array.isArray(city.area) ? city.area as any[] : []
+				for (const area of areas) {
+					if ('' + area.code == d) return ['' + province.name, '' + city.name, '' + area.name]
+				}
+				return ['' + province.name, '' + city.name, '']
+			}
+			return ['' + province.name, '', '']
+		}
+		return []
+	}
+	const residenceRegionValue = computed(() => locationNamesByCodes(formData.value.residenceProvinceCode, formData.value.residenceApiCityCode, formData.value.residenceDistrictCode))
+	const hometownRegionValue = computed(() => locationNamesByCodes(formData.value.hometownProvinceCode, formData.value.hometownCityCode, formData.value.hometownDistrictCode))
+	const householdRegionValue = computed(() => locationNamesByCodes(formData.value.householdProvinceCode, formData.value.householdCityCode, formData.value.householdDistrictCode))
 
 	const applyProfile = (raw: any) => {
 		const data = raw != null ? raw : {}
@@ -458,6 +616,18 @@
 		formData.value.occupation = textValue(data.occupation)
 		formData.value.industry = textValue(data.industry)
 		formData.value.company = textValue(data.company)
+		formData.value.zodiac = textValue(data.zodiac)
+		formData.value.household = textValue(data.household)
+		formData.value.householdProvinceCode = textValue(data.household_province_code)
+		formData.value.householdCityCode = textValue(data.household_city_code)
+		formData.value.householdDistrictCode = textValue(data.household_district_code)
+		formData.value.house = textValue(data.house)
+		formData.value.car = textValue(data.car)
+		formData.value.smoking = textValue(data.smoking)
+		formData.value.drinking = textValue(data.drinking)
+		formData.value.ethnicity = textValue(data.ethnicity)
+		formData.value.religion = textValue(data.religion)
+		formData.value.graduateSchool = textValue(data.school)
 		formData.value.income = incomeDisplay(data.income) || textValue(data.income_range)
 		formData.value.isMarried = data.is_married
 		formData.value.mbti = textValue(data.mbti)
@@ -471,7 +641,7 @@
 		formData.value.avatar = resolveMediaUrl(data.avatar)
 		formData.value.coverBg = resolveMediaUrl(data.background_wall)
 		formData.value.photos = profileMedia(data.photos)
-		completionScore.value = data.completion_score != null ? Math.round(Number(data.completion_score)) : 0
+		// 完整度只认 /users/me/completion，不再从 profile.completion_score 取副本。
 	}
 
 	const applyPreferences = (raw: any) => {
@@ -538,10 +708,17 @@
 	const refreshCompletion = async () => {
 		try {
 			const completion = await apiGetCompletion()
-			if (!completion.success || completion.data == null) return
+			if (!completion.success || completion.data == null) {
+				completionLoaded.value = false
+				return
+			}
 			const data = completion.data as any
-			const returnedScore = data.score != null ? data.score : data.completion_score
-			if (returnedScore != null) completionScore.value = Math.round(Number(returnedScore))
+			const returnedScore = data.score
+			if (returnedScore == null) {
+				completionLoaded.value = false
+				return
+			}
+			completionScore.value = Math.round(Number(returnedScore))
 			const items = Array.isArray(data.items) ? data.items as any[] : []
 			const nextItems = {} as any
 			for (const item of items) {
@@ -550,18 +727,34 @@
 				if (item.key == 'single_pledge') singlePledgePassed.value = item.completed == true
 			}
 			completionItems.value = nextItems
+			completionLoaded.value = true
 		} catch (e) {
 			console.error('[EditProfile] completion refresh failed', e)
+			completionLoaded.value = false
 		}
 	}
 
 	// ===== AI 用心度 =====
 	const AI_THOUGHTFULNESS_KEY = 'xsa_profile_ai_thoughtfulness'
+	// 用心度结果必须按当前账号隔离；旧版全局 key 会在切账号后串出上一账号结果。
+	const thoughtfulnessCacheKey = (): string => {
+		let scope = 'guest'
+		try {
+			const raw = uni.getStorageSync(CURRENT_USER_ID_KEY)
+			const id = Number(raw)
+			if (id > 0) scope = 'user-' + id
+		} catch (e) {}
+		return AI_THOUGHTFULNESS_KEY + '-' + scope
+	}
+	const clearThoughtfulnessCache = () => {
+		try { uni.removeStorageSync(thoughtfulnessCacheKey()) } catch (e) {}
+	}
 	const aiAnalyzing = ref(false)
 	const aiError = ref('')
 	const aiResult = ref<ThoughtfulnessResult | null>(null)
 	const aiAnalysisStartedAt = ref(0)
-	// AI 用心度默认先展示初次使用说明；分析成功后自动回到结果卡。
+	const aiAnalysisBaselineJson = ref('')
+	// AI 用心度默认先展示初次使用说明；分析成功或读取到既有结果后自动回到结果卡。
 	const aiFirstAnalysisVisible = ref(true)
 	const aiStale = ref(false)
 	const pendingAiEditedKeys = ref([] as string[])
@@ -587,16 +780,29 @@
 		} catch (e) { return '' }
 	}
 
+	const hasUnsavedProfileChanges = (): boolean => lastSavedPayloadJson.value != '' && JSON.stringify(buildProfilePayload()) != lastSavedPayloadJson.value
+	const hasUnsavedChanges = (): boolean => hasUnsavedProfileChanges() || textValue(formData.value.nickname) != savedNickname.value
+	const saveStatusText = computed((): string => {
+		if (uploadingMedia.value) return '照片上传中，请稍候再保存'
+		if (saving.value) return '正在保存…'
+		return hasUnsavedChanges() ? '有修改尚未保存' : '资料已与后台一致'
+	})
+	const savedProfileHash = (): string => {
+		try {
+			if (lastSavedPayloadJson.value != '') return payloadHash(JSON.parse(lastSavedPayloadJson.value))
+		} catch (e) {}
+		return payloadHash(buildProfilePayload())
+	}
 	const persistThoughtfulness = () => {
 		const result = aiResult.value
 		if (result == null) return
 		try {
-			uni.setStorageSync(AI_THOUGHTFULNESS_KEY, {
+			uni.setStorageSync(thoughtfulnessCacheKey(), {
 				score: result.score,
 				summary: result.summary,
 				todos: result.todos,
 				generated_at: result.generatedAt,
-				profile_hash: payloadHash(buildProfilePayload())
+				profile_hash: savedProfileHash()
 			} as any)
 		} catch (e) {
 			console.error('[EditProfile] thoughtfulness persist failed', e)
@@ -605,10 +811,12 @@
 
 	const loadThoughtfulness = async () => {
 		try {
-			const cached = uni.getStorageSync(AI_THOUGHTFULNESS_KEY) as any
+			const cached = uni.getStorageSync(thoughtfulnessCacheKey()) as any
 			if (cached != null && typeof cached == 'object') {
 				aiResult.value = normalizeThoughtfulness(cached)
-				aiStale.value = cached.profile_hash != null && '' + cached.profile_hash != '' && '' + cached.profile_hash != payloadHash(buildProfilePayload())
+				aiStale.value = cached.profile_hash != null && '' + cached.profile_hash != '' && '' + cached.profile_hash != savedProfileHash()
+				// 有同账号缓存只作为离线兜底，但它已经是结果态，不能再被首次说明卡遮住。
+				aiFirstAnalysisVisible.value = false
 			}
 		} catch (e) {
 			console.error('[EditProfile] thoughtfulness cache read failed', e)
@@ -618,13 +826,25 @@
 			if (res.success && res.data != null) {
 				aiResult.value = res.data as ThoughtfulnessResult
 				aiError.value = ''
-				aiStale.value = false
+				aiStale.value = hasUnsavedProfileChanges()
+				aiFirstAnalysisVisible.value = false
 				persistThoughtfulness()
-			} else if (!res.success && aiResult.value == null) {
-				aiError.value = res.message != null ? '' + res.message : 'AI 用心度评审暂时不可用'
+			} else if (res.success && res.data == null) {
+				// 服务端明确说明当前账号没有结果时，本地缓存也不能冒充已生成。
+				aiResult.value = null
+				aiStale.value = false
+				aiError.value = ''
+				aiFirstAnalysisVisible.value = true
+				clearThoughtfulnessCache()
+			} else if (!res.success) {
+				// GET 失败保留旧结果，但必须把失败提示带到结果卡上，便于重试。
+				// 503 = 服务端 AI 能力未开启（AI_ENABLED=false / 未配 Key），
+				// 这不是网络故障也不是资料问题，不能引导用户反复重试。
+				const notice = aiFailureNotice(res, 'AI 用心度评审')
+				aiError.value = notice.disabled ? notice.title + '，资料本身不受影响' : notice.title + ' · ' + notice.hint
 			}
 		} catch (e) {
-			if (aiResult.value == null) aiError.value = '网络异常，AI 用心度评审暂时不可用'
+			aiError.value = '网络异常，AI 用心度评审暂时不可用'
 		}
 	}
 
@@ -632,17 +852,23 @@
 		if (aiAnalyzing.value) return false
 		aiAnalyzing.value = true
 		aiAnalysisStartedAt.value = Date.now()
+		// 固定本次请求开始时的资料快照；分析期间若用户保存新资料，旧返回不能冒充最新结果。
+		aiAnalysisBaselineJson.value = JSON.stringify(buildProfilePayload())
 		aiError.value = ''
 		try {
 			// 先让小程序完成 loading 视图渲染，再发起可能立即失败的请求。
 			await sleep(80)
 			const res = await analyzeProfileThoughtfulness(trigger, editedKeys)
 			if (!res.success || res.data == null) {
-				aiError.value = res.message != null ? '' + res.message : 'AI 用心度分析失败，请稍后再试'
+				// 按 businessCode 分诊：功能未开放 / 暂时不可用 / 网络超时，
+				// 不要把后端「AI返回格式无效」这类措辞直接抛给用户。
+				const notice = aiFailureNotice(res, 'AI 用心度评审')
+				aiError.value = notice.disabled ? notice.title + '，资料已正常保存' : notice.title + ' · ' + notice.hint
 				return false
 			}
 			aiResult.value = res.data as ThoughtfulnessResult
-			aiStale.value = false
+			aiStale.value = hasUnsavedProfileChanges() || JSON.stringify(buildProfilePayload()) != aiAnalysisBaselineJson.value
+			aiFirstAnalysisVisible.value = false
 			persistThoughtfulness()
 			if (trigger == 'manual') uni.showToast({ title: 'AI 分析已更新', icon: 'success' })
 			return true
@@ -657,14 +883,22 @@
 			aiAnalyzing.value = false
 		}
 	}
-
-	const onAiRetry = () => { triggerThoughtfulness('manual', []) }
+	const guardThoughtfulnessSaveState = (): boolean => {
+		if (!hasUnsavedProfileChanges()) return true
+		uni.showToast({ title: '请先保存资料，再分析最新内容', icon: 'none' })
+		return false
+	}
+	const onAiRetry = () => {
+		if (!guardThoughtfulnessSaveState()) return
+		triggerThoughtfulness('manual', [])
+	}
 	const openAiFirstAnalysis = () => {
 		aiError.value = ''
 		aiFirstAnalysisVisible.value = true
 	}
 	const closeAiFirstAnalysis = () => { if (!aiAnalyzing.value) aiFirstAnalysisVisible.value = false }
 	const startAiFirstAnalysis = async () => {
+		if (!guardThoughtfulnessSaveState()) return
 		const success = await triggerThoughtfulness('manual', [])
 		if (success) aiFirstAnalysisVisible.value = false
 	}
@@ -755,8 +989,15 @@
 				const certificationsRes = await getUserCertifications()
 				if (certificationsRes.success && certificationsRes.data != null) {
 					if (certificationsRes.data.education != null) {
-						const status = Number(certificationsRes.data.education.status)
-						educationStatus.value = status == 2 ? 'passed' : (status == 1 ? 'reviewing' : (status == 3 ? 'rejected' : 'missing'))
+						const educationItem: any = certificationsRes.data.education
+						const status = Number(educationItem.status)
+						// status==1 但没有任何材料凭据 = 从未真正提交，按"未认证"处理，
+						// 否则会卡在"审核中"且无法重新提交。
+						const educationHasMaterial = educationItem.material_submitted == true
+							|| (educationItem.material != null && textValue(educationItem.material).trim() != '')
+						educationStatus.value = status == 2
+							? 'passed'
+							: (status == 1 ? (educationHasMaterial ? 'reviewing' : 'missing') : (status == 3 ? 'rejected' : 'missing'))
 					}
 					if (certificationsRes.data.single_pledge != null) {
 						const status = Number(certificationsRes.data.single_pledge.status)
@@ -769,6 +1010,7 @@
 			}
 			await refreshCompletion()
 			lastSavedPayloadJson.value = JSON.stringify(buildProfilePayload())
+			savedNickname.value = textValue(formData.value.nickname)
 			clearPendingEditedKeys()
 			if (!isMemberEdit.value) loadThoughtfulness()
 		} catch (e) {
@@ -780,33 +1022,36 @@
 
 	const hasPreferenceValues = (): boolean => formData.value.ageMin != '' || formData.value.ageMax != '' || formData.value.heightMin != '' || formData.value.heightMax != '' || formData.value.educationMin != '' || formData.value.acceptLongDistance || formData.value.acceptCrossProvince || textValue(formData.value.extraRequirement).trim() != ''
 	const completeness = computed(() => completionScore.value)
-	const fallbackCompletion = (key: string): boolean => {
-		if (key == 'avatar') return formData.value.avatar != ''
-		if (key == 'album') return formData.value.photos.length > 0
-		if (key == 'intro') return textValue(formData.value.introduction).trim() != ''
-		if (key == 'weight') return formData.value.weight != ''
-		if (key == 'hometown') return textValue(formData.value.hometown).trim() != ''
-		if (key == 'personal_tags') return personalDisplayTags.value.length >= 3
-		if (key == 'preference') return formData.value.ageMin != '' || formData.value.ageMax != ''
-		if (key == 'company') return textValue(formData.value.company).trim() != ''
-		return false
-	}
+	const completionItem = (key: string): any => completionItems.value[key]
 	const completionPassed = (key: string): boolean => {
-		if (key == 'personal_tags') return personalDisplayTags.value.length >= 3
-		const item = completionItems.value[key]
-		return item != null ? item.completed == true : fallbackCompletion(key)
+		const item = completionItem(key)
+		return item != null && item.completed == true
 	}
-	const completionWeight = (key: string, fallback: number): number => {
-		const weights: any = {
-			gender: 7, birthday: 7, location: 5, marriage: 5, occupation: 4, education: 4, income: 4,
-			height: 4, weight: 4, hometown: 4, avatar: 15, intro: 10, album: 8, personal_tags: 8, mbti: 2, preference: 3, realname: 5, single_pledge: 1
-		}
-		return weights[key] != null ? weights[key] : fallback
+	const completionWeight = (key: string): number => {
+		const item = completionItem(key)
+		if (item == null) return 0
+		const weight = Number(item.weight)
+		return isNaN(weight) ? 0 : weight
 	}
-	const completionSuffix = (key: string, fallback: number, prefix: string = ' ·'): string => completionPassed(key) ? '' : prefix + ' +' + completionWeight(key, fallback) + '%'
-	const completionText = (key: string, value: any, emptyText: string, fallback: number): string => {
+	const completionHint = (key: string): string => {
+		if (completionPassed(key)) return ''
+		const weight = completionWeight(key)
+		return weight > 0 ? '填写后 +' + weight + '%' : ''
+	}
+	const completionSuffix = (key: string, prefix: string = ' ·'): string => {
+		if (completionPassed(key)) return ''
+		const weight = completionWeight(key)
+		return weight > 0 ? prefix + ' 填写后 +' + weight + '%' : ''
+	}
+	const completionText = (key: string, value: any, emptyText: string): string => {
 		const text = textValue(value).trim()
-		return completionPassed(key) && text != '' ? text : emptyText + completionSuffix(key, fallback)
+		if (text != '') return text
+		const hint = completionHint(key)
+		return hint == '' ? emptyText : emptyText + '（' + hint + '）'
+	}
+	const detailPlaceholder = (key: string, fallback: string = '请选择'): string => {
+		const hint = completionHint(key)
+		return hint == '' ? fallback : fallback + ' · ' + hint
 	}
 	const missingCompletionSummary = computed(() => {
 		const keys = Object.keys(completionItems.value)
@@ -816,8 +1061,10 @@
 		const labels: any = {
 			gender: '性别', birthday: '出生日期', location: '所在地区', marriage: '婚姻状况', occupation: '职业', company: '公司',
 			education: '学历', income: '收入', height: '身高', weight: '体重', hometown: '家乡', avatar: '头像',
-			intro: '自我介绍', album: '相册', personal_tags: '兴趣标签', interest: '兴趣标签', personality: '兴趣标签', mbti: 'MBTI',
-			preference: '择偶要求', realname: '实名认证', single_pledge: '单身承诺'
+			intro: '关于我', album: '相册', personal_tags: '兴趣标签', interest: '兴趣标签', personality: '兴趣标签', mbti: 'MBTI',
+			preference: '择偶要求', realname: '实名认证', single_pledge: '单身承诺',
+			school: '毕业学校', house: '购房情况', car: '购车情况', household: '户口所在地', ethnicity: '民族',
+			religion: '宗教信仰', smoking: '吸烟习惯', drinking: '饮酒习惯'
 		}
 		const names = missing.map((key: string) => labels[key] || key)
 		return names.length > 4 ? names.slice(0, 4).join('、') + '等' + names.length + '项' : names.join('、')
@@ -835,6 +1082,18 @@
 	const genderText = computed(() => formData.value.gender == 1 ? '男' : formData.value.gender == 2 ? '女' : '未选择')
 	const educationText = computed(() => formData.value.educationLevel != null ? educationOptions[Number(formData.value.educationLevel)] || '未选择' : '未选择')
 	const maritalText = computed(() => formData.value.isMarried != null ? maritalOptions[Number(formData.value.isMarried)] || '未选择' : '未选择')
+	// 属相只读：由生日推导，不单独落库（详情页用同一套规则推导，两边天然一致）。
+	// 允许用户手选会与生日矛盾，所以这里不给 picker。
+	const zodiacText = computed((): string => {
+		const stored = textValue(formData.value.zodiac).trim()
+		if (stored != '') return stored
+		const birthday = textValue(formData.value.birthday)
+		if (birthday.length < 4) return '填生日后自动生成'
+		const year = Number(birthday.substring(0, 4))
+		if (isNaN(year) || year < 1900 || year > 2100) return '填生日后自动生成'
+		const animals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
+		return animals[(year - 1900) % 12] + '年'
+	})
 	const incomeText = computed(() => formData.value.income != '' ? textValue(formData.value.income) : '请选择')
 	const incomePickerIndex = computed(() => {
 		const index = incomeOptions.indexOf(textValue(formData.value.income))
@@ -843,6 +1102,16 @@
 	const mbtiPickerIndex = computed(() => {
 		const index = mbtiOptions.indexOf(textValue(formData.value.mbti))
 		return index >= 0 ? index : 0
+	})
+	// 职业：枚举内命中则回显该项；不在枚举里的历史值（早期自由填写）归到「其他」，
+	// 由下方的「职业名称」输入框继续编辑，避免打开选择器就把旧值抹掉。
+	const occupationText = computed(() => textValue(formData.value.occupation))
+	const occupationPickerIndex = computed(() => {
+		const current = occupationText.value
+		if (current == '') return 0
+		const index = occupationOptions.indexOf(current)
+		if (index > 0) return index
+		return occupationOptions.length - 1
 	})
 	const agePreview = computed(() => {
 		const birthday = textValue(formData.value.birthday)
@@ -890,11 +1159,13 @@
 		if (realNameStatus.value == 'revoked') return '实名认证已撤销，请重新认证'
 		return '需通过平台实名认证'
 	})
+	// reviewing 单独成态：以前只区分 passed / 未通过，导致"审核中"也显示"去认证"，
+	// 点进认证页又是"资料已提交，正在审核"且没有表单，用户会判定为"点不开"。
 	const certifications = computed(() => [
-		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', desc: realNameDescription.value },
-		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', desc: educationStatus.value == 'passed' ? '学历信息已核验' : '需核验学历信息' },
-		{ key: 'avatar', label: '头像认证', icon: '像', passed: avatarCertificationPassed.value, desc: avatarCertificationPassed.value ? '头像为本人真实照片' : '上传真实本人照片' },
-		{ key: 'single_pledge', label: '单身承诺', icon: '誓', passed: singlePledgeStatus.value == 'passed', desc: singlePledgeStatus.value == 'passed' ? '手写承诺已审核通过' : (singlePledgeStatus.value == 'reviewing' ? '手写承诺审核中' : (singlePledgeStatus.value == 'rejected' ? '审核未通过，可重新签署' : '手写签署当前单身状态承诺')) }
+		{ key: 'realname', label: '实名认证', icon: '盾', passed: realNameStatus.value == 'passed', reviewing: realNameStatus.value == 'reviewing', desc: realNameDescription.value },
+		{ key: 'education', label: '学历认证', icon: '学', passed: educationStatus.value == 'passed', reviewing: educationStatus.value == 'reviewing', desc: educationStatus.value == 'passed' ? '学历信息已核验' : (educationStatus.value == 'reviewing' ? '学历材料审核中' : '需核验学历信息') },
+		{ key: 'avatar', label: '头像认证', icon: '像', passed: avatarCertificationPassed.value, reviewing: false, desc: avatarCertificationPassed.value ? '头像为本人真实照片' : '上传真实本人照片' },
+		{ key: 'single_pledge', label: '单身承诺', icon: '誓', passed: singlePledgeStatus.value == 'passed', reviewing: singlePledgeStatus.value == 'reviewing', desc: singlePledgeStatus.value == 'passed' ? '手写承诺已审核通过' : (singlePledgeStatus.value == 'reviewing' ? '手写承诺审核中' : (singlePledgeStatus.value == 'rejected' ? '审核未通过，可重新签署' : '手写签署当前单身状态承诺')) }
 	])
 
 	onMounted(() => {
@@ -916,6 +1187,27 @@
 	const onGenderChange = (event: any) => { if (!isIdentityLocked.value) formData.value.gender = Number(event.detail.value) == 1 ? 1 : Number(event.detail.value) == 2 ? 2 : null }
 	const onEducationChange = (event: any) => formData.value.educationLevel = Number(event.detail.value) > 0 ? Number(event.detail.value) : null
 	const onMaritalChange = (event: any) => formData.value.isMarried = Number(event.detail.value) > 0 ? Number(event.detail.value) : null
+	// 「未填写」等于不改：置空后 putText 不提交该 key，后端 PATCH 语义下原值保留。
+	const setDetailField = (field: string, options: string[], event: any) => {
+		const index = Number(event.detail.value)
+		const label = index >= 0 && index < options.length ? options[index] : ''
+		const value = label == '未填写' ? '' : label
+		;(formData.value as any)[field] = value
+	}
+	const onHouseChange = (event: any) => setDetailField('house', houseOptions, event)
+	const onCarChange = (event: any) => setDetailField('car', carOptions, event)
+	const onSmokingChange = (event: any) => setDetailField('smoking', smokingOptions, event)
+	const onDrinkingChange = (event: any) => setDetailField('drinking', drinkingOptions, event)
+	const onReligionChange = (event: any) => setDetailField('religion', religionOptions, event)
+	const onEthnicityChange = (event: any) => setDetailField('ethnicity', ethnicityOptions, event)
+	const onHouseholdChange = (event: any) => {
+		const values = event.detail.value as string[]
+		const codes = locationCodesByNames(values)
+		formData.value.householdProvinceCode = codes.province
+		formData.value.householdCityCode = codes.city
+		formData.value.householdDistrictCode = codes.district
+		formData.value.household = values.length >= 3 ? values[0] + ' ' + values[1] + ' ' + values[2] : ''
+	}
 	const onBirthdayChange = (event: any) => { if (!isIdentityLocked.value) formData.value.birthday = event.detail.value }
 	const onHeightChange = (event: any) => formData.value.height = Number(heightOptions[Number(event.detail.value)])
 	const onWeightChange = (event: any) => formData.value.weight = Number(weightOptions[Number(event.detail.value)])
@@ -951,6 +1243,16 @@
 	const onIncomeChange = (event: any) => {
 		const index = Number(event.detail.value)
 		formData.value.income = index > 0 ? incomeOptions[index] : ''
+	}
+	const onOccupationChange = (event: any) => {
+		const index = Number(event.detail.value)
+		if (index <= 0) {
+			formData.value.occupation = ''
+			return
+		}
+		const picked = occupationOptions[index]
+		// 选「其他」时清空，交给下方自定义输入框填写
+		formData.value.occupation = picked == '其他' ? '' : picked
 	}
 	const onMbtiChange = (event: any) => {
 		const index = Number(event.detail.value)
@@ -1157,23 +1459,64 @@
 			chooseAvatar()
 			return
 		}
-		if (key == 'single_pledge') {
-			singlePledgeVisible.value = true
-			return
-		}
+		// 单身承诺书走 certification 页的手写签名流程（certification.uvue 已实现
+		// single_pledge 步骤，并在未实名时给出「请先完成实名认证」门槛）。
+		// 这里不要再拦成本地弹层——旧分支引用了从未声明的 singlePledgeVisible，
+		// 点击会直接抛错、表现为「点去认证无响应」。
 		uni.navigateTo({ url: '/pagesSub/profileExtra/certification?type=' + key })
+	}
+	const reviewIntroPolish = async () => {
+		const original = textValue(formData.value.introduction).trim()
+		if (original == '' || introPolishing.value) return
+		introPolishing.value = true
+		try {
+			const res = await polishPaperPlaneText(original, 'selfIntroduction', 'natural', 500)
+			if (res == null || !res.success || res.data == null) {
+				uni.showToast({ title: res != null && res.message != null ? '' + res.message : 'AI 润色失败，请稍后再试', icon: 'none' })
+				return
+			}
+			introPolishOriginal.value = res.data.original != null ? '' + res.data.original : original
+			introPolishProposed.value = res.data.polished != null ? '' + res.data.polished : original
+			const points = res.data.changedPoints != null && Array.isArray(res.data.changedPoints) ? res.data.changedPoints as any[] : []
+			introPolishChangedPoints.value = points.map((point: any) => '' + point)
+			introPolishChangesExpanded.value = false
+			// changed=false 或服务端原样回显时，不再展示两份相同文本。
+			introPolishNoChange.value = res.data.changed === false || introPolishProposed.value.trim() == introPolishOriginal.value.trim()
+			introPolishVisible.value = true
+		} catch (e) {
+			uni.showToast({ title: '网络异常，AI 润色失败，请稍后再试', icon: 'none' })
+		} finally {
+			introPolishing.value = false
+		}
+	}
+	const closeIntroPolish = () => { introPolishVisible.value = false }
+	const adoptIntroPolish = () => {
+		if (introPolishNoChange.value) return
+		const proposed = introPolishProposed.value.trim()
+		if (proposed == '') return
+		formData.value.introduction = proposed
+		if (aiHasData.value) aiStale.value = true
+		introPolishVisible.value = false
+		uni.showToast({ title: '已填入关于我，请确认后保存', icon: 'none' })
 	}
 	const saveIntroduction = async () => {
 		if (saving.value || uploadingMedia.value) return
 		saving.value = true
 		try {
-			const res = await apiUpdateProfile({ self_intro: textValue(formData.value.introduction) || null })
+			const introduction = textValue(formData.value.introduction)
+			const res = await apiUpdateProfile({ self_intro: introduction || null })
 			if (!res.success) {
-				uni.showToast({ title: res.message != null ? '' + res.message : '自我介绍保存失败', icon: 'none' })
+				uni.showToast({ title: res.message != null ? '' + res.message : '关于我保存失败', icon: 'none' })
 				return
 			}
+			try {
+				const saved = lastSavedPayloadJson.value != '' ? JSON.parse(lastSavedPayloadJson.value) : buildProfilePayload()
+				saved.self_intro = introduction || null
+				lastSavedPayloadJson.value = JSON.stringify(saved)
+			} catch (e) {}
 			await refreshCompletion()
-			uni.showToast({ title: '自我介绍已保存', icon: 'success' })
+			uni.showToast({ title: '关于我已保存', icon: 'success' })
+			if (!isMemberEdit.value) triggerThoughtfulness('save', ['self_intro'])
 		} finally {
 			saving.value = false
 		}
@@ -1183,20 +1526,25 @@
 	// 本地兜底：同步写 storage，云端尚未支持该字段或请求失败时，回答也不会丢。
 	const QA_STORAGE_KEY = 'xsa_own_qa_answers_v1'
 	const qaItems = ref([
-		{ id: 1, question: '你理想中的另一半是什么样的', answer: '' },
-		{ id: 2, question: '喜欢什么运动', answer: '' },
-		{ id: 3, question: '你期待的爱情是什么样子的', answer: '' }
+		{ id: 1, question: '你理想中的另一半是什么样的', answer: '', mediaId: 0, mediaUrl: '' },
+		{ id: 2, question: '喜欢什么运动', answer: '', mediaId: 0, mediaUrl: '' },
+		{ id: 3, question: '你期待的爱情是什么样子的', answer: '', mediaId: 0, mediaUrl: '' }
 	])
 	const qaSheetVisible = ref(false)
 	const qaEditingIndex = ref(-1)
 	const qaEditingQuestion = ref('')
 	const qaDraft = ref('')
+	const qaDraftMediaId = ref(0)
+	const qaDraftMediaUrl = ref('')
 	const qaSaving = ref(false)
 	const buildQaPayload = (editIndex: number, nextAnswer: string): any[] => {
 		const payload: any[] = []
 		for (let i = 0; i < qaItems.value.length; i++) {
 			const qa = qaItems.value[i]
-			payload.push({ question_id: qa.id, question: qa.question, answer: i == editIndex ? nextAnswer : textValue(qa.answer) })
+			const mediaId = i == editIndex ? qaDraftMediaId.value : Number(qa.mediaId)
+			const item: any = { question_id: qa.id, question: qa.question, answer: i == editIndex ? nextAnswer : textValue(qa.answer) }
+			item.media_ids = mediaId > 0 ? [mediaId] : []
+			payload.push(item)
 		}
 		return payload
 	}
@@ -1208,6 +1556,16 @@
 				if (row == null) continue
 				const qid = row.question_id != null ? Number(row.question_id) : (row.id != null ? Number(row.id) : 0)
 				if (qid == item.id && row.answer != null && textValue(row.answer) != '') item.answer = textValue(row.answer)
+				if (qid == item.id) {
+					const mediaIds = row.media_ids != null && Array.isArray(row.media_ids) ? row.media_ids as any[] : []
+					const mediaList = row.media != null && Array.isArray(row.media) ? row.media as any[] : []
+					if (mediaIds.length > 0) item.mediaId = Number(mediaIds[0])
+					if (mediaList.length > 0 && mediaList[0] != null) {
+						item.mediaId = Number(mediaList[0].id != null ? mediaList[0].id : item.mediaId)
+						const url = mediaList[0].file_url != null ? mediaList[0].file_url : mediaList[0].thumbnail_url
+						item.mediaUrl = url != null ? resolveMediaUrl('' + url) : ''
+					}
+				}
 			}
 		}
 	}
@@ -1227,7 +1585,25 @@
 		qaEditingIndex.value = index
 		qaEditingQuestion.value = item.question
 		qaDraft.value = textValue(item.answer)
+		qaDraftMediaId.value = Number(item.mediaId != null ? item.mediaId : 0)
+		qaDraftMediaUrl.value = item.mediaUrl != null ? '' + item.mediaUrl : ''
 		qaSheetVisible.value = true
+	}
+	const selectQaMedia = (photo: any) => {
+		if (photo == null) return
+		const id = Number(photo.id != null ? photo.id : 0)
+		if (id <= 0) return
+		if (qaDraftMediaId.value == id) {
+			qaDraftMediaId.value = 0
+			qaDraftMediaUrl.value = ''
+			return
+		}
+		qaDraftMediaId.value = id
+		qaDraftMediaUrl.value = photo.url != null ? '' + photo.url : ''
+	}
+	const clearQaMedia = () => {
+		qaDraftMediaId.value = 0
+		qaDraftMediaUrl.value = ''
 	}
 	const closeQaEditor = () => { qaSheetVisible.value = false }
 	const onQaDraftInput = (event: any) => { qaDraft.value = event != null && event.detail != null ? '' + event.detail.value : '' }
@@ -1243,14 +1619,20 @@
 			if (!res.success) throw new Error(res.message != null ? '' + res.message : 'save failed')
 			uni.setStorageSync(QA_STORAGE_KEY, payload)
 			qaItems.value[index].answer = nextAnswer
+			qaItems.value[index].mediaId = qaDraftMediaId.value
+			qaItems.value[index].mediaUrl = qaDraftMediaUrl.value
 			qaSheetVisible.value = false
 			uni.showToast({ title: '回答已保存', icon: 'success' })
 		} catch (e: any) {
 			// 云端失败时兜底存本地，返回资料页仍可回显
 			uni.setStorageSync(QA_STORAGE_KEY, payload)
 			qaItems.value[index].answer = nextAnswer
+			qaItems.value[index].mediaId = qaDraftMediaId.value
+			qaItems.value[index].mediaUrl = qaDraftMediaUrl.value
 			qaSheetVisible.value = false
-			uni.showToast({ title: '已本地保存，云端同步失败', icon: 'none' })
+			const errorText = e != null && e.message != null ? '' + e.message : ''
+			const tip = errorText.indexOf('QA_MEDIA') >= 0 ? '问答图片需为已通过审核的相册照片' : '已本地保存，云端同步失败'
+			uni.showToast({ title: tip, icon: 'none' })
 		} finally {
 			qaSaving.value = false
 		}
@@ -1268,7 +1650,23 @@
 	const onPreview = () => uni.navigateTo({ url: '/pagesSub/userExtra/user/detail?own=true&preview=true' })
 
 	const onCancel = () => {
-		uni.navigateBack({ delta: 1 })
+		if (saving.value || uploadingMedia.value) return
+		if (!hasUnsavedChanges()) {
+			uni.navigateBack({ delta: 1 })
+			return
+		}
+		// 退出只丢一次改动是不够的：代编场景里改完直接返回就等于白填，这里必须让他选。
+		uni.showModal({
+			title: '尚未保存',
+			content: '资料有修改还没保存，直接退出会丢失这些改动。',
+			confirmText: '保存退出',
+			cancelText: '直接退出',
+			success: (result: any) => {
+				if (result == null) return
+				if (result.confirm == true) { handleSave(); return }
+				uni.navigateBack({ delta: 1 })
+			}
+		})
 	}
 	const openBasicEditor = () => {
 		editSheetMode.value = 'basic'
@@ -1278,11 +1676,17 @@
 		if (!saving.value && !uploadingMedia.value) detailSheetVisible.value = false
 	}
 
+	// 只把非空值塞进 payload：后端 update_profile 是 exclude_unset=True（PATCH），
+	// 传 null 等于 SET NULL。若某字段 get_profile 没下发，编辑页读到空，
+	// 用 `|| null` 就会把红娘后台录入的历史值清掉，且回滚代码救不回来。
+	const putText = (obj: any, key: string, value: any) => {
+		const text = textValue(value).trim()
+		if (text != '') obj[key] = text
+	}
 	const buildProfilePayload = () => {
 		const payload: any = {
 			gender: formData.value.gender,
 			birthday: formData.value.birthday != '' ? formData.value.birthday : null,
-			is_married: formData.value.isMarried,
 			height: optionalNumber(formData.value.height),
 			weight: optionalNumber(formData.value.weight),
 			occupation: textValue(formData.value.occupation) || null,
@@ -1299,8 +1703,34 @@
 			qa_answers: buildQaPayload(-1, ''),
 			mbti: textValue(formData.value.mbti).toUpperCase() || null
 		}
+		// 婚况写入域只有 1/2/3：库里 0 是「未填」的列默认值，4~7 是旧的离异细分档，读接口会原样带回，
+		// 直接回传会被后端 422 拒掉；没有在弹层里重新选择过就不提交这个键。
+		const married = formData.value.isMarried
+		if (married == null) {
+			payload.is_married = null
+		} else if (Number(married) >= 1 && Number(married) <= 3) {
+			payload.is_married = Number(married)
+		}
+		// 详细资料 13 项：非空才提交
+		putText(payload, 'zodiac', formData.value.zodiac)
+		putText(payload, 'household', formData.value.household)
+		putText(payload, 'household_province_code', formData.value.householdProvinceCode)
+		putText(payload, 'household_city_code', formData.value.householdCityCode)
+		putText(payload, 'household_district_code', formData.value.householdDistrictCode)
+		putText(payload, 'house', formData.value.house)
+		putText(payload, 'car', formData.value.car)
+		putText(payload, 'smoking', formData.value.smoking)
+		putText(payload, 'drinking', formData.value.drinking)
+		putText(payload, 'ethnicity', formData.value.ethnicity)
+		putText(payload, 'religion', formData.value.religion)
+		putText(payload, 'school', formData.value.graduateSchool)
+		putText(payload, 'company', formData.value.company)
 		return payload
 	}
+	watch(() => JSON.stringify(buildProfilePayload()), (current: string) => {
+		if (isMemberEdit.value || !profileLoaded.value || !aiHasData.value || lastSavedPayloadJson.value == '') return
+		aiStale.value = current != lastSavedPayloadJson.value
+	})
 
 	const saveNickname = async () => {
 		if (saving.value || uploadingMedia.value) return
@@ -1317,6 +1747,7 @@
 				return
 			}
 			formData.value.nickname = value
+			savedNickname.value = value
 			await refreshCompletion()
 			uni.showToast({ title: '昵称已保存', icon: 'success' })
 		} finally {
@@ -1326,19 +1757,24 @@
 
 	const handleSave = async () => {
 		if (saving.value || uploadingMedia.value) return
+		const nickname = textValue(formData.value.nickname).trim()
+		if (nickname == '') {
+			uni.showToast({ title: '昵称不能为空', icon: 'none' })
+			return
+		}
 		const height = optionalNumber(formData.value.height)
 		const weight = optionalNumber(formData.value.weight)
 		if (height != null && (height < 140 || height > 220)) {
 			uni.showToast({ title: '身高需在140至220厘米之间', icon: 'none' })
 			return
 		}
-		if (weight != null && (weight < 40 || weight > 120)) {
-			uni.showToast({ title: '体重需在40至120千克之间', icon: 'none' })
+		if (weight != null && (weight < 30 || weight > 150)) {
+			uni.showToast({ title: '体重需在30至150千克之间', icon: 'none' })
 			return
 		}
 		saving.value = true
 		try {
-			const nicknameRes = await apiUpdateNickname(textValue(formData.value.nickname))
+			const nicknameRes = await apiUpdateNickname(nickname)
 			if (!nicknameRes.success) {
 				uni.showToast({ title: nicknameRes.message != null ? '' + nicknameRes.message : '昵称保存失败', icon: 'none' })
 				return
@@ -1348,6 +1784,8 @@
 				uni.showToast({ title: profileRes.message != null ? '' + profileRes.message : '基础资料保存失败', icon: 'none' })
 				return
 			}
+			formData.value.nickname = nickname
+			savedNickname.value = nickname
 			await refreshCompletion()
 			uni.showToast({ title: isMemberEdit.value ? '会员资料已保存' : '资料已保存', icon: 'success' })
 			// AI 用心度:对本次保存的编辑内容触发评审,不阻塞保存/返回流程（会员资料代编不参与本人用心度）
@@ -1356,6 +1794,8 @@
 				clearPendingEditedKeys()
 				lastSavedPayloadJson.value = JSON.stringify(buildProfilePayload())
 				triggerThoughtfulness('save', editedKeys)
+			} else {
+				lastSavedPayloadJson.value = JSON.stringify(buildProfilePayload())
 			}
 			if (detailSheetVisible.value) detailSheetVisible.value = false
 			else setTimeout(() => uni.navigateBack({ delta: 1 }), 700)
@@ -1477,6 +1917,8 @@
 .cert-description { font-size: 11px; color: var(--muted); }
 .cert-done-pill { flex-shrink: 0; padding: 5px 12px; border-radius: 12px; background: var(--sage-soft); }
 .cert-done-text { font-size: 12px; color: var(--sage); font-weight: 600; }
+.cert-reviewing-pill { flex-shrink: 0; padding: 5px 12px; border-radius: 12px; background: var(--warm); border: 1px solid var(--line); }
+.cert-reviewing-text { font-size: 12px; color: var(--muted); font-weight: 600; }
 .cert-pending-text { font-size: 12px; color: var(--sage); font-weight: 600; }
 
 /* Intro */
@@ -1502,16 +1944,32 @@
 .qa-hint { font-size: 12px; color: var(--muted); }
 .qa-answer-text { flex: 1; font-size: 12px; color: var(--ink2); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .qa-edit-icon { font-size: 13px; color: var(--sage); margin-left: 6px; flex-shrink: 0; }
-.qa-sheet-body { padding: 4px 20px 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.qa-sheet-body { flex: 1; min-height: 0; padding: 4px 20px 0 20px; display: flex; flex-direction: column; gap: 10px; }
 .qa-sheet-question { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.5; }
-.qa-sheet-textarea { width: 100%; height: 140px; padding: 12px; border-radius: 12px; background: var(--warm); font-size: 14px; color: var(--ink); line-height: 1.6; box-sizing: border-box; }
+.qa-sheet-textarea { width: 100%; flex: 1; min-height: 140px; height: auto; padding: 12px; border-radius: 12px; background: var(--warm); font-size: 14px; color: var(--ink); line-height: 1.6; box-sizing: border-box; }
 .qa-sheet-count { font-size: 12px; color: var(--muted); text-align: right; }
+.qa-media-title { margin-top: 14px; font-size: 13px; color: var(--ink2); }
+.qa-media-scroll { width: 100%; white-space: nowrap; margin-top: 8px; }
+.qa-media-list { display: flex; flex-direction: row; gap: 8px; }
+.qa-media-item { position: relative; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 2px solid transparent; flex-shrink: 0; }
+.qa-media-item.selected { border-color: var(--sage); }
+.qa-media-image { width: 100%; height: 100%; }
+.qa-media-check { position: absolute; right: 4px; bottom: 4px; width: 18px; height: 18px; border-radius: 9px; background: var(--sage); color: #FFFFFF; font-size: 12px; text-align: center; line-height: 18px; }
+.qa-media-hint { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.qa-media-clear { margin-top: 8px; font-size: 12px; color: var(--ink2); text-decoration: underline; }
 
 /* Bottom bar */
 .cancel-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--warm); color: var(--ink2); font-size: 15px; font-weight: 600; }
 .save-button { flex: 1; height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; background: var(--sage); color: var(--text-invert); font-size: 15px; font-weight: 700; box-shadow: 0 4px 12px rgba(51,141,107,0.25); }
 .save-button.disabled { opacity: 0.55; }
-.scroll-bottom-spacer { height: calc(100vh - 312px); min-height: 120px; }
+/* 旧版用 calc(100vh - 312px) 的空占位块把页面往下顶出近整屏空白，
+   底部避让统一交给 .scroll-content 的 padding-bottom 处理。 */
+/* 页面级统一保存条：始终贴在内容区底部，避免只有弹层里才有整体保存 */
+.page-save-bar { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
+.page-save-status { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); line-height: 1.4; }
+.page-save-button { flex-shrink: 0; min-width: 132px; height: 44px; padding: 0 18px; display: flex; align-items: center; justify-content: center; border-radius: 22px; background: var(--sage); box-shadow: 0 4px 12px rgba(51,141,107,0.25); }
+.page-save-button-text { font-size: 15px; font-weight: 700; color: var(--text-invert); }
+.page-save-button.disabled { opacity: 0.55; }
 
 /* Sheet overlay */
 .sheet-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; width: 100%; height: 100vh; background: rgba(12,19,19,0.36); z-index: 100; display: flex; align-items: flex-end; }
@@ -1522,10 +1980,14 @@
 .sheet-close { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); font-size: 20px; color: var(--muted); padding: 4px; }
 .sheet-body { flex: 1; padding: 0 18px 24px; }
 .sheet-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; padding: 14px 6px; }
+/* 「职业=其他」时出现的补充输入行：缩进 + 去掉上分隔，避免看成两个独立字段 */
+.sheet-row-sub { padding: 4px 6px 14px 6px; }
+.sheet-row-sub .sheet-row-label { font-size: 13px; color: var(--muted); }
 .sheet-row-label { font-size: 14px; color: var(--ink); flex-shrink: 0; }
 .sheet-row-right { display: flex; flex-direction: row; align-items: center; gap: 6px; }
 .sheet-row-value { font-size: 14px; color: var(--muted); }
 .sheet-row-arrow { font-size: 18px; color: var(--muted); }
+.sheet-row-readonly { flex: 1; text-align: right; color: var(--muted); font-size: 14px; }
 .sheet-input { flex: 1; min-width: 0; text-align: right; font-size: 14px; color: var(--muted); height: 24px; }
 .sheet-locked-note { padding: 0 6px 10px; text-align: right; font-size: 11px; color: var(--muted); }
 .sheet-suggestion-list { margin: -4px 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; }
@@ -1541,4 +2003,16 @@
 @media (max-width: 350px) { .scroll-content { padding-left: 12px; padding-right: 12px; } .section-card { padding: 13px 14px; } }
 .nav-back { width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; }
 .nav-back-icon { font-size: 16px; line-height: 1; color: var(--ink); }
+.intro-polish-action { min-height: 28px; padding: 4px 12px; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--sage-soft); color: var(--sage); font-size: 12px; font-weight: 700; }
+.intro-polish-action.disabled { opacity: 0.45; }
+.intro-polish-panel { height: auto; max-height: 82vh; }
+.intro-polish-body { max-height: 58vh; padding: 0 18px 18px; box-sizing: border-box; }
+.intro-polish-note { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.intro-polish-label { display: block; margin-top: 16px; color: var(--accent2); font-size: 12px; font-weight: 700; }
+.intro-polish-copy { display: block; margin-top: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink2); font-size: 13px; line-height: 1.6; }
+.intro-polish-proposed { background: var(--accent-bg); color: var(--ink); }
+.intro-polish-changes { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--warm); }
+.intro-polish-change-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; color: var(--ink2); font-size: 12px; font-weight: 700; }
+.intro-polish-change-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.intro-polish-change { color: var(--muted); font-size: 11px; line-height: 1.5; }
 </style>

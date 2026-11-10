@@ -1,0 +1,65 @@
+/**
+ * 资料卡成稿出口：只消费已确认个人成稿，先生成草稿再由用户显式采用。
+ * 不提交事实字段、照片或私人访谈原文。
+ */
+import { request } from './request.uts'
+import { pollTaskUntilTerminal } from './ai-profile.uts'
+
+export function createProfileCardIdempotencyKey(prefix: string): string {
+  return prefix + '-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 1000000))
+}
+
+export async function summarizeProfileCard(force: boolean = false, key: string = ''): Promise<any> {
+  const requestKey = key.trim().length >= 8 ? key.trim() : createProfileCardIdempotencyKey('profile-card-summarize')
+  return request({
+    url: '/ai/profile-card/summarize',
+    method: 'POST',
+    data: { force: force },
+    headers: { 'Idempotency-Key': requestKey }
+  })
+}
+
+export async function getProfileCardDraft(draftId: string = ''): Promise<any> {
+  const query: any = {}
+  if (draftId.trim() != '') query.draft_id = draftId.trim()
+  return request({ url: '/ai/profile-card/draft', method: 'GET', data: query })
+}
+
+function copyPayload(payload: any, optionalFields: any = null): any {
+  const result: any = {}
+  if (payload != null) {
+    const keys = Object.keys(payload)
+    for (let index = 0; index < keys.length; index++) result[keys[index]] = payload[keys[index]]
+  }
+  if (optionalFields != null) {
+    if (optionalFields.draft_id != null && String(optionalFields.draft_id).trim() != '') result.draft_id = String(optionalFields.draft_id)
+    if (optionalFields.source_revision_id != null) result.source_revision_id = Number(optionalFields.source_revision_id)
+    if (optionalFields.base_profile_revision != null) result.base_profile_revision = Number(optionalFields.base_profile_revision)
+    if (optionalFields.tag_apply_mode != null && String(optionalFields.tag_apply_mode).trim() != '') result.tag_apply_mode = String(optionalFields.tag_apply_mode)
+  }
+  return result
+}
+
+/** 旧后端拒绝新版约束时直接返回失败，禁止删掉草稿 ID 或版本约束重发。 */
+export async function applyProfileCardDraft(payload: any, key: string = '', optionalFields: any = null): Promise<any> {
+  const requestKey = key.trim().length >= 8 ? key.trim() : createProfileCardIdempotencyKey('profile-card-apply')
+  return request({
+    url: '/ai/profile-card/draft/apply',
+    method: 'POST',
+    data: copyPayload(payload, optionalFields),
+    headers: { 'Idempotency-Key': requestKey }
+  })
+}
+
+export function isProfileCardVersionConflict(response: any): boolean {
+  if (response == null) return false
+  if (Number(response.code) == 409) return true
+  const data = response.data != null ? response.data : {}
+  const detail = data.detail != null ? data.detail : data
+  const dataCode = String(detail.code ?? detail.error_code ?? '')
+  return dataCode == 'DRAFT_VERSION_CONFLICT' || dataCode == 'RESULT_STALE'
+}
+
+export async function waitForProfileCardTask(taskId: string, shouldContinue: (() => boolean) | null = null): Promise<any> {
+  return pollTaskUntilTerminal(taskId, 60, shouldContinue)
+}

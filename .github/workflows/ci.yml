@@ -5,28 +5,69 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+env:
+  # 后端契约基线:指向已推送到 xuanshiai 仓库 main 的提交;更新前端交付时须同步更新此 SHA。
+  BACKEND_CONTRACT_REPO: redspider-ai/xuanshiai
+  BACKEND_CONTRACT_SHA: c2c331c5694e71069ce5b095388bed2da704b541
 
 jobs:
-  build:
+  source:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      # xuanshiai 已转为组织内私有仓库，作业自带的 GITHUB_TOKEN 读不到它，
+      # 跨仓库检出必须用只读 PAT；未配置时契约测试按设计 SKIP，不冒充通过。
+      - name: Detect backend contract access
+        id: contract
+        env:
+          CONTRACT_TOKEN: ${{ secrets.XSA_BACKEND_CONTRACT_TOKEN }}
+        run: |
+          if [ -n "$CONTRACT_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::缺少 Actions secret XSA_BACKEND_CONTRACT_TOKEN，后端契约未检出，本轮跨仓库契约测试将 SKIP；补齐后自动恢复。"
+          fi
       - name: Checkout backend contract
+        if: steps.contract.outputs.available == 'true'
         uses: actions/checkout@v4
         with:
-          repository: kx-learn/xuanshiai
+          repository: ${{ env.BACKEND_CONTRACT_REPO }}
+          ref: ${{ env.BACKEND_CONTRACT_SHA }}
           path: backend-contract
-
+          token: ${{ secrets.XSA_BACKEND_CONTRACT_TOKEN }}
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
-
       - name: Install dependencies
         run: npm ci
-
+      - name: Record both repository HEADs
+        run: |
+          echo "frontend HEAD: $(git rev-parse HEAD)"
+          if [ "${{ steps.contract.outputs.available }}" = "true" ]; then
+            echo "backend contract HEAD: $(git -C backend-contract rev-parse HEAD)"
+            echo "backend contract requested: $BACKEND_CONTRACT_SHA"
+            test "$(git -C backend-contract rev-parse HEAD)" = "$BACKEND_CONTRACT_SHA"
+          else
+            echo "backend contract: 未检出（缺少 XSA_BACKEND_CONTRACT_TOKEN），请求基线 $BACKEND_CONTRACT_SHA"
+          fi
+      - name: Validate versioned authoritative documents
+        run: node scripts/authoritative-docs.cjs --check
       - name: Validate frontend source
         env:
           XSA_BACKEND_ROOT: backend-contract
         run: npm test
+      - name: Record manual release blocker
+        if: always()
+        run: |
+          echo "::warning::源码 CI 不认证发布：当前没有自动 HBuilderX 产物流水线，端侧验收仍为人工发布阻塞项。"
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## 发布验收未通过（人工阻塞）
+          本 workflow 仅验证源码与版本化权威文档，不生成或下载 mp-weixin 产物。
+          必须按 docs/HOW_TO_RUN.md#发布验收门禁 从目标前端 SHA 的干净检出用 HBuilderX 编译，
+          记录产物摘要，实际执行 verify:mp、test:artifact，并提供微信工具/真机及多宽度证据。
+          缺产物或任何 artifact SKIP 均失败；没有端侧记录不得发布。
+          EOF

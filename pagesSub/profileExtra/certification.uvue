@@ -26,12 +26,13 @@
 				<view class="cert-item" @tap="openStep('education')">
 					<view class="cert-icon-wrap" :class="{ 'cert-done': educationStatus == 2 }"><text class="cert-icon-text">学历</text></view>
 					<view class="cert-text-wrap"><text class="cert-label">学历认证</text><text class="cert-desc">{{ educationDescription }}</text></view>
-					<text v-if="educationStatus == 2" class="status passed">已认证</text><text v-else-if="educationStatus == 1" class="status reviewing">审核中</text><view v-else class="action-pill"><text>{{ educationStatus == 3 ? '重新提交' : '去认证' }}</text></view>
+					<text v-if="educationStatus == 2" class="status passed">已认证</text><text v-else-if="educationReviewing" class="status reviewing">审核中</text><view v-else class="action-pill"><text>{{ educationStatus == 3 ? '重新提交' : '去认证' }}</text></view>
 				</view>
 				<view class="cert-item">
 					<view class="cert-icon-wrap" :class="{ 'cert-done': avatarUploaded }"><text class="cert-icon-text">头像</text></view>
-					<view class="cert-text-wrap"><text class="cert-label">头像认证</text><text class="cert-desc">{{ avatarUploaded ? '本人真实照片已上传' : '上传本人真实照片' }}</text></view>
-					<text v-if="avatarUploaded" class="status uploaded">已上传</text><view v-else class="action-pill" :class="{ disabled: avatarUploading }" @tap="openStep('avatar')"><text>{{ avatarUploading ? '上传中…' : '上传图片' }}</text></view>
+					<view class="cert-text-wrap"><text class="cert-label">头像认证</text><text class="cert-desc">{{ faceVerified ? '人脸核验已通过' : (avatarUploaded ? '本人真实照片已上传，待人脸核验' : '上传本人真实照片') }}</text></view>
+					<text v-if="faceVerified" class="status uploaded">已认证</text>
+					<text v-else-if="avatarUploaded" class="status uploaded">待核验</text><view v-else class="action-pill" :class="{ disabled: avatarUploading }" @tap="openStep('avatar')"><text>{{ avatarUploading ? '上传中…' : '上传图片' }}</text></view>
 				</view>
 				<view class="cert-item" @tap="openStep('single_pledge')">
 					<view class="cert-icon-wrap" :class="{ 'cert-done': pledgeStatus == 2 }"><text class="cert-icon-text">承诺</text></view>
@@ -52,8 +53,8 @@
 
 		<template v-else-if="activeStep == 'education'">
 			<view class="detail-hero"><text class="hero-title">学历认证</text><view class="hero-underline"></view><text class="hero-subtitle">认证多一点，了解更安心</text></view>
-			<view v-if="educationStatus == 1 || educationStatus == 2" class="status-panel">
-				<view class="status-band"><text class="status-band-title">{{ educationStatus == 1 ? '审核中' : '审核已通过' }}</text><text class="status-band-copy">{{ educationStatus == 1 ? '平台正在核验您提交的学历材料' : '您的学历材料已通过平台审核' }}</text></view>
+			<view v-if="educationReviewing || educationStatus == 2" class="status-panel">
+				<view class="status-band"><text class="status-band-title">{{ educationReviewing ? '审核中' : '审核已通过' }}</text><text class="status-band-copy">{{ educationReviewing ? '平台正在核验您提交的学历材料' : '您的学历材料已通过平台审核' }}</text></view>
 				<view class="document-card"><image v-if="educationExistingImage != ''" class="document-preview" :src="mediaUrl(educationExistingImage)" mode="aspectFill" @tap="previewImage(educationExistingImage)"></image><view v-else class="document-placeholder"><text>学历材料</text></view><text class="document-meta">{{ selectedEducationText }} · {{ school || '毕业学校' }}</text><text class="privacy-copy">材料仅用于平台审核，未经允许不会对外公开。</text></view>
 			</view>
 			<view v-else class="education-form">
@@ -63,7 +64,7 @@
 				<view class="upload-section"><text class="upload-title">上传证书照片</text><view v-if="educationImage == ''" class="upload-tile" @tap="chooseEducationImage"><text class="upload-plus">＋</text><text>上传图片</text></view><view v-else class="upload-preview-wrap"><image class="upload-preview" :src="educationImage" mode="aspectFill" @tap="previewImage(educationImage)"></image><view class="remove-image" @tap="removeEducationImage"><text>删除重选</text></view></view></view>
 				<view class="privacy-note"><text class="privacy-title">温馨提示</text><text>仅供平台审核，未经您允许不会对外公开；证书姓名需清晰可见，并与实名认证一致。</text></view>
 			</view>
-			<view v-if="educationStatus != 1 && educationStatus != 2" class="bottom-action"><view class="primary-button" :class="{ disabled: educationSubmitting }" @tap="confirmEducation"><text>{{ educationSubmitting ? '提交中…' : '提交审核' }}</text></view></view>
+			<view v-if="!educationReviewing && educationStatus != 2" class="bottom-action"><view class="primary-button" :class="{ disabled: educationSubmitting }" @tap="confirmEducation"><text>{{ educationSubmitting ? '提交中…' : '提交审核' }}</text></view></view>
 		</template>
 
 		<template v-else-if="activeStep == 'single_pledge'">
@@ -90,7 +91,7 @@
 
 <script setup lang="uts">
 import { getCurrentInstance, nextTick } from 'vue'
-import { bindPhone, getAgreementVersions, getMeProfile, getUserCertifications, sendSms, submitEducationCertification, submitRealname, submitSinglePledgeCertification, uploadUserProfileMedia } from '@/api'
+import { bindPhone, getAgreementVersions, getMeProfile, getUserCertifications, sendSms, submitEducationCertification, submitRealname, submitSinglePledgeCertification, uploadUserProfileMedia, verifyFace } from '@/api'
 import { resolveMediaUrl } from '@/api/config.uts'
 
 const pageInstance = getCurrentInstance()
@@ -101,7 +102,13 @@ const realnameStatus = ref(0)
 const educationStatus = ref(0)
 const educationFailReason = ref('')
 const educationExistingImage = ref('')
+// status==1 只代表「有记录且处于待审」，并不代表用户真的提交过材料。
+// 后端返回的 material_submitted / material 才是实际提交凭据；缺失时必须回到表单，
+// 否则会出现"没提交过材料却显示审核中"的死页（无表单、无法重新提交）。
+const educationSubmitted = ref(false)
+const educationReviewing = computed(() => educationStatus.value == 1 && educationSubmitted.value)
 const avatarUploaded = ref(false)
+const faceVerified = ref(false)
 const pledgeStatus = ref(0)
 const pledgeFailReason = ref('')
 const pledgeMaterial = ref('')
@@ -151,7 +158,7 @@ const realnameDescription = computed(() => {
 	if (realnameStatus.value == 3 || realnameStatus.value == 5) return '实名认证未通过，请重新提交'
 	return '填写本人真实身份信息后提交审核'
 })
-const educationDescription = computed(() => educationStatus.value == 2 ? '学历信息已通过平台人工审核' : (educationStatus.value == 1 ? '学历材料正在等待平台审核' : (educationStatus.value == 3 ? (educationFailReason.value != '' ? educationFailReason.value : '审核未通过，可重新提交') : '提交学历、学校和证明图片')))
+const educationDescription = computed(() => educationStatus.value == 2 ? '学历信息已通过平台人工审核' : (educationReviewing.value ? '学历材料正在等待平台审核' : (educationStatus.value == 3 ? (educationFailReason.value != '' ? educationFailReason.value : '审核未通过，可重新提交') : '提交学历、学校和证明图片')))
 const pledgeDescription = computed(() => pledgeStatus.value == 2 ? '手写承诺已通过平台审核' : (pledgeStatus.value == 1 ? '单身承诺正在等待平台审核' : (pledgeStatus.value == 3 ? (pledgeFailReason.value != '' ? pledgeFailReason.value : '审核未通过，可重新签署') : (realnameStatus.value == 2 ? '手写签署当前单身状态承诺' : '完成实名认证后可签署'))))
 const messageOf = (res: any, fallback: string): string => res != null && res.message != null && String(res.message) != '' ? String(res.message) : fallback
 const mediaUrl = (value: string): string => resolveMediaUrl(value)
@@ -175,6 +182,7 @@ const refreshStatus = async () => {
 		phoneMasked.value = profile.phone_masked != null ? String(profile.phone_masked) : ''
 		realnameStatus.value = profile.realname_status != null ? Number(profile.realname_status) : (profile.realNameStatus == 'passed' ? 2 : (profile.realNameStatus == 'reviewing' ? 1 : 0))
 		avatarUploaded.value = profile.avatar != null && String(profile.avatar).trim() != ''
+		faceVerified.value = profile.face_verified != null && Number(profile.face_verified) == 1
 		meNickname.value = profile.nickname != null && String(profile.nickname).trim() != '' ? String(profile.nickname) : '用户'
 		meId.value = profile.id != null ? Number(profile.id) : (profile.user_id != null ? Number(profile.user_id) : 0)
 	}
@@ -187,6 +195,7 @@ const refreshStatus = async () => {
 			educationStatus.value = item.status != null ? Number(item.status) : 0
 			educationFailReason.value = item.fail_reason != null ? String(item.fail_reason) : ''
 			educationExistingImage.value = item.material != null ? String(item.material) : ''
+			educationSubmitted.value = item.material_submitted == true || educationExistingImage.value.trim() != ''
 			if (item.education != null && educationOptions.indexOf(String(item.education)) >= 0) { educationIndex.value = educationOptions.indexOf(String(item.education)); educationSelected.value = true }
 			if (item.school != null) school.value = String(item.school)
 		}
@@ -212,7 +221,26 @@ const chooseAvatarForCertification = () => {
 		const filePath = res != null && res.tempFilePaths != null && res.tempFilePaths.length > 0 ? String(res.tempFilePaths[0]) : ''
 		if (filePath == '') return
 		avatarUploading.value = true
-		try { const uploadRes = await uploadUserProfileMedia(filePath, 'avatar'); if (!uploadRes.success) { uni.showToast({ title: messageOf(uploadRes, '头像上传失败'), icon: 'none' }); return }; avatarUploaded.value = true; uni.showToast({ title: '头像已上传', icon: 'success' }) } finally { avatarUploading.value = false }
+		try {
+			const uploadRes = await uploadUserProfileMedia(filePath, 'avatar')
+			if (!uploadRes.success) { uni.showToast({ title: messageOf(uploadRes, '头像上传失败'), icon: 'none' }); return }
+			avatarUploaded.value = true
+			// 核验必须以服务端保存的头像 URL 为准，不能拿本地临时路径。
+			const profileRes = await getMeProfile()
+			const avatarUrl = profileRes != null && profileRes.success && profileRes.data != null && profileRes.data.avatar != null ? '' + profileRes.data.avatar : ''
+			if (avatarUrl == '') { uni.showToast({ title: '头像已上传，请稍后重试核验', icon: 'none' }); return }
+			const verifyRes = await verifyFace(avatarUrl)
+			if (verifyRes != null && verifyRes.success) {
+				faceVerified.value = true
+				uni.showToast({ title: '人脸核验通过', icon: 'success' })
+				return
+			}
+			const code = verifyRes != null ? Number(verifyRes.code) : 0
+			if (code == 503) uni.showToast({ title: '人脸核验暂未开通', icon: 'none' })
+			else if (code == 429) uni.showToast({ title: '今日人脸核验次数已用完', icon: 'none' })
+			else if (code == 422) uni.showToast({ title: '人脸与实名信息不匹配，请更换照片后重试', icon: 'none' })
+			else uni.showToast({ title: verifyRes != null && verifyRes.message != null ? '' + verifyRes.message : '人脸核验失败，请稍后重试', icon: 'none' })
+		} finally { avatarUploading.value = false }
 	} })
 }
 const openStep = (step: string) => {

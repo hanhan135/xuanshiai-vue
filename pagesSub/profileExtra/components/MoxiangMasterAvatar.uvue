@@ -1,0 +1,62 @@
+<template>
+	<view class="mm-avatar" :class="['mm-' + state, 'mm-avatar-' + size]">
+		<view class="mm-frame"></view>
+		<XsaZhiyuMark :size="avatarSize" :show-label="false" />
+		<view class="mm-status-dot"></view>
+	</view>
+</template>
+
+<script setup lang="uts">
+import XsaZhiyuMark from '@/components/XsaZhiyuMark.uvue'
+
+interface Props {
+	state?: string
+	size?: string
+}
+
+const props = withDefaults(defineProps<Props>(), {
+	state: 'idle',
+	size: 'large'
+})
+
+const size = computed(() : string => props.size == 'small' ? 'small' : 'large')
+const avatarSize = computed(() : string => size.value == 'small' ? '30px' : '82px')
+</script>
+
+<style scoped>
+.mm-avatar {
+	position: relative;
+	width: 96px;
+	height: 96px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+}
+.mm-avatar-small { width: 36px; height: 36px; }
+.mm-frame {
+	position: absolute;
+	width: 88px;
+	height: 88px;
+	border: 1px solid var(--accent-glow);
+	border-radius: 999px;
+	z-index: 1;
+}
+.mm-avatar-small .mm-frame { width: 34px; height: 34px; }
+.mm-status-dot {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--accent);
+	z-index: 2;
+}
+.mm-avatar-small .mm-status-dot { top: 1px; right: 1px; width: 6px; height: 6px; }
+.mm-thinking .mm-status-dot { background: var(--warm); animation: mm-dot-blink 1.2s ease-in-out infinite; }
+.mm-speaking .mm-status-dot { background: var(--accent2); animation: mm-dot-blink 0.8s ease-in-out infinite; }
+.mm-listening .mm-status-dot { background: var(--soft); animation: mm-dot-pulse 1s ease-in-out infinite; }
+@keyframes mm-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes mm-dot-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.6; } }
+</style>

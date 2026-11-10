@@ -6,6 +6,11 @@
 import { request } from './request.uts'
 import { mockMeProfile } from '@/mock'
 import { CURRENT_USER_ID_KEY, USE_MOCK, buildApiUrl, getAccessToken, setAuthTokens, clearAuthTokens } from './config.uts'
+// 退出登录要清掉缓存的己方头像，否则换号后聊天页仍显示上一个账号的头像。
+import { resetMyAvatarCache } from './message.uts'
+
+// 登录态自动续期入口（实现位于 request.uts，此处 re-export 供外部统一从 auth 模块引用）。
+export { refreshAccessToken } from './request.uts'
 
 const mockCertifications: any = {
   education: { kind: 'education', status: 0, material_submitted: false, submitted_at: null, reviewed_at: null, fail_reason: null, next_action: '提交认证材料' },
@@ -109,6 +114,7 @@ export async function loginByExistingAccount(phone: string, password: string) {
   })
   if (res.success && res.data != null && res.data.access_token != null) {
     setAuthTokens(String(res.data.access_token), res.data.refresh_token != null ? String(res.data.refresh_token) : '')
+    if (res.data.user_id != null) uni.setStorageSync(CURRENT_USER_ID_KEY, res.data.user_id)
   }
   return res
 }
@@ -148,6 +154,23 @@ export async function bindPhone(phone: string, code: string) {
   })
 }
 
+export function createPhoneChangeKey(): string {
+  return 'phone-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36)
+}
+
+/** 换绑手机号：旧号验证码或密码 + 新号验证码，成功后其他会话失效。 */
+export async function changePhone(newPhone: string, newCode: string, oldCode: string, password: string, idempotencyKey: string) {
+  const body: any = { new_phone: newPhone, new_code: newCode }
+  if (oldCode != '') body.old_code = oldCode
+  if (password != '') body.password = password
+  return request({
+    url: '/auth/phone?confirm=true',
+    method: 'PUT',
+    data: body,
+    headers: { 'Idempotency-Key': idempotencyKey }
+  })
+}
+
 /** Submit real-name information. The server returns status 1 while reviewing. */
 export async function submitRealname(realName: string, idCard: string) {
   return request({
@@ -165,6 +188,20 @@ export async function getUserCertifications() {
     method: 'GET',
     mockData: mockCertifications
   })
+}
+
+function normalizeUploadErrorDetail(detail: any): string {
+  if (detail == null) return '上传失败，请稍后重试'
+  if (typeof detail == 'string') {
+    const text = ('' + detail).trim()
+    return text != '' ? text : '上传失败，请稍后重试'
+  }
+  const message = detail.message != null ? detail.message : detail.msg
+  if (typeof message == 'string') {
+    const text = ('' + message).trim()
+    if (text != '') return text
+  }
+  return '上传失败，请稍后重试'
 }
 
 function uploadCertificationFile(path: string, filePath: string, formData: any) {
@@ -187,8 +224,7 @@ function uploadCertificationFile(path: string, filePath: string, formData: any) 
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve({ success: true, data, code: res.statusCode, message: 'success' })
         } else {
-          const detail = data != null && data.detail != null ? data.detail : '上传失败'
-          resolve({ success: false, data, code: res.statusCode, message: '' + detail })
+          resolve({ success: false, data, code: res.statusCode, message: normalizeUploadErrorDetail(data != null ? data.detail : null) })
         }
       },
       fail: (err: any) => {
@@ -245,5 +281,6 @@ export async function logout() {
     })
   } finally {
     clearAuthTokens()
+    resetMyAvatarCache()
   }
 }

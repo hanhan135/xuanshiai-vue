@@ -9,9 +9,9 @@ const mockSource = fs.readFileSync(path.join(root, 'mock/message.uts'), 'utf8')
 const parentApiSource = fs.readFileSync(path.join(root, 'api/parent.uts'), 'utf8')
 const messagePage = fs.readFileSync(path.join(root, 'pages/message/message.uvue'), 'utf8')
 const chatPage = fs.readFileSync(path.join(root, 'pagesSub/chat/detail.uvue'), 'utf8')
-const messageCenterPath = path.join(root, 'components/XsaMessageCenter.uvue')
-const applicationTabsPath = path.join(root, 'components/XsaApplicationTabs.uvue')
-const conversationListPath = path.join(root, 'components/XsaConversationList.uvue')
+const messageCenterPath = path.join(root, 'pagesSub/parent/components/XsaMessageCenter.uvue')
+const applicationTabsPath = path.join(root, 'pagesSub/parent/components/XsaApplicationTabs.uvue')
+const conversationListPath = path.join(root, 'pagesSub/parent/components/XsaConversationList.uvue')
 
 function includes(source, value, label) {
   assert.ok(source.includes(value), `${label} should include ${value}`)
@@ -84,6 +84,10 @@ for (const name of [
   'getMessageList',
   'getChatMessages',
   'sendMessage',
+  'markConversationRead',
+  'setChatSessionPinned',
+  'hideChatSession',
+  'restoreChatSession',
   'uploadChatMedia',
   'revokeMessage',
   'getContactExchanges',
@@ -109,7 +113,10 @@ includes(apiSource, "url: '/chat/sessions/' + sessionId + '/messages'", 'chat hi
 includes(apiSource, 'data: { page: 1, page_size: 50 }', 'chat history uses the supported FastAPI page contract')
 includes(apiSource, 'data: { type: 1, content: content.trim(), client_message_id: resolvedClientMessageId }', 'text send carries the stable idempotency key')
 includes(apiSource, "if (subjectContext.mode == 'parent') {", 'ordinary chat rejects unsupported parent mode')
-includes(apiSource, 'const peerAvatar = sessionRes.data.target?.avatar ?? DEFAULT_PEER_AVATAR', 'history reuses the authorized session lookup result')
+includes(apiSource, 'const peerAvatar = resolvePeerAvatar(sessionRes.data.target)', 'history reuses the authorized session lookup result and resolves the peer avatar through the shared resolver')
+includes(apiSource, 'function resolvePeerAvatar(target: any): string {', 'peer avatar has a single resolver shared by list and chat')
+includes(apiSource, "if (gender == 2) return DEFAULT_PEER_AVATAR_FEMALE", 'peer avatar fallback is gender-aware, never a hardcoded female portrait')
+includes(apiSource, 'const myAvatar = await getMyAvatarUrl()', 'own avatar comes from the authenticated profile, not a hardcoded portrait')
 excludes(apiSource, 'const session = await findRealChatSession(userId)', 'history does not repeat the session-list request')
 excludes(apiSource, "url: '/chat/sessions/' + userId + '/messages'", 'peer user id is never used as a chat session id')
 includes(parentApiSource, "getApplications('protected', subject)", 'parent applications require protected scope and child subject')
@@ -308,7 +315,7 @@ const messageCenter = fs.readFileSync(messageCenterPath, 'utf8')
 const applicationTabs = fs.readFileSync(applicationTabsPath, 'utf8')
 const conversationList = fs.readFileSync(conversationListPath, 'utf8')
 includes(messagePage, 'const openEmotionLab = () =>', 'message page exposes the emotion-lab navigation action')
-includes(messagePage, "url: '/pages/emotion-lab/emotion-lab'", 'message page uses the registered emotion-lab route')
+includes(messagePage, "url: '/pagesSub/emotionLab/emotion-lab'", 'message page uses the registered emotion-lab route')
 excludes(messagePage, "openHint('情感实验室", 'emotion-lab shortcut must not show a dead-end hint')
 includes(messageCenter, "mode?: 'standard' | 'parent'", 'standard and parent modes')
 includes(messageCenter, 'showStandardShortcuts', 'role-aware shortcut visibility')
@@ -359,7 +366,7 @@ includes(applicationTabs, 'protected-avatar-mark', 'parent applications should r
 includes(conversationList, ':protect-photo="protectPhotos"', 'parent conversations should protect each avatar')
 includes(messageCenter, '@click="openEmotionLab"', 'emotion-lab shortcut binds the navigation action')
 includes(messageCenter, 'const openEmotionLab = () =>', 'emotion-lab shortcut exposes a navigation action')
-includes(messageCenter, "url: '/pages/emotion-lab/emotion-lab'", 'emotion-lab shortcut uses the registered page')
+includes(messageCenter, "url: '/pagesSub/emotionLab/emotion-lab'", 'emotion-lab shortcut uses the registered page')
 excludes(messageCenter, '情感实验室尚未完成账号与结果绑定', 'emotion-lab shortcut is not a dead-end hint')
 excludes(messageCenter, "openHint('情感实验室", 'fake emotion-lab success hint')
 excludes(messageCenter, '// mock 容错', 'application success-on-error fallback')
@@ -383,7 +390,7 @@ includes(chatPage, 'message.protectedContent', 'parent detail renders a protecte
 includes(chatPage, "{ 'parent-mode': isParentMode }", 'parent chat enables its accessibility variant')
 includes(chatPage, '.chat-page.parent-mode .tool-btn', 'parent chat enlarges icon controls')
 includes(chatPage, 'min-height: 48px', 'parent chat controls expose 48px targets')
-includes(chatPage, "url: '/pages/parent/user-detail?id=' + userId.value", 'parent chat profile uses the gated parent detail')
+includes(chatPage, "url: '/pagesSub/parent/user-detail?id=' + userId.value", 'parent chat profile uses the gated parent detail')
 includes(chatPage, 'v-if="!message.isMine && isParentMode"', 'parent chat does not bind the peer clear avatar')
 includes(chatPage, "res.code == 'CHAT_NOT_ALLOWED'", 'detail and send failures close the permission gate')
 assert.match(chatPage, /message\.status\s*=\s*'failed'/, 'failed sends should update only their own message state')
@@ -406,3 +413,43 @@ const messageItem = fs.readFileSync(path.join(root, 'components/XsaMessageItem.u
 includes(messageItem, 'v-if="protectPhoto"', 'parent conversations render a protected avatar placeholder')
 
 console.log('消息闭环行为与契约测试通过')
+
+// P0-02：真实环境不得用示例申请或演示同意掩盖真实状态
+const indexPageSource = fs.readFileSync(path.join(root, 'pages/index/index.uvue'), 'utf8')
+excludes(indexPageSource, '演示对方同意', 'home page must not offer a demo "other side agrees" action')
+excludes(indexPageSource, 'simulateMatch', 'home page must not simulate a match locally')
+excludes(indexPageSource, 'matchedVisible', 'home page must not render a locally forged match state')
+includes(indexPageSource, 'closeApplySuccess', 'apply success modal must only acknowledge the real pending state')
+assert.match(
+  indexPageSource,
+  /const onApplySheetSuccess = \(payload: any\) => \{\s*\n\s*applyVisible\.value = false/,
+  'apply success must not mutate any local relationship state'
+)
+excludes(messagePage, '苏晚晴', 'application load failure must not fall back to a hardcoded sample application')
+excludes(messagePage, '给演示数据', 'application load failure must not fabricate demo applications')
+includes(messagePage, 'applicationsError', 'application load failure must surface a retryable error state')
+assert.match(
+  messagePage,
+  /applicationsError\.value = '申请列表加载失败，请重试'/,
+  'thrown application load errors must be reported instead of silently ignored'
+)
+assert.match(
+  messagePage,
+  /if \(applicationsError\.value != ''\) return applicationsError\.value/,
+  'a failed application load must not be displayed as "暂无新申请"'
+)
+
+
+const applicationsPage = fs.readFileSync(path.join(root, 'pagesSub/profileExtra/applications.uvue'), 'utf8')
+includes(applicationsPage, "getApplicationPage('incoming'", 'incoming applications use the shared paged API')
+includes(applicationsPage, "getApplicationPage('outgoing'", 'outgoing applications use the shared paged API')
+includes(applicationsPage, 'incomingTotal.value = Number(data.total', 'incoming count uses backend total')
+includes(applicationsPage, 'outgoingTotal.value = Number(data.total', 'outgoing count uses backend total')
+includes(applicationsPage, 'item.message', 'application card preserves the backend note')
+includes(applicationsPage, "item.statusCode == 'pending'", 'only pending applications expose response actions')
+includes(applicationsPage, "item.statusCode = 'accepted'", 'accept response updates the normalized status')
+includes(applicationsPage, "Number(res.code) == 409) await loadApplications()", 'stale response conflicts reload authoritative status')
+includes(applicationsPage, 'getChatSessionId(peerId)', 'chat action resolves a server-owned session first')
+includes(applicationsPage, 'openProfile(item.userId)', 'application cards open the full profile')
+excludes(applicationsPage, 'createMatchedConversation(', 'application response must not create a local conversation')
+excludes(applicationsPage, 'userId=' + ' + Number(session.data.id)', 'chat navigation must not treat a session id as a peer id')

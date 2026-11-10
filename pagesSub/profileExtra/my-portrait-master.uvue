@@ -1,17 +1,26 @@
 <template>
 	<view class="mm-page">
 		<!-- 导航栏 -->
-		<view class="mm-nav" :style="{ paddingTop: navPadTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px' }">
+		<view class="mm-nav" :style="{ paddingTop: navPadTop + 'px', paddingRight: (menuButtonSpacing + 8) + 'px', zIndex: roleplayVisible ? 1 : 100 }">
 			<view class="mm-nav-side mm-nav-back" @tap="navBack">
 				<text class="mm-nav-back-text">‹</text>
 			</view>
 			<text class="mm-nav-title" :style="{ top: navPadTop + 'px' }">与知遇聊聊</text>
-			<view class="mm-nav-side"></view>
+			<view class="mm-nav-side mm-roleplay-entry" @tap="openRoleplay"><text class="mm-roleplay-entry-text">角色扮演</text></view>
 		</view>
 
+		<MoxiangContinuousPanel v-if="continuousFlow && continuousState != null && continuousState.consent_granted" :state="continuousState" @open="openContinuousPortrait" />
+		<view v-if="continuousFlow && stateError != ''" class="mm-sync-error" @tap="retryConnect">
+			<text class="mm-state-sub">{{ stateError }} · 点击重试恢复</text>
+		</view>
+		<view v-if="continuousFlow && continuousState != null && !continuousState.consent_granted" class="mm-entry-wrap">
+			<text class="mm-state-text">从你愿意分享的开始</text>
+			<text class="mm-state-sub">授权后，知遇会记住对话并分别整理你自己和伴侣偏好。整份确认前不会成为正式画像；授权与数据可在档案中管理。</text>
+			<view class="mm-state-btn" @tap="grantConsentFlow"><text class="mm-state-btn-text">同意并开始聊聊</text></view>
+		</view>
 		<!-- Phase 2 P2-02/P2-04 —— 双阶段卡(墨相师首页,no buildMode 时展示)。
 			移除顶部主体 Tab;每张卡只打开自己的独立会话。 -->
-		<view v-if="!buildMode && stateResponse != null" class="mm-journey-cards">
+		<view v-if="!continuousFlow && !buildMode && stateResponse != null" class="mm-journey-cards">
 			<view class="mm-stage-card" :class="stageCardClass('personal')" @tap="onEnterSubject('personal')">
 				<text class="mm-stage-card-title">我的真实画像</text>
 				<text class="mm-stage-card-sub">{{ stageCardSub('personal') }}</text>
@@ -38,7 +47,7 @@
 
 		<!-- 兼容旧入口:进入某主体后,展示 MoxiangEntryState(授权/首次/恢复)。
 			仅在用户已点击双阶段卡、但 buildMode 仍未就绪时显示。 -->
-		<view v-if="!buildMode && stateResponse != null && pendingSubject != ''" class="mm-entry-wrap">
+		<view v-if="!continuousFlow && !buildMode && stateResponse != null && pendingSubject != ''" class="mm-entry-wrap">
 			<MoxiangEntryState :state="stateResponse" :subject="pendingSubject" :errorMessage="stateError" @grant-consent="grantConsentFlow" @start-chat="startChatFlow" @continue-chat="continueChatFlow" @retry="retryConnect" />
 			<view class="mm-entry-back" @tap="onBackToCards">
 				<text class="mm-entry-back-text">← 返回两幅画像</text>
@@ -46,7 +55,7 @@
 		</view>
 
 		<!-- P1-D 收尾：网络/授权错误兜底(state 拉取失败但用户已 connected 时,允许重试回到 entry) -->
-		<view v-if="!buildMode && stateResponse == null && stateError != ''" class="mm-entry-wrap">
+		<view v-if="!continuousFlow && !buildMode && stateResponse == null && stateError != ''" class="mm-entry-wrap">
 			<view class="mm-state">
 				<text class="mm-state-text">暂时连不上{{ masterRoleName }}</text>
 				<text class="mm-state-sub">{{ stateError }}</text>
@@ -58,22 +67,22 @@
 
 		<!-- 六维理解进度由旅程 WebSocket 实时驱动。 -->
 		<MoxiangProgressPanel
-			v-if="buildMode && currentSubjectSummary != null"
+			v-if="!continuousFlow && buildMode && currentSubjectSummary != null"
 			:metrics="currentSubjectSummary"
 			:livePercent="liveProgressPercent"
 			:extractionStatus="currentExtractionStatus"
 		/>
 		<!-- 邀请卡仅在服务端声明的 building 阶段出现，且始终绑定其主体。 -->
 		<MoxiangBuildInviteCard
-			v-if="buildMode && inviteVisibleInStage && currentPendingInvite != null"
+			v-if="!continuousFlow && buildMode && inviteVisibleInStage && currentPendingInvite != null"
 			:invite="currentPendingInvite"
 			:busy="inviteBusy"
 			@accept="acceptInvite"
 			@snooze="snoozeInvite"
 		/>
 		<!-- 角色形象区 -->
-		<view class="mm-hero" :class="'mm-hero-' + masterState">
-			<MoxiangMasterAvatar :state="masterState" size="large" />
+		<view class="mm-hero" :class="['mm-hero-' + masterState, { 'mm-hero-compact': continuousFlow }]">
+			<MoxiangMasterAvatar :state="masterState" :size="continuousFlow ? 'small' : 'large'" />
 			<text class="mm-hero-name">{{ masterRoleName }}</text>
 			<text class="mm-hero-sub">{{ statusLabel }}</text>
 		</view>
@@ -101,6 +110,8 @@
 		<view v-else-if="sessionStarted" class="mm-body">
 			<!-- 消息流 -->
 			<scroll-view scroll-y class="mm-flow" enhanced :show-scrollbar="false" :scroll-into-view="scrollAnchor" :scroll-with-animation="true">
+				<view v-if="continuousFlow && historyBeforeId != null" class="mm-history-more" @tap="loadOlderContinuousHistory"><text class="mm-state-sub">{{ historyLoading ? '正在恢复…' : '查看更早的对话' }}</text></view>
+				<view v-if="!continuousFlow && legacyHistoryCursors[activeSessionBySubject[currentSubject]] != null" class="mm-history-more" @tap="loadOlderLegacyHistory"><text class="mm-state-sub">{{ legacyHistoryBusy ? '正在恢复…' : '查看更早的对话' }}</text></view>
 				<view v-if="visibleMessages.length == 0" class="mm-empty">
 					<text class="mm-empty-title">从一句近况开始</text>
 					<text class="mm-empty-sub">说说最近在想什么，{{ masterRoleName }}会帮你慢慢整理。</text>
@@ -113,7 +124,7 @@
 						</view>
 						<view class="mm-bubble mm-bubble-master">
 							<text class="mm-bubble-text">{{ msg.text }}</text>
-							<view v-if="msg.canListen && msg.text != ''" class="mm-listen" @tap="playTTS(msg.text)">
+							<view v-if="msg.canListen && voiceEnabled && msg.text != ''" class="mm-listen" @tap="playTTS(msg.text)">
 								<text class="mm-listen-text">听它读</text>
 							</view>
 						</view>
@@ -139,7 +150,7 @@
 					</view>
 
 					<!-- 确认卡片(建构模式) -->
-					<view v-if="msg.role == 'card' && msg.card != null" class="mm-msg mm-msg-left">
+					<view v-if="!continuousFlow && msg.role == 'card' && msg.card != null" class="mm-msg mm-msg-left">
 						<view class="mm-msg-avatar">
 						<MoxiangMasterAvatar state="thinking" size="small" />
 						</view>
@@ -191,6 +202,13 @@
 			</view>
 
 			<!-- 语音模式 TTS 播报提示 -->
+            <view v-if="continuousFlow && transcriptPreviewVisible" class="mm-transcript-preview">
+				<textarea class="mm-transcript-input" v-model="transcriptPreview.text" maxlength="2000" />
+				<view class="mm-transcript-actions">
+					<view class="mm-card-btn mm-card-btn-primary" @tap="confirmTranscript"><text class="mm-card-btn-text-primary">确认发送</text></view>
+					<view class="mm-card-btn" @tap="cancelTranscript"><text class="mm-card-btn-text">取消</text></view>
+				</view>
+			</view>
 			<view v-if="lastTTSUrl != ''" class="mm-tts-bar">
 				<text class="mm-tts-label">{{ masterRoleName }}说完了</text>
 				<view class="mm-tts-replay" @tap="replayTTS">
@@ -239,7 +257,7 @@
 						<text class="mm-voice-btn-text">{{ voiceActionLabel }}</text>
 					</view>
 					<view
-						v-if="masterState == 'idle' && lastReplyText != ''"
+						v-if="voiceEnabled && masterState == 'idle' && lastReplyText != ''"
 						class="mm-listen-btn"
 						@tap="requestTTS"
 					>
@@ -249,23 +267,28 @@
 			</view>
 		</view>
 		<XsaMoxiangTrace :trace="devMoxiangTrace" />
+		<MoxiangRoleplaySheet v-if="roleplayVisible" @close="closeRoleplay" />
 	</view>
 </template>
 
 <script setup lang="uts">
-import MoxiangMasterAvatar from '@/components/MoxiangMasterAvatar.uvue'
-import MoxiangEntryState from '@/components/moxiang/MoxiangEntryState.uvue'
-import MoxiangProgressPanel from '@/components/moxiang/MoxiangProgressPanel.uvue'
-import MoxiangBuildInviteCard from '@/components/moxiang/MoxiangBuildInviteCard.uvue'
-import XsaMoxiangTrace from '@/components/XsaMoxiangTrace.uvue'
-import { MasterWS, MASTER_ROLE_NAME, ConfirmCardPayload, ConfirmCardItem, BuildInvitePayload, JourneyStage, JourneyProgress, ExtractionStatus } from '@/api/voice-master-ws.uts'
+import MoxiangRoleplaySheet from '@/pagesSub/profileExtra/components/moxiang/MoxiangRoleplaySheet.uvue'
+import MoxiangMasterAvatar from '@/pagesSub/profileExtra/components/MoxiangMasterAvatar.uvue'
+import MoxiangEntryState from '@/pagesSub/profileExtra/components/moxiang/MoxiangEntryState.uvue'
+import MoxiangProgressPanel from '@/pagesSub/profileExtra/components/moxiang/MoxiangProgressPanel.uvue'
+import MoxiangBuildInviteCard from '@/pagesSub/profileExtra/components/moxiang/MoxiangBuildInviteCard.uvue'
+import MoxiangContinuousPanel from '@/pagesSub/profileExtra/components/moxiang/MoxiangContinuousPanel.uvue'
+import XsaMoxiangTrace from '@/pagesSub/profileExtra/components/XsaMoxiangTrace.uvue'
+import { MasterWS, MASTER_ROLE_NAME, ConfirmCardPayload, ConfirmCardItem, BuildInvitePayload, JourneyStage, JourneyProgress, ExtractionStatus, classifyMasterWSError } from '@/api/voice-master-ws.uts'
 import { resolveMediaUrl } from '@/api/config.uts'
-import { ProfileSubject, getProfileDraft, patchProfileDraft, fieldAction, getAiConsents, grantProfileTextConsent } from '@/api/ai-profile.uts'
+import { ProfileSubject, getProfileDraft, patchProfileDraft, fieldAction, getAiConsents, grantProfileTextConsent, synthesizeSpeech, genIdempotencyKey } from '@/api/ai-profile.uts'
 import { getMoxiangState, getSessionTurns, getMoxiangArchive, MoxiangStateResponse, MoxiangSubjectSummary, MoxiangTurn, MoxiangArchiveResponse, ArchiveSubject } from '@/api/ai-moxiang.uts'
+import { getContinuousMoxiangState, getContinuousTurns, buildContinuousPortrait, ContinuousMoxiangState } from '@/api/ai-moxiang.uts'
 import { displayFieldValue } from '@/utils/profile-field-display.uts'
 import { categoryLabel } from '@/utils/moxiang-dimension.uts'
 import { loadMoxiangTrace } from '@/utils/moxiangTrace.uts'
 import { PcmPlayer } from '@/utils/pcm-player.uts'
+import { getAiCapabilities } from '@/api/ai-capabilities.uts'
 
 // ===== 导航与安全区域 =====
 const systemInfo = uni.getSystemInfoSync()
@@ -273,6 +296,15 @@ const statusBarHeight = systemInfo.statusBarHeight != null ? systemInfo.statusBa
 const menuButtonInfo = uni.getMenuButtonBoundingClientRect()
 const navPadTop = menuButtonInfo != null && menuButtonInfo.top > statusBarHeight ? menuButtonInfo.top : statusBarHeight + 6
 const menuButtonSpacing = menuButtonInfo != null ? (systemInfo.windowWidth - menuButtonInfo.left) : 8
+
+onMounted(async () => {
+	try {
+		const res = await getAiCapabilities()
+		voiceEnabled.value = res != null && res.success == true && res.data != null && res.data.voice == true
+	} catch (e) {
+		voiceEnabled.value = false
+	}
+})
 
 // ===== 状态 =====
 // 产品能力仍叫“墨相”，对话中的 AI 角色使用独立身份名，避免把 LLM
@@ -283,13 +315,26 @@ const connectError = ref('')
 const sessionStartFailed = ref(false)
 const masterState = ref('idle')  // idle / thinking / listening / speaking
 const inputMode = ref('text')    // text / voice
+const voiceEnabled = ref(false)
 const inputText = ref('')
 const partialText = ref('')
-const lastReplyText = ref('')
-const lastTTSUrl = ref('')
-const lastTTSDuration = ref(0)
-const scrollAnchor = ref('')
+const transcriptPreview = ref<{ transcriptId: string, clientTurnId: string, sessionId: string, text: string }>({ transcriptId: '', clientTurnId: '', sessionId: '', text: '' })
+const transcriptPreviewVisible = ref(false)
 const messages = ref([] as any[])
+// 新入口默认连续对话；显式 legacy 只用于既有草稿兼容。
+const continuousFlow = ref(true)
+const continuousState = ref<ContinuousMoxiangState | null>(null)
+const historyBeforeId = ref<string | null>(null)
+const historyLoading = ref(false)
+const continuousActionBusy = ref(false)
+// 超时不能换键或更换原 refresh 参数；不同主体各自保留未决操作。
+const continuousPendingBuilds = new Map<string, { refresh: boolean, key: string }>()
+let continuousPollTimer = -1
+let continuousPollGeneration = 0
+let continuousSnapshotSeq = 0
+let continuousLoadSeq = 0
+let masterPageVisible = true
+let consentBusy = false
 
 // ===== 建构模式状态 =====
 const buildMode = ref(false)
@@ -312,6 +357,7 @@ let idealPartnerDraft: ConfirmCardPayload | null = null
 let personalCard: ConfirmCardPayload | null = null
 let idealPartnerCard: ConfirmCardPayload | null = null
 const visibleMessages = computed((): any[] => {
+	if (continuousFlow.value) return messages.value.filter((msg: any) => msg.role != 'card')
 	const subject = currentSubject.value
 	return messages.value.filter((msg: any) => msg.subject == subject)
 })
@@ -373,10 +419,11 @@ const currentPendingInvite = computed((): InviteView | null => {
  * subject 在回调里再次校验，防止用户切换主体后误打开另一幅画像。
  */
 function maybePromptBuild(subject: ProfileSubject, inviteId: string = '') {
+	if (continuousFlow.value) return
 	if (buildPromptShown.value[subject]) return
 	if (subject != currentSubject.value) return
 	buildPromptShown.value[subject] = true
-	const title = subject == 'personal' ? '我的墨相可以开始构建了' : '愿遇之相可以开始构建了'
+	const title = subject == 'personal' ? '我的真实画像可以开始构建了' : '期待的长期关系可以开始构建了'
 	uni.showModal({
 		title,
 		content: '我们已经收集到足够内容。现在开始构建画像吗？构建后会先给你一份可审阅的预览，确认后才会发布。',
@@ -418,6 +465,7 @@ function cardBySubject(subject: ProfileSubject): ConfirmCardPayload | null {
 }
 
 function sessionIdForSubject(subject: ProfileSubject): string {
+	if (continuousFlow.value) return String(continuousState.value?.session_id ?? '')
 	if (stateResponse.value == null) return ''
 	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
 	if (summary.sessionId == null) return ''
@@ -464,6 +512,21 @@ let audioContext: any = null
 let chunkSeq = 0
 let isRecording = false
 let typingMsgId = 0
+// 连接世代号：旧连接迟到的回调（journey_ready/close 等）不得改动新连接状态。
+let connectionSeq = 0
+// 每个主体最后一次 journey_ready 绑定的服务端会话，onShow 时与 state 核对。
+const activeSessionBySubject = ref<{ personal: string; ideal_partner: string }>({ personal: '', ideal_partner: '' })
+// 播报合成互斥：同一时刻只允许一条消息合成/播放，重复点击不并发合成多份。
+const ttsBusy = ref(false)
+// 最新一条知遇回复：listen 复用与「听它读」按钮的判定依据。
+const lastReplyText = ref('')
+// 最近一次合成音频：重播复用同一 URL，避免重复合成。
+const lastTTSUrl = ref('')
+const lastTTSDuration = ref(0)
+// 消息流锚点：scroll-into-view 需要稳定的响应式目标，直接改 DOM 不生效。
+const scrollAnchor = ref('')
+// 页面存活：离开页面后迟到的合成回调不再更新界面。
+let masterPageAlive = true
 
 // ===== 实时语音 v2（SenseAudio,开发开关默认关;开启后走 PCM 流式播放链路）=====
 const MOXIANG_REALTIME_V2_DEV = false
@@ -472,7 +535,7 @@ let currentGenerationId = ''
 let lastProgressReportMs = 0
 const pcmPlayer = new PcmPlayer({
 	onStarted: (generationId: string) => {
-		if (masterState.value == 'listening') masterState.value = 'idle'
+		masterState.value = 'speaking'
 		currentGenerationId = generationId
 	},
 	onProgress: (generationId: string, playedMs: number) => {
@@ -484,12 +547,12 @@ const pcmPlayer = new PcmPlayer({
 	},
 	onFinished: (generationId: string, status: string, playedMs: number) => {
 		if (generationId != currentGenerationId && status != 'interrupted') return
+		if (status == 'completed' || status == 'interrupted' || status == 'failed') masterState.value = 'idle'
 		currentGenerationId = ''
 		ws?.sendPlaybackFinished(generationId, status, playedMs)
 		// completed 后不本地抢跑:等服务端 voice_ready 自动开麦
-	}
+	},
 })
-
 // ===== 计算属性 =====
 const statusLabel = computed(() : string => {
 	if (connecting.value) return '正在连接'
@@ -525,7 +588,7 @@ function stageCardClass(subject: ProfileSubject): string {
 function stageCardSub(subject: ProfileSubject): string {
 	if (stateResponse.value == null) return '加载中...'
 	const isPartner = subject == 'ideal_partner'
-	if (isPartner && !stateResponse.value.canStartIdealPartner) return '请先完成我的墨相'
+	if (isPartner && !stateResponse.value.canStartIdealPartner) return '请先完成我的真实画像'
 	const summary = isPartner ? stateResponse.value.idealPartner : stateResponse.value.personal
 	if (summary == null) return '还没有开始'
 	if (summary.publishedRevisionId != null) return '已发布'
@@ -574,6 +637,8 @@ async function loadPortraitArchive() {
 
 // ===== 连接 =====
 function connectWS() {
+	if (!masterPageVisible || !masterPageAlive) return
+	const connId = ++connectionSeq
 	// A retry creates a fresh socket, but the local message stream belongs to the
 	// page/session and must survive the transport replacement.
 	if (ws != null) {
@@ -584,9 +649,23 @@ function connectWS() {
 	connectError.value = ''
 	sessionStartFailed.value = false
 	ws = new MasterWS({
+		onContinuousState: (state: ContinuousMoxiangState) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			continuousSnapshotSeq++
+			applyContinuousState(state)
+		},
 		onSubjectChanged: (subject: ProfileSubject, sessionId?: string) => {
+			if (connId != connectionSeq) return
+			if (continuousFlow.value) return
 			currentSubject.value = subject
+			// 主体切换后旧回复不再代表服务端当前回复：清缓存并停止旧音频，
+			// 避免对另一主体误用 listen 播报错内容。
+			lastReplyText.value = ''
+			stopAudioPlayback()
 			setSessionIdForSubject(subject, String(sessionId ?? ''))
+			if (sessionId != null && String(sessionId) != '') {
+				activeSessionBySubject.value[subject] = String(sessionId)
+			}
 			removeVisibleCardMessages()
 			const cached = cardBySubject(subject)
 			if (cached != null) addCardMessage(cached)
@@ -604,6 +683,7 @@ function connectWS() {
 			}
 		},
 		onJourneyReady: (subject: ProfileSubject, sessionId: string, journeyStage: JourneyStage, resumed: boolean, protocolVersion?: number) => {
+			if (connId != connectionSeq) return
 			connecting.value = false
 			// 实时语音 v2:仅当服务端确认 protocol_version=2 才启用 PCM 播放链路。
 			realtimeV2Active = protocolVersion != null && protocolVersion == 2
@@ -613,7 +693,14 @@ function connectWS() {
 			currentSubject.value = subject
 			sessionStarted.value = true
 			buildMode.value = true
+			if (continuousFlow.value) {
+				activeSessionBySubject.value.personal = sessionId
+				if (continuousState.value != null) continuousState.value.session_id = sessionId
+				refreshContinuousState()
+				return
+			}
 			if (sessionId != '') {
+				activeSessionBySubject.value[subject] = sessionId
 				setSessionIdForSubject(subject, sessionId)
 				loadSessionHistory(sessionId, null, subject)
 			}
@@ -640,10 +727,13 @@ function connectWS() {
 			}
 		},
 		onExtractionStatus: (status: ExtractionStatus) => {
+			if (connId != connectionSeq) return
+			if (continuousFlow.value) { refreshContinuousState(); return }
 			if (status.subject == 'personal') personalExtractionStatus.value = status.status
 			else idealPartnerExtractionStatus.value = status.status
 		},
 		 onJourneyProgress: (progress: JourneyProgress) => {
+			if (connId != connectionSeq || continuousFlow.value) return
 			if (stateResponse.value == null) return
 			const summary = progress.subject == 'ideal_partner'
 				? stateResponse.value.idealPartner
@@ -661,6 +751,7 @@ function connectWS() {
 			}
 		},
 		onBuildInvite: (invite: BuildInvitePayload) => {
+			if (continuousFlow.value || connId != connectionSeq) return
 			// P1-D 收尾：journey_stage≠building 时静默忽略,
 			// 不在 chatting/ready/published 期间意外弹出邀请卡。
 			if (invite.journey_stage != 'building') {
@@ -697,6 +788,7 @@ function connectWS() {
 			}
 		},
 			onBuildInviteResolved: (resolution) => {
+			if (connId != connectionSeq || continuousFlow.value) return
 			if (pendingInvite.value != null && pendingInvite.value.inviteId == resolution.invite_id) {
 				if (resolution.resolution == 'accepted') {
 					pendingInvite.value = null
@@ -712,15 +804,44 @@ function connectWS() {
 			}
 		},
 		onPartialTranscript: (text: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			partialText.value = text
 		},
 		onFinalTranscript: (text: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible || continuousFlow.value) return
 			partialText.value = ''
-			// 把用户语音转写加入消息流
 			addMessage('user', text)
 		},
+		onTranscriptPreview: (transcriptId: string, clientTurnId: string, sessionId: string, text: string, _expiresIn: number) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			partialText.value = ''
+			transcriptPreview.value = { transcriptId: transcriptId, clientTurnId: clientTurnId, sessionId: sessionId, text: text }
+			transcriptPreviewVisible.value = true
+			masterState.value = 'idle'
+		},
+		onTranscriptConfirmed: (transcriptId: string, _clientTurnId: string, sourceId: string, text: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			if (transcriptPreview.value.transcriptId != transcriptId) return
+			transcriptPreviewVisible.value = false
+			transcriptPreview.value = { transcriptId: '', clientTurnId: '', sessionId: '', text: '' }
+			if (sourceId != '' && !messages.value.some((msg: any) => msg.sourceId == sourceId)) addMessageWithSource('user', text, sourceId)
+		},
+		onTranscriptCancelled: (transcriptId: string) => {
+			if (transcriptPreview.value.transcriptId == transcriptId) {
+				transcriptPreviewVisible.value = false
+				transcriptPreview.value = { transcriptId: '', clientTurnId: '', sessionId: '', text: '' }
+			}
+		},
+		onTranscriptExpired: (transcriptId: string) => {
+			if (transcriptPreview.value.transcriptId == transcriptId) {
+				transcriptPreviewVisible.value = false
+				transcriptPreview.value = { transcriptId: '', clientTurnId: '', sessionId: '', text: '' }
+			}
+		},
 		onAIThinking: () => {
-			masterState.value = 'thinking'
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			const previousTyping = findMsgIndex(typingMsgId)
+			if (previousTyping >= 0) messages.value.splice(previousTyping, 1)
 			// 在消息流末尾添加 typing 占位
 			typingMsgId = Date.now()
 			messages.value.push({
@@ -733,6 +854,7 @@ function connectWS() {
 			scrollToBottom()
 		},
 		onAIContent: (text: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			// 流式增量:把 typing 占位替换为实际内容,逐段追加
 			const idx = findMsgIndex(typingMsgId)
 			if (idx >= 0) {
@@ -742,6 +864,7 @@ function connectWS() {
 			}
 		},
 		onAIReply: (text: string, isOpening?: boolean) => {
+			if (connId != connectionSeq || !masterPageVisible) return
 			if (isOpening === true) {
 				// Include the server session id so a real new session can show its
 				// own welcome while replayed events on the same session stay deduped.
@@ -759,15 +882,34 @@ function connectWS() {
 			masterState.value = 'idle'
 		},
 		onTTSAudio: (audioUrl: string, durationMs: number) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			lastTTSUrl.value = audioUrl
 			lastTTSDuration.value = durationMs
 			masterState.value = 'speaking'
 			playAudio(audioUrl)
 		},
 		onConfirmCard: (card: ConfirmCardPayload) => {
-			// REST 兜底可能已按同一草稿重建过卡片；WS 重放同 draftId 时不再重复入流。
+			if (continuousFlow.value || connId != connectionSeq) return
+			// 同草稿按版本去重：同版本/旧版本重放不重复插入，也不被旧缓存挡住新版本。
 			const cached = cardBySubject(card.subject)
-			if (cached != null && cached.draftId == card.draftId) return
+			if (cached != null && cached.draftId == card.draftId) {
+				if (card.expectedRevision <= cached.expectedRevision) return
+				setDraftBySubject(card.subject, card)
+				setCardBySubject(card.subject, card)
+				editingKey.value = ''
+				editText.value = ''
+				const idx = findCardMsgIndexByDraftId(card.draftId)
+				if (idx >= 0) {
+					const msg = messages.value[idx]
+					msg.card = card
+					msg.collapsed = false
+					msg.confirmIndex = 0
+					msg.confirming = false
+				} else if (card.subject == currentSubject.value && sessionStarted.value) {
+					addCardMessage(card)
+				}
+				return
+			}
 			setDraftBySubject(card.subject, card)
 			setCardBySubject(card.subject, card)
 			editingKey.value = ''
@@ -775,6 +917,8 @@ function connectWS() {
 			if (card.subject == currentSubject.value) addCardMessage(card)
 		},
 		onError: (code: string, message: string) => {
+			// 旧连接迟到的错误不得改动新连接状态（尤其不得在重连窗口内误杀新 socket）。
+			if (connId != connectionSeq) return
 			if (connecting.value) {
 				sessionStartFailed.value = true
 				connectError.value = message
@@ -787,7 +931,12 @@ function connectWS() {
 					ws = null
 				}
 			} else {
-				uni.showToast({ title: message, icon: 'none' })
+				// 去重：下列 kind 由 onTypedError → handleTypedWSFailure 负责展示
+				// （文案更具体）。此处只做状态清理，不再弹通用 toast，否则同一
+				// 条下行 error 会连弹两个提示（会话阶段 connecting 已为 false）。
+				if (!isTypedFailureHandledFor(code)) {
+					uni.showToast({ title: message, icon: 'none' })
+				}
 				// 邀请接受/暂缓等待服务端回执；失败时解除忙状态，
 				// 保留邀请卡以便用户重试，不把界面锁死。
 				inviteBusy.value = false
@@ -797,13 +946,24 @@ function connectWS() {
 				if (idx >= 0) messages.value.splice(idx, 1)
 			}
 		},
+		// 类型化错误：按 docs/api/语音.md §4 区分「授权已撤回」与「稍后重试」。
+		// 去重契约：policy_denied / temporarily_unavailable / quota_exceeded
+		// 的提示在此展示，onError 通过 isTypedFailureHandledFor 跳过通用 toast
+		// （会话阶段 connecting 已为 false，两条回调都会到达消费方，否则双 toast）。
+		onTypedError: (kind: string, code: string, message: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			if (connecting.value) return
+			handleTypedWSFailure(kind, message)
+		},
 		// ===== 实时语音 v2 事件(未协商成功时服务端不会推送) =====
 		onVoiceReady: () => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			pcmPlayer.stopAll()
 			startRecordingV2()
 		},
 		onInputClosed: () => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			// 服务端已关输入窗口;直接停麦,不发 audio_end(v2 由供应商 VAD 定稿)
 			if (isRecording) {
@@ -815,18 +975,24 @@ function connectWS() {
 			if (masterState.value == 'listening') masterState.value = 'thinking'
 		},
 		onAudioOutputStart: (generationId: string, responseId: string, sampleRate: number, format: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
+			if (!pcmPlayer.begin(generationId)) return
+			masterState.value = 'speaking'
 			currentGenerationId = generationId
 		},
 		onAudioChunk: (generationId: string, seq: number, base64Data: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			pcmPlayer.enqueue(generationId, base64Data, seq)
 		},
 		onAudioOutputEnd: (generationId: string, responseId: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			pcmPlayer.finish(generationId)
 		},
 		onResponseDone: (generationId: string, status: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			if (status != 'completed') {
 				// 失败/打断的回复:停掉播放残留,等服务端 voice_ready 或用户操作
@@ -837,16 +1003,43 @@ function connectWS() {
 				pcmPlayer.finish(generationId)
 			}
 		},
+		onResponseStatus: (generationId: string, generationStatus: string, playbackStatus: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
+			if (!realtimeV2Active) return
+			if (generationId != '' && currentGenerationId != '' && generationId != currentGenerationId) return
+			if (playbackStatus == 'playing') {
+				masterState.value = 'speaking'
+			} else if (playbackStatus == 'completed' || playbackStatus == 'interrupted' || playbackStatus == 'unknown') {
+				masterState.value = 'idle'
+			}
+		},
 		onCancelled: (generationId: string) => {
+			if (connId != connectionSeq || !masterPageAlive || !masterPageVisible) return
 			if (!realtimeV2Active) return
 			if (currentGenerationId == generationId || generationId != '') {
 				pcmPlayer.stopAll()
 			}
+			masterState.value = 'idle'
+			currentGenerationId = ''
 		},
 		onClose: () => {
+			if (connId != connectionSeq) return
 			inviteBusy.value = false
 			pcmPlayer.stopAll()
+			if (continuousFlow.value) {
+				connecting.value = false
+				sessionStarted.value = false
+				masterState.value = 'idle'
+				transcriptPreviewVisible.value = false
+				transcriptPreview.value = { transcriptId: '', clientTurnId: '', sessionId: '', text: '' }
+				connectError.value = '连接已断开，点击重试恢复对话'
+				if (isRecording) { isRecording = false; recorderManager?.stop() }
+				stopAudioPlayback()
+				return
+			}
 			if (!connecting.value && sessionStarted.value) {
+				// 断线后撤销可发送状态，只有新连接收到 journey_ready 才恢复。
+				sessionStarted.value = false
 				uni.showToast({ title: masterRoleName + '已离开', icon: 'none' })
 			}
 		}
@@ -855,11 +1048,18 @@ function connectWS() {
 	if (MOXIANG_REALTIME_V2_DEV && ws != null) {
 		ws.enableRealtimeV2()
 	}
-	// 双画像共用一条自然对话旅程 WebSocket；主体切换只改变当前会话绑定。
+	// 连续流程显式协商；旧客户端语义不受实时语音协议版本影响。
 	if (ws != null) {
-		ws.startJourneyMode(currentSubject.value, 'profile-text-v1')
+		if (continuousFlow.value) ws.startContinuousMode('profile-text-v1')
+		else ws.startJourneyMode(currentSubject.value, 'profile-text-v1')
 	}
 	ws.connect()
+}
+
+function addMessageWithSource(role: string, text: string, sourceId: string, canListen: boolean = false, subject: ProfileSubject = currentSubject.value) {
+	if (sourceId != '' && messages.value.some((msg: any) => msg.sourceId == sourceId)) return
+	messages.value.push({ id: Date.now() + Math.floor(Math.random() * 1000), sourceId: sourceId, role: role, text: text, canListen: canListen, subject: subject })
+	scrollToBottom()
 }
 
 // ===== 消息管理 =====
@@ -922,6 +1122,14 @@ function findCardMsgIndex(cardId: string) : number {
 	for (let i = 0; i < messages.value.length; i++) {
 		const m = messages.value[i]
 		if (m.role == 'card' && m.card != null && m.card.cardId == cardId) return i
+	}
+	return -1
+}
+
+function findCardMsgIndexByDraftId(draftId: string) : number {
+	for (let i = messages.value.length - 1; i >= 0; i--) {
+		const m = messages.value[i]
+		if (m.role == 'card' && m.card != null && m.card.draftId == draftId) return i
 	}
 	return -1
 }
@@ -1078,7 +1286,7 @@ async function confirmCardItem(msg: any) {
 		} else {
 			removeCardMessage(card.cardId)
 			setCardBySubject(card.subject, null)
-			addMessage('master', '这一组内容已经逐一确认完成。我会把它整理成最后的总结,确认后就会出现在“我的墨相”。', true, card.subject)
+			addMessage('master', '这一组内容已经逐一确认完成。我会把它整理成最后的总结,确认后就会出现在“我的真实画像”。', true, card.subject)
 			// 与 confirmAll 同口径：逐条确认走完也要接上发布出口。
 			goPortrait()
 		}
@@ -1137,6 +1345,7 @@ async function submitEdit(card: ConfirmCardPayload, item: ConfirmCardItem) {
 // ===== 建构模式:统一结果页 =====
 // subjectArg 为空时沿用当前主体；入口卡「查看成稿/继续整理」显式传入。
 async function goPortrait(subjectArg?: string) {
+	if (continuousFlow.value) { await openContinuousPortrait(subjectArg ?? 'personal'); return }
 	const subject: ProfileSubject = subjectArg != null && subjectArg != ''
 		? (subjectArg == 'ideal_partner' ? 'ideal_partner' : 'personal')
 		: currentSubject.value
@@ -1173,17 +1382,17 @@ async function goPortrait(subjectArg?: string) {
 // Phase 2 P2-02 / P2-04 —— 双阶段卡入口
 function onEnterSubject(subject: ProfileSubject) {
 	if (subject == 'ideal_partner' && stateResponse.value != null && !stateResponse.value.canStartIdealPartner) {
-		uni.showToast({ title: '请先完成我的墨相', icon: 'none' })
+		uni.showToast({ title: '请先完成我的真实画像', icon: 'none' })
 		return
 	}
 	if (subject == 'ideal_partner' && stateResponse.value != null && stateResponse.value.canStartIdealPartner) {
 		// 老用户恢复路径:理想伴侣已经有会话/草稿 → 直接进入该主体的 master session。
-		currentSubject.value = 'ideal_partner'
+		// 不提前改 currentSubject：先记录目标主体并发出既有切换请求，
+		// 服务端确认（subject_changed）后才更新当前主体与消息区；失败保留原主体。
 		pendingSubject.value = ''
 		enterSubjectSession('ideal_partner')
 		return
 	}
-	currentSubject.value = subject
 	pendingSubject.value = subject
 	// 如果已经有会话(state 显示 sessionId),直接进入 buildMode;否则等用户在 MoxiangEntryState 点开始。
 	loadMoxiangState().then(() => {
@@ -1194,6 +1403,18 @@ function onEnterSubject(subject: ProfileSubject) {
 	})
 }
 
+
+function confirmTranscript() {
+    const preview = transcriptPreview.value
+    if (!transcriptPreviewVisible.value || preview.transcriptId == '' || preview.text.trim() == '' || ws == null || !ws.isConnected()) return
+    ws.confirmTranscript(preview.transcriptId, preview.clientTurnId, preview.sessionId, preview.text.trim())
+}
+
+function cancelTranscript() {
+    const preview = transcriptPreview.value
+    if (!transcriptPreviewVisible.value || preview.transcriptId == '' || ws == null || !ws.isConnected()) return
+    ws.cancelTranscript(preview.transcriptId, preview.clientTurnId, preview.sessionId)
+}
 function enterSubjectSession(subject: ProfileSubject) {
 	if (subject == 'ideal_partner') {
 		// ideal_partner 走独立会话入口(可能为老用户恢复或新开启)
@@ -1208,7 +1429,6 @@ function onBackToCards() {
 	pendingSubject.value = ''
 }
 
-// ===== 文字模式 =====
 function sendText() {
 	const text = inputText.value.trim()
 	if (text == '') return
@@ -1217,6 +1437,7 @@ function sendText() {
 		return
 	}
 	if (masterState.value == 'thinking') return
+	masterState.value = 'thinking'
 	addMessage('user', text)
 	inputText.value = ''
 	ws.sendTextMessage(text)
@@ -1314,7 +1535,7 @@ function arrayBufferToBase64(buffer: any) : string {
 }
 
 function startRecording() {
-	if (ws == null || !ws.isConnected()) {
+	if (ws == null || !ws.isConnected() || !sessionStarted.value || !masterPageVisible) {
 		uni.showToast({ title: '未连接', icon: 'none' })
 		return
 	}
@@ -1352,12 +1573,95 @@ function requestTTS() {
 	}
 }
 
+/**
+ * "听它读"只做语音合成/播放，绝不发送 revise_text：revise 在服务端是一轮
+ * 真实用户输入（会新建用户轮次、触发候选抽取并重新生成回复）。
+ * - 最新回复：复用会话内 listen，后端只合成当前服务端持有的这条回复；
+ * - 历史/指定消息：走既有 POST /voice/synthesize，与对话链路完全隔离。
+ */
 function playTTS(text: string) {
-	// 从消息流中点击"听它读":发送 revise 让后端重新合成
-	if (ws != null && ws.isConnected() && text != '') {
-		ws.sendReviseText(text)
+	if (text == '' || ttsBusy.value) return
+	if (text == lastReplyText.value && ws != null && ws.isConnected()) {
 		ws.sendListen()
+		return
 	}
+	ttsBusy.value = true
+	const requestConnection = connectionSeq
+	synthesizeSpeech(text).then((res: any) => {
+		ttsBusy.value = false
+		if (!masterPageAlive || !masterPageVisible || requestConnection != connectionSeq) return
+		if (res != null && res.success == true && res.audioUrl != null && ('' + res.audioUrl) != '') {
+			lastTTSUrl.value = '' + res.audioUrl
+			masterState.value = 'speaking'
+			playAudio('' + res.audioUrl)
+		} else {
+			const message = res != null && res.error != null && ('' + res.error) != '' ? ('' + res.error) : '播报失败，请稍后重试'
+			uni.showToast({ title: message, icon: 'none' })
+		}
+	}).catch((_e: any) => {
+		ttsBusy.value = false
+		if (masterPageAlive) uni.showToast({ title: '播报失败，请稍后重试', icon: 'none' })
+	})
+}
+
+/**
+ * 该 code 是否已由 handleTypedWSFailure 展示过（用于 onError 去重）。
+ * 判定复用 WS 模块的 classifyMasterWSError，保证与 onTypedError 同一分类源。
+ */
+function isTypedFailureHandledFor(code: string): boolean {
+	const kind = classifyMasterWSError(code)
+	return kind == 'policy_denied' || kind == 'temporarily_unavailable' || kind == 'quota_exceeded'
+}
+
+/**
+ * 按后端下行 error.code 的文档语义（docs/api/语音.md §4）区分处理：
+ * - policy_denied：账号撤权/注销/签名上下文失效 → 停止播放并丢弃旧音频
+ *   URL（不得复用），提示重新获取会话；
+ * - temporarily_unavailable：ASR/TTS/模型暂时失败 → 停播保状态，提示稍后重试；
+ * - quota_exceeded：额度用尽；
+ * - 其他：沿用通用 toast（与既有 onError 行为一致）。
+ */
+function handleTypedWSFailure(kind: string, message: string) {
+	if (kind == 'policy_denied' || kind == 'temporarily_unavailable') {
+		stopAudioPlayback()
+		// 授权已撤回时会话/音频上下文已失效，旧 URL 不可复用。
+		if (kind == 'policy_denied') {
+			lastTTSUrl.value = ''
+		}
+	}
+	if (kind == 'policy_denied') {
+		if (continuousFlow.value) {
+			clearContinuousPrivateCache()
+			continuousState.value = null
+			stateError.value = '授权状态已变化，请点击重试核对'
+		}
+		masterState.value = 'idle'
+		uni.showToast({ title: '授权已撤回，请重新进入对话', icon: 'none' })
+		return
+	}
+	if (kind == 'temporarily_unavailable') {
+		masterState.value = 'idle'
+		uni.showToast({ title: '语音服务暂时不可用，请稍后重试', icon: 'none' })
+		return
+	}
+	if (kind == 'quota_exceeded') {
+		masterState.value = 'idle'
+		uni.showToast({ title: '本次额度已用完', icon: 'none' })
+		return
+	}
+}
+
+function stopAudioPlayback() {
+	if (audioContext != null) {
+		try {
+			audioContext.stop()
+			audioContext.destroy()
+		} catch (e) {}
+		audioContext = null
+	}
+	// 旧音频地址一并失效：主体切换/授权撤回后"重听"不得重放错内容。
+	lastTTSUrl.value = ''
+	masterState.value = 'idle'
 }
 
 function playAudio(url: string) {
@@ -1385,12 +1689,229 @@ function replayTTS() {
 	}
 }
 
+// 收起朗读只负责播报职责：不得清空聊天会话，也不得触发会话重连或轮询。
 function closeTTS() {
 	lastTTSUrl.value = ''
+	lastTTSDuration.value = 0
 	if (audioContext != null) {
 		try { audioContext.stop() } catch (e) {}
 	}
 	masterState.value = 'idle'
+}
+
+function clearContinuousPrivateCache() {
+	continuousLoadSeq++
+	continuousSnapshotSeq++
+	continuousPendingBuilds.clear()
+	messages.value = []
+	restoredTurnIds.value.clear()
+	openingMessageKeys.clear()
+	historyBeforeId.value = null
+	historyLoading.value = false
+	lastReplyText.value = ''
+	lastTTSUrl.value = ''
+	lastTTSDuration.value = 0
+	partialText.value = ''
+	inputText.value = ''
+	sessionStarted.value = false
+	connecting.value = false
+	connectionSeq++
+	if (isRecording) { isRecording = false; recorderManager?.stop() }
+	if (ws != null) { ws.disconnect(); ws = null }
+	pcmPlayer.stopAll()
+	stopAudioPlayback()
+	stopContinuousPolling()
+}
+
+function applyContinuousState(state: ContinuousMoxiangState) {
+	continuousState.value = state
+	if (!state.consent_granted) clearContinuousPrivateCache()
+}
+
+// 连续性轮询只是 WS 推送的兜底：页面隐藏/卸载、退出连续流程或撤权后必须停止，
+// 否则会在后台持续请求，并把已撤权的状态留在内存里。
+function stopContinuousPolling() {
+	continuousPollGeneration++
+	if (continuousPollTimer != -1) {
+		clearTimeout(continuousPollTimer)
+		continuousPollTimer = -1
+	}
+}
+
+
+// 单次链式调度：请求前、返回后、续排前都绑定同一轮 generation。
+function scheduleContinuousPolling() {
+	stopContinuousPolling()
+	if (!masterPageAlive || !masterPageVisible || !continuousFlow.value) return
+	if (continuousState.value?.consent_granted != true) return
+	const generation = continuousPollGeneration
+	continuousPollTimer = setTimeout(async () => {
+		if (generation != continuousPollGeneration || !masterPageAlive || !masterPageVisible || !continuousFlow.value) return
+		continuousPollTimer = -1
+		await refreshContinuousState(generation)
+		if (generation != continuousPollGeneration || !masterPageAlive || !masterPageVisible || !continuousFlow.value) return
+		scheduleContinuousPolling()
+	}, 5000)
+}
+
+async function refreshContinuousState(expectedGeneration: number = continuousPollGeneration): Promise<boolean> {
+	if (expectedGeneration != continuousPollGeneration || !masterPageAlive || !masterPageVisible) return false
+	const snapshotSeq = ++continuousSnapshotSeq
+	try {
+		const state = await getContinuousMoxiangState()
+		if (expectedGeneration != continuousPollGeneration || !masterPageAlive || !masterPageVisible || snapshotSeq != continuousSnapshotSeq) return false
+		applyContinuousState(state)
+		stateError.value = ''
+		return true
+	} catch (e: any) {
+		if (expectedGeneration == continuousPollGeneration && masterPageAlive && masterPageVisible && snapshotSeq == continuousSnapshotSeq) {
+			const code = Number(e?.code ?? e?.statusCode ?? 0)
+			if (code == 401 || code == 403) { clearContinuousPrivateCache(); continuousState.value = null }
+			stateError.value = e?.message ?? '状态未能同步，已显示内容不是最新状态'
+		}
+		return false
+	}
+}
+
+function continuousTurnMessages(turns: MoxiangTurn[]): any[] {
+	const seen = new Set<string>()
+	const result: any[] = []
+	for (let i = 0; i < turns.length; i++) {
+		const turn = turns[i]
+		if (turn.turnId == '' || seen.has(turn.turnId)) continue
+		seen.add(turn.turnId)
+		result.push({ id: 'turn-' + turn.turnId, turnId: turn.turnId, clientTurnId: turn.clientTurnId,
+			role: turn.role == 'assistant' ? 'master' : 'user', text: turn.content,
+			canListen: turn.role == 'assistant', subject: 'personal' })
+	}
+	return result
+}
+
+async function loadContinuousConversation() {
+	const loadSeq = ++continuousLoadSeq
+	stopContinuousPolling()
+	connectionSeq++
+	if (ws != null) { ws.disconnect(); ws = null }
+	sessionStarted.value = false
+	connecting.value = true
+	connectError.value = ''
+	lastReplyText.value = ''
+	const restored = await refreshContinuousState()
+	if (!masterPageAlive || !masterPageVisible || loadSeq != continuousLoadSeq) return
+	if (!restored || continuousState.value?.consent_granted != true) { connecting.value = false; return }
+	historyLoading.value = true
+	try {
+		const history = await getContinuousTurns()
+		if (!masterPageAlive || !masterPageVisible || loadSeq != continuousLoadSeq) return
+		// 恢复期间尚未开放发送，服务端历史替换本地临时气泡，避免重连重复回复。
+		messages.value = continuousTurnMessages(history.turns)
+		restoredTurnIds.value = new Set(history.turns.map((turn: MoxiangTurn): string => turn.turnId))
+		historyBeforeId.value = history.next_before_id
+		typingMsgId = 0
+		masterState.value = 'idle'
+		currentSubject.value = 'personal' // 内部兼容槽，不限制聊什么。
+		stateError.value = ''
+		scrollToBottom()
+		connectWS()
+		scheduleContinuousPolling()
+	} catch (e: any) {
+		if (loadSeq == continuousLoadSeq && masterPageAlive && masterPageVisible) {
+			const code = Number(e?.code ?? e?.statusCode ?? 0)
+			if (code == 401 || code == 403) { clearContinuousPrivateCache(); continuousState.value = null }
+			stateError.value = e?.message ?? '对话历史未能恢复，请重试；已有理解不会被重置'
+			connecting.value = false
+		}
+	} finally {
+		if (loadSeq == continuousLoadSeq) historyLoading.value = false
+	}
+}
+
+async function loadOlderContinuousHistory() {
+	if (historyLoading.value || historyBeforeId.value == null) return
+	const loadSeq = continuousLoadSeq
+	historyLoading.value = true
+	try {
+		const history = await getContinuousTurns(historyBeforeId.value)
+		if (!masterPageAlive || !masterPageVisible || loadSeq != continuousLoadSeq) return
+		const older = continuousTurnMessages(history.turns).filter((msg: any) => !restoredTurnIds.value.has(msg.turnId))
+		for (let i = 0; i < older.length; i++) restoredTurnIds.value.add(older[i].turnId)
+		messages.value = older.concat(messages.value)
+		historyBeforeId.value = history.next_before_id
+	} catch (e: any) {
+		if (loadSeq == continuousLoadSeq && masterPageAlive && masterPageVisible) {
+			const code = Number(e?.code ?? e?.statusCode ?? 0)
+			if (code == 401 || code == 403) { clearContinuousPrivateCache(); continuousState.value = null }
+			stateError.value = '更早的对话未能加载，请重试'
+		}
+	} finally {
+		if (loadSeq == continuousLoadSeq) historyLoading.value = false
+	}
+}
+
+async function openContinuousPortrait(subject: string) {
+	if ((subject != 'personal' && subject != 'ideal_partner') || continuousActionBusy.value) return
+	continuousActionBusy.value = true
+	try {
+		if (!await refreshContinuousState() || continuousState.value?.consent_granted != true) return
+		let item = subject == 'personal' ? continuousState.value.personal : continuousState.value.ideal_partner
+		let pending = continuousPendingBuilds.get(subject)
+		let refresh = false
+		if (pending == null && (item.has_updates || item.status == 'stale')) {
+			const choice: any = await new Promise((resolve) => uni.showModal({
+				title: item.status == 'stale' ? '这份稿件的版本已变化' : '有新的对话补充',
+				content: '合并后会生成新的待确认稿，需要重新阅读。不会自动改变已确认画像。',
+				confirmText: '合并新信息', cancelText: '先看原稿', success: resolve, fail: () => resolve({ confirm: false })
+			}))
+			refresh = choice.confirm === true
+		}
+		if (!masterPageAlive || !masterPageVisible || continuousState.value?.consent_granted != true) return
+		if (pending != null || refresh || item.status == 'failed') {
+			if (pending == null) {
+				pending = { refresh, key: genIdempotencyKey() }
+				continuousPendingBuilds.set(subject, pending)
+			}
+			const updated = await buildContinuousPortrait(subject, pending.refresh, pending.key)
+			if (!masterPageAlive || !masterPageVisible || continuousPendingBuilds.get(subject) !== pending) return
+			continuousPendingBuilds.delete(subject)
+			continuousSnapshotSeq++
+			applyContinuousState(updated)
+			if (!updated.consent_granted) return
+			item = subject == 'personal' ? updated.personal : updated.ideal_partner
+		}
+		let url = '/pagesSub/profileExtra/my-portrait-result?flow_version=continuous_v2&subject=' + subject
+		if (item.draft_id != null && item.expected_revision != null && item.status != 'confirmed') {
+			url += '&draft_id=' + encodeURIComponent(item.draft_id) + '&expected_revision=' + item.expected_revision
+			if (item.preview_id != null) url += '&preview_id=' + encodeURIComponent(item.preview_id)
+		} else if (item.published_revision_id != null) {
+			url += '&published=1'
+		} else {
+			uni.showToast({ title: '还在整理中，你可以聊自己，也可以聊期待的关系', icon: 'none' })
+			return
+		}
+		uni.navigateTo({ url })
+	} catch (e: any) {
+		const code = Number(e?.code ?? e?.statusCode ?? 0)
+		if ([400, 401, 403, 404, 409, 422].includes(code)) continuousPendingBuilds.delete(subject)
+		if (code == 401 || code == 403) { clearContinuousPrivateCache(); continuousState.value = null }
+		if (!masterPageAlive || !masterPageVisible) return
+		uni.showToast({ title: e?.message ?? '读取成稿失败，请稍后重试', icon: 'none' })
+	} finally {
+		continuousActionBusy.value = false
+	}
+}
+
+// 角色扮演是独立面板；不改动知遇的 WS、轮询、录音或异步恢复状态。
+const roleplayVisible = ref(false)
+function openRoleplay() {
+	if (roleplayVisible.value) return
+	if (isRecording || masterState.value == 'listening' || masterState.value == 'thinking' || transcriptPreviewVisible.value || continuousActionBusy.value || consentBusy) {
+		uni.showToast({ title: '请先完成当前对话或录音', icon: 'none' })
+		return
+	}
+	roleplayVisible.value = true
+}
+function closeRoleplay() {
+	roleplayVisible.value = false
 }
 
 // ===== 重试 =====
@@ -1424,6 +1945,7 @@ async function loadMoxiangState() {
 // first-time visitor has no session to connect to and must not remain in the
 // full-page connecting state forever.
 async function loadStateAndMaybeConnect() {
+	if (continuousFlow.value) { await loadContinuousConversation(); return }
 	await loadMoxiangState()
 	loadPortraitArchive()
 	const summary = currentSubjectSummary.value
@@ -1438,6 +1960,7 @@ async function loadStateAndMaybeConnect() {
 // 确认卡 REST 兜底：卡片正常由 WS 推送（含服务端重连重放）；若重放丢失或
 // 通道异常，用档案里的未完成草稿重建卡片，避免旅程卡死在 building 无人确认。
 async function restoreConfirmCardFromRest(subject: ProfileSubject) {
+	if (continuousFlow.value) return
 	if (stateResponse.value == null) return
 	const summary = subject == 'ideal_partner' ? stateResponse.value.idealPartner : stateResponse.value.personal
 	if (summary == null || summary.pendingConfirmCard != true) return
@@ -1469,11 +1992,13 @@ async function restoreConfirmCardFromRest(subject: ProfileSubject) {
 			items.push(item)
 		}
 		if (items.length == 0) return
+		// 版本以最新草稿响应为准：档案快照只用于找到草稿，不能用其旧版本覆盖最新读取结果。
+		const latestRevision = data.expected_revision != null ? Number(data.expected_revision) : Number(draft.expectedRevision ?? 0)
 		const card: ConfirmCardPayload = {
 			subject: subject,
 			cardId: 'rest-' + draft.draftId,
 			draftId: draft.draftId,
-			expectedRevision: Number(draft.expectedRevision ?? 0),
+			expectedRevision: latestRevision,
 			items: items
 		}
 		setDraftBySubject(subject, card)
@@ -1485,33 +2010,48 @@ async function restoreConfirmCardFromRest(subject: ProfileSubject) {
 }
 
 // 按 turn_id 去重合并服务端历史到本地消息流
+const legacyHistoryCursors = ref<Record<string, number | null>>({})
+const legacyHistoryBusy = ref(false)
+async function loadOlderLegacyHistory() {
+	if (legacyHistoryBusy.value) return
+	const subject = currentSubject.value
+	const sessionId = activeSessionBySubject.value[subject]
+	const cursor = legacyHistoryCursors.value[sessionId]
+	if (sessionId == '' || cursor == null) return
+	legacyHistoryBusy.value = true
+	try { await loadSessionHistory(sessionId, cursor, subject) } finally { legacyHistoryBusy.value = false }
+}
 async function loadSessionHistory(sessionId: string, beforeTurnNo: number | null, subject: ProfileSubject = currentSubject.value) {
 	try {
 		const res = await getSessionTurns(sessionId, beforeTurnNo, 50)
+		if (!masterPageAlive || !masterPageVisible || continuousFlow.value || activeSessionBySubject.value[subject] != sessionId) return
+		const older: any[] = []
 		for (let i = 0; i < res.turns.length; i++) {
 			const t: MoxiangTurn = res.turns[i]
 			if (restoredTurnIds.value.has(t.turnId)) continue
 			restoredTurnIds.value.add(t.turnId)
-			if (t.role == 'assistant') {
-				addMessage('master', t.content, false, subject)
-			} else {
-				addMessage('user', t.content, false, subject)
-			}
+			older.push({ id: 'history-' + t.turnId, turnId: t.turnId, role: t.role == 'assistant' ? 'master' : 'user', text: t.content, canListen: t.role == 'assistant', subject })
 		}
+		messages.value = older.concat(messages.value)
+		legacyHistoryCursors.value[sessionId] = res.nextBeforeTurnNo
 	} catch (e: any) {
-		// 历史读取失败不替换本地已有消息,提示重试
 		stateError.value = '重新加载历史'
 	}
 }
 
 // 用户从 entry 点 "开始聊聊" / "继续上次对话" → 切换到聊天视图并建立 WS
 function startChatFlow() {
+	// pendingSubject 是用户在双阶段卡明确选择、但旅程尚未绑定的主体；
+	// 优先于 currentSubject，避免无会话新开启时走错主体。
+	if (pendingSubject.value != '') {
+		return startChatFlowFor(pendingSubject.value)
+	}
 	return startChatFlowFor(currentSubject.value)
 }
 
 function startChatFlowFor(subject: ProfileSubject) {
 	if (subject == 'ideal_partner' && stateResponse.value != null && !stateResponse.value.canStartIdealPartner) {
-		uni.showToast({ title: '请先完成我的墨相', icon: 'none' })
+		uni.showToast({ title: '请先完成我的真实画像', icon: 'none' })
 		pendingSubject.value = ''
 		return
 	}
@@ -1543,6 +2083,8 @@ function continueChatFlow() {
 }
 
 async function grantConsentFlow() {
+	if (consentBusy) return
+	consentBusy = true
 	// P1-D 收尾:真正调用授权 API,而不是直接 startChatFlow。
 	// 后端要求 X-Expected-Privacy-Revision 头与 GET /ai/consents 返回的
 	// privacy_revision 匹配,先拉一次再调授权。
@@ -1552,6 +2094,7 @@ async function grantConsentFlow() {
 		const res = await grantProfileTextConsent(privacyRevision)
 		if (res.success) {
 			stateError.value = ''
+			if (continuousFlow.value) { await loadContinuousConversation(); return }
 			startChatFlow()
 			// 重新拉 state 以更新 entry 视图的 consentGranted
 			loadMoxiangState()
@@ -1561,6 +2104,8 @@ async function grantConsentFlow() {
 		}
 	} catch (e: any) {
 		stateError.value = (e?.message != null ? ('' + e.message) : '授权失败,请稍后再试')
+	} finally {
+		consentBusy = false
 	}
 }
 
@@ -1596,7 +2141,65 @@ function navBack() {
 }
 
 // ===== 生命周期 =====
+// 首次显示与 onLoad 共用一次状态核对，避免重复请求、重复取凭证或建两条连接。
+let pageFirstShow = true
+
+onShow(() => {
+	masterPageVisible = true
+	if (pageFirstShow) {
+		pageFirstShow = false
+		return
+	}
+	resyncOnShow()
+})
+
+/**
+ * 页面再次显示（从结果页/档案返回等）时，用现有 state 接口核对：
+ * 当前主体是否还有活动会话、会话 ID 是否变化、是否已完成。
+ * 不依据旧的 sessionStarted 布尔值直接允许发送。
+ */
+async function resyncOnShow() {
+	if (continuousFlow.value) { await loadContinuousConversation(); return }
+	if (connecting.value) return
+	await loadMoxiangState()
+	// 读不到 state ≠ 没有会话：网络抖动时保留现有连接与聊天视图，不误断。
+	if (stateError.value != '' || stateResponse.value == null) return
+	syncGateFromState(currentSubject.value)
+	const subject = currentSubject.value
+	const stateSessionId = sessionIdForSubject(subject)
+	const connSessionId = activeSessionBySubject.value[subject] != null ? activeSessionBySubject.value[subject] : ''
+	if (stateSessionId == '') {
+		// 服务端已无该主体活动会话（已完成/失效释放/被查看）：断开旧连接，回到入口核对视图。
+		sessionStarted.value = false
+		if (ws != null) {
+			ws.disconnect()
+			ws = null
+		}
+		connecting.value = false
+		return
+	}
+	if (connSessionId != '' && connSessionId != stateSessionId) {
+		// 服务端会话与本地连接绑定的会话不一致（旧会话失效后重建等）：丢弃旧连接，按 state 恢复。
+		sessionStarted.value = false
+		if (ws != null) {
+			ws.disconnect()
+			ws = null
+		}
+		setSessionIdForSubject(subject, stateSessionId)
+		connectWS()
+		return
+	}
+	if (ws == null || !ws.isConnected()) {
+		// 会话仍有效但连接已断：重建连接恢复同一会话。
+		sessionStarted.value = false
+		connectWS()
+	}
+}
+
 onLoad((options: any) => {
+	masterPageAlive = true
+	masterPageVisible = true
+	continuousFlow.value = options?.flow_version != 'legacy'
 	if (options != null && String(options.subject != null ? options.subject : '') == 'ideal_partner') {
 		currentSubject.value = 'ideal_partner'
 	}
@@ -1608,7 +2211,31 @@ onLoad((options: any) => {
 	})
 })
 
+onHide(() => {
+	roleplayVisible.value = false
+	if (!continuousFlow.value) return
+	masterPageVisible = false
+	continuousLoadSeq++
+	continuousSnapshotSeq++
+	stopContinuousPolling()
+	connectionSeq++
+	if (isRecording) stopRecording()
+	stopAudioPlayback()
+	pcmPlayer.stopAll()
+	if (ws != null) { ws.disconnect(); ws = null }
+	sessionStarted.value = false
+	connecting.value = false
+	historyLoading.value = false
+})
+
 onUnmounted(() => {
+	roleplayVisible.value = false
+	masterPageAlive = false
+	masterPageVisible = false
+	connectionSeq++
+	continuousSnapshotSeq++
+	continuousLoadSeq++
+	stopContinuousPolling()
 	pcmPlayer.stopAll()
 	pcmPlayer.destroy()
 	if (isRecording) stopRecording()
@@ -1627,6 +2254,13 @@ const devMoxiangTrace = ref<any>(null)
 </script>
 
 <style scoped>
+.mm-roleplay-entry { position: relative; z-index: 2; min-width: 68px; }
+.mm-roleplay-entry-text { font-size: 12px; color: var(--primary-deep); }
+.mm-sync-error { flex-shrink: 0; min-height: 44px; padding: 0 16px; display: flex; align-items: center; }
+.mm-history-more { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+.mm-hero.mm-hero-compact { flex-direction: row; gap: 10px; padding: 4px 16px; }
+.mm-hero-compact .mm-hero-name { margin: 0; font-size: 14px; }
+.mm-hero-compact .mm-hero-sub { margin: 0; }
 .mm-page {
 	display: flex;
 	flex-direction: column;

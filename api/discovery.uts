@@ -2,7 +2,8 @@ import { request } from './request.uts'
 import { resolveMediaUrl } from './config.uts'
 import { mockRecommendUsers, mockSquareUsers } from '@/mock/user.uts'
 
-function mapCard(row: any): any {
+// 只适配服务端公开候选卡；详情 profile/画像/择偶偏好由各自接口处理。
+export function mapCard(row: any, fallbackName: string = '用户'): any {
   const source = row != null && row.target != null ? row.target : row
   const card = source != null ? source : {}
   const tags = Array.isArray(card.personal_tags) ? card.personal_tags : card.interest_tags != null && Array.isArray(card.interest_tags)
@@ -19,12 +20,28 @@ function mapCard(row: any): any {
     if (item != '' && photos.indexOf(item) < 0) photos.push(item)
   }
   if (photos.length == 0 && photo != '') photos.push(photo)
+  const qaAnswers: any[] = []
+  const rawQa = card.qa_answers != null && Array.isArray(card.qa_answers) ? card.qa_answers as any[] : []
+  for (let qaIndex = 0; qaIndex < rawQa.length; qaIndex++) {
+    const item: any = rawQa[qaIndex]
+    if (item == null) continue
+    const answer = item.answer != null ? ('' + item.answer).trim() : ''
+    if (answer == '') continue
+    let mediaUrl = ''
+    const mediaList = item.media != null && Array.isArray(item.media) ? item.media as any[] : []
+    if (mediaList.length > 0 && mediaList[0] != null) {
+      const media = mediaList[0]
+      const url = media.file_url != null ? media.file_url : media.thumbnail_url
+      if (url != null) mediaUrl = resolveMediaUrl('' + url)
+    }
+    qaAnswers.push({ question: item.question != null ? '' + item.question : '关于我', answer: answer, mediaUrl: mediaUrl })
+  }
   const onlineText = card.online != null ? '' + card.online : ''
   return {
     id: Number(card.user_id != null ? card.user_id : (card.id != null ? card.id : 0)),
     userId: Number(card.user_id != null ? card.user_id : 0),
-    name: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : '用户'),
-    nickname: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : '用户'),
+    name: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : fallbackName),
+    nickname: card.nickname != null ? '' + card.nickname : (card.name != null ? '' + card.name : fallbackName),
     avatar: photo,
     photos,
     age: card.age != null ? Number(card.age) : 0,
@@ -32,22 +49,37 @@ function mapCard(row: any): any {
     weight: card.weight_kg != null ? Number(card.weight_kg) : (card.weight != null ? Number(card.weight) : 0),
     gender: card.gender != null ? '' + card.gender : '',
     zodiac: card.zodiac != null ? '' + card.zodiac : (card.constellation != null ? '' + card.constellation : ''),
-    hometown: card.hometown != null ? '' + card.hometown : '',
+    // 后端 A-2 起卡片直接下发 *_display（服务端按省市区码合成），首页 9 格不再靠二次详情补；
+    // 锁定态后端不给值，此处保持空串由页面显示「未填写」。
+    hometown: card.hometown_display != null && ('' + card.hometown_display).trim() != ''
+      ? '' + card.hometown_display
+      : (card.hometown != null ? '' + card.hometown : ''),
+    hometownDisplay: card.hometown_display != null ? '' + card.hometown_display : '',
+    residenceDisplay: card.residence_display != null ? '' + card.residence_display : '',
     income: card.income != null ? '' + card.income : '',
-    bio: card.bio != null ? '' + card.bio : (card.introduction != null ? '' + card.introduction : (card.intro != null ? '' + card.intro : '')),
+    // self_intro 才是编辑页「自我介绍」真正写入的字段；漏掉它会让首页名片首屏「关于我」恒为空，
+    // 只能等 second-pass 的 getUserDetail 再补，而那次请求一旦 429/失败就永久空白。
+    bio: card.self_intro != null && ('' + card.self_intro).trim() != ''
+      ? '' + card.self_intro
+      : (card.bio != null ? '' + card.bio : (card.introduction != null ? '' + card.introduction : (card.intro != null ? '' + card.intro : ''))),
     education: card.education_level != null ? '' + card.education_level : (card.education != null ? '' + card.education : '未填写'),
     educationLevel: card.education_level,
     job: card.occupation != null ? '' + card.occupation : (card.job != null ? '' + card.job : '未填写'),
     occupation: card.occupation != null ? '' + card.occupation : (card.job != null ? '' + card.job : ''),
     city: card.city_code != null ? '' + card.city_code : (card.city != null ? '' + card.city : '未填写'),
     cityCode: card.city_code != null ? '' + card.city_code : '',
-    distance: card.distance_km != null ? Number(card.distance_km) : 0,
+    distance: card.distance_km != null ? Number(card.distance_km) : null,
+    detailLocked: card.detail_locked === true,
     online: card.online_status != null ? card.online_status == 1 : (card.online === true || onlineText.indexOf('在线') >= 0),
     mbti: card.mbti != null ? '' + card.mbti : '',
     interestTags: tags,
     certificationTags: certifications,
+    qaAnswers: qaAnswers,
     isVip: card.isVip === true || card.is_vip === true,
     isFavorite: card.is_favorite == true,
+    // 喜欢（user_favorite.type=1）与收藏（type=2）是两套数据：is_favorite 只代表收藏，
+    // 红心必须读后端新加的 is_liked，缺字段时按未喜欢处理。
+    isLiked: card.is_liked == true,
     matchScore: card.match_score != null ? Number(card.match_score) : (card.match != null ? Number(card.match) : null),
     viewCount: card.view_count != null ? Number(card.view_count) : 0,
     matchReason: card.match_reason != null ? '' + card.match_reason : '',
@@ -79,6 +111,66 @@ export async function getDiscoveryRecommendations(filters: any = null) {
   })
   if (!res.success) return res
   return { success: true, data: mapPage(res.data), code: res.code, message: res.message }
+}
+
+/** 筛选项字典：mbti_types 为 MBTI 选项权威来源；cities 只是展示名，不含编码。 */
+export async function getDiscoveryFilterOptions() {
+  const res = await request({
+    url: '/discovery/filter-options',
+    method: 'GET',
+    skipAuth: true,
+    mockData: {
+      genders: [{ value: 1, label: '男' }, { value: 2, label: '女' }],
+      marriage_statuses: [{ value: 1, label: '未婚' }, { value: 2, label: '离异' }, { value: 3, label: '丧偶' }],
+      education_levels: [{ value: 1, label: '高中及以下' }, { value: 2, label: '大专' }, { value: 3, label: '本科' }, { value: 4, label: '硕士' }, { value: 5, label: '博士' }],
+      cities: ['北京', '上海', '杭州'],
+      mbti_types: [
+        { value: 'INTJ', label: '建筑师' }, { value: 'INTP', label: '逻辑学家' }, { value: 'ENTJ', label: '指挥官' }, { value: 'ENTP', label: '辩论家' },
+        { value: 'INFJ', label: '提倡者' }, { value: 'INFP', label: '调停者' }, { value: 'ENFJ', label: '主人公' }, { value: 'ENFP', label: '竞选者' },
+        { value: 'ISTJ', label: '物流师' }, { value: 'ISFJ', label: '守卫者' }, { value: 'ESTJ', label: '总经理' }, { value: 'ESFJ', label: '执政官' },
+        { value: 'ISTP', label: '鉴赏家' }, { value: 'ISFP', label: '探险家' }, { value: 'ESTP', label: '企业家' }, { value: 'ESFP', label: '表演者' }
+      ]
+    }
+  })
+  return res
+}
+
+/**
+ * 首页卡片预览（后端 A-3）。
+ * 契约：`GET /users/{id}/card-preview` → `{ user_id, card, background_wall, photos[≤1], income_display }`。
+ * 与 `/users/{id}/profile` 的差别只有三点：**不扣浏览额度、不写 user_browse_history、不返回 profile**。
+ * 首页只用它拉背景墙与首图；基础资料已在推荐卡里，不要再为 9 格发第二次详情请求。
+ */
+export async function getUserCardPreview(userId: number) {
+  const res = await request({
+    url: '/users/' + userId + '/card-preview',
+    method: 'GET',
+    mockData: null
+  })
+  if (!res.success || res.data == null) return res
+  const body = res.data as any
+  const card = body.card != null ? body.card : {}
+  const rawPhotos = body.photos != null && Array.isArray(body.photos) ? body.photos as any[] : []
+  const photos: string[] = []
+  for (let i = 0; i < rawPhotos.length; i++) {
+    const item: any = rawPhotos[i]
+    const url = item != null && typeof item === 'object'
+      ? resolveMediaUrl(item.file_url != null ? item.file_url : item.url)
+      : resolveMediaUrl(item)
+    if (url != '' && photos.indexOf(url) < 0) photos.push(url)
+  }
+  return {
+    success: true,
+    code: res.code,
+    message: res.message,
+    data: {
+      userId: Number(body.user_id != null ? body.user_id : userId),
+      card: mapCard(card, '用户'),
+      background: resolveMediaUrl(body.background_wall),
+      photos,
+      incomeDisplay: body.income_display != null ? '' + body.income_display : ''
+    }
+  }
 }
 
 export async function getDiscoveryPlaza(filters: any = null) {
